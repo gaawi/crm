@@ -1,10 +1,11 @@
 import "server-only";
 import { sql } from "@/lib/db";
 import { OPEN_STAGES } from "@/lib/constants";
-import type { Opportunity, OpportunityStage } from "@/lib/types";
+import type { Opportunity, OpportunityKind, OpportunityStage } from "@/lib/types";
 
 export interface OpportunityFilters {
   stage?: OpportunityStage;
+  kind?: OpportunityKind;
   projectId?: string;
   contactId?: string;
   organizationId?: string;
@@ -13,7 +14,7 @@ export interface OpportunityFilters {
 }
 
 export const opportunityColumns = () => sql`
-  op.id, op.title, op.stage, op.value, op.currency, op.follow_up_at, op.next_step, op.notes,
+  op.id, op.title, op.kind, op.stage, op.value, op.currency, op.follow_up_at, op.next_step, op.notes,
   op.closed_at, op.created_at, op.updated_at,
   case when c.id is null then null else json_build_object(
     'id', c.id,
@@ -40,6 +41,7 @@ export async function listOpportunities(filters: OpportunityFilters = {}): Promi
       ${opportunityJoins()}
      where true
        ${filters.stage ? sql`and op.stage = ${filters.stage}` : filters.includeClosed ? sql`` : sql`and op.stage = any(${OPEN_STAGES}::text[])`}
+       ${filters.kind ? sql`and op.kind = ${filters.kind}` : sql``}
        ${filters.projectId ? sql`and op.project_id = ${filters.projectId}` : sql``}
        ${filters.contactId ? sql`and op.contact_id = ${filters.contactId}` : sql``}
        ${filters.organizationId ? sql`and op.organization_id = ${filters.organizationId}` : sql``}
@@ -57,6 +59,7 @@ export async function getOpportunity(id: string): Promise<Opportunity | null> {
 
 export interface OpportunityInput {
   title?: string;
+  kind?: OpportunityKind;
   stage?: OpportunityStage;
   contactId?: string | null;
   organizationId?: string | null;
@@ -87,6 +90,7 @@ export async function createOpportunity(input: OpportunityInput & { title: strin
   const [row] = await sql<{ id: string }[]>`
     insert into opportunities ${sql({
       title,
+      kind: input.kind ?? "other",
       stage,
       contactId: input.contactId || null,
       organizationId,
@@ -112,6 +116,7 @@ export async function updateOpportunity(id: string, patch: OpportunityInput): Pr
     values.title = title;
   }
   if (patch.stage !== undefined) values.stage = patch.stage;
+  if (patch.kind !== undefined) values.kind = patch.kind;
   if ("contactId" in patch) values.contactId = patch.contactId || null;
   if ("organizationId" in patch) values.organizationId = patch.organizationId || null;
   if ("projectId" in patch) values.projectId = patch.projectId || null;

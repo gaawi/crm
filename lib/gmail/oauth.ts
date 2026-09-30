@@ -6,12 +6,17 @@ import { env } from "@/lib/env";
  * Docs: https://developers.google.com/identity/protocols/oauth2/web-server
  */
 
+/**
+ * gmail.modify = read, compose, send and change labels (archive, read/unread,
+ * star…) — everything the CRM, the approval queue and the mail client need —
+ * but never permanent deletion. Requested once so accounts never have to be
+ * reconnected when a feature is added.
+ */
 export const GMAIL_SCOPES = [
   "openid",
   "email",
   "profile",
-  "https://www.googleapis.com/auth/gmail.readonly",
-  "https://www.googleapis.com/auth/gmail.compose",
+  "https://www.googleapis.com/auth/gmail.modify",
 ] as const;
 
 export const REQUIRED_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
@@ -149,10 +154,16 @@ export function hasRequiredScopes(scopes: readonly string[]): boolean {
   return granted.has(REQUIRED_SCOPE) || granted.has(MODIFY_SCOPE) || granted.has(FULL_MAIL_SCOPE);
 }
 
-/** True when drafts can be saved (gmail.compose granted). */
+/** True when drafts can be saved and sent (gmail.compose or broader). */
 export function canCompose(scopes: readonly string[]): boolean {
   const granted = scopeSet(scopes);
   return granted.has(COMPOSE_SCOPE) || granted.has(MODIFY_SCOPE) || granted.has(FULL_MAIL_SCOPE);
+}
+
+/** True when labels can be changed (archive, read/unread, star, trash). */
+export function canModify(scopes: readonly string[]): boolean {
+  const granted = scopeSet(scopes);
+  return granted.has(MODIFY_SCOPE) || granted.has(FULL_MAIL_SCOPE);
 }
 
 /** Decode (without verifying — it came straight from Google over TLS) an id_token's email claim. */

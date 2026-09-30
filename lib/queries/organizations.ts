@@ -1,6 +1,6 @@
 import "server-only";
 import { sql } from "@/lib/db";
-import type { ContactSummary, EmailMessage, Organization } from "@/lib/types";
+import type { ContactSummary, EmailMessage, Organization, OrganizationKind } from "@/lib/types";
 import { FREE_MAIL_DOMAINS } from "@/lib/constants";
 import { normalizeTag } from "@/lib/utils";
 import {
@@ -14,12 +14,12 @@ import {
 } from "@/lib/queries/shared";
 
 const organizationColumns = () => sql`
-  o.id, o.name, o.domains, o.website, o.notes, o.tags, o.created_at, o.updated_at,
+  o.id, o.name, o.kind, o.city, o.domains, o.website, o.notes, o.tags, o.created_at, o.updated_at,
   (select count(*)::int from contacts c where c.organization_id = o.id and c.status <> 'archived') as contact_count,
   (select max(c.last_contacted_at) from contacts c where c.organization_id = o.id) as last_contacted_at
 `;
 
-export async function listOrganizations(options: { q?: string; limit?: number } = {}): Promise<Organization[]> {
+export async function listOrganizations(options: { q?: string; kind?: OrganizationKind; limit?: number } = {}): Promise<Organization[]> {
   const q = options.q?.trim();
   const pattern = q ? likePattern(q) : null;
   return sql<Organization[]>`
@@ -27,9 +27,10 @@ export async function listOrganizations(options: { q?: string; limit?: number } 
       select ${organizationColumns()}
         from organizations o
        where true
+         ${options.kind ? sql`and o.kind = ${options.kind}` : sql``}
          ${
            pattern
-             ? sql`and (o.name ilike ${pattern} or exists (select 1 from unnest(o.domains) d where d ilike ${pattern})
+             ? sql`and (o.name ilike ${pattern} or o.city ilike ${pattern} or exists (select 1 from unnest(o.domains) d where d ilike ${pattern})
                        or exists (select 1 from unnest(o.tags) t where t ilike ${pattern}))`
              : sql``
          }
@@ -55,6 +56,8 @@ export async function getOrganizationByName(name: string): Promise<Organization 
 
 export interface OrganizationInput {
   name?: string;
+  kind?: OrganizationKind | null;
+  city?: string | null;
   /** Lower-cased, "@" and "www." stripped, de-duplicated; free-mail domains (gmail.com, …) are dropped. */
   domains?: string[];
   website?: string | null;
@@ -70,6 +73,8 @@ export async function createOrganization(input: OrganizationInput & { name: stri
   const [row] = await sql<{ id: string }[]>`
     insert into organizations ${sql({
       name,
+      kind: input.kind ?? null,
+      city: emptyToNull(input.city),
       domains,
       website: emptyToNull(input.website),
       notes: emptyToNull(input.notes),
@@ -89,6 +94,8 @@ export async function updateOrganization(id: string, patch: OrganizationInput): 
     if (!name) throw new Error("Organization name is required");
     values.name = name;
   }
+  if ("kind" in patch) values.kind = patch.kind ?? null;
+  if ("city" in patch) values.city = emptyToNull(patch.city);
   if (patch.domains !== undefined) values.domains = normalizeDomains(patch.domains);
   if ("website" in patch) values.website = emptyToNull(patch.website);
   if ("notes" in patch) values.notes = emptyToNull(patch.notes);

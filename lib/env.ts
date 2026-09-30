@@ -41,7 +41,9 @@ export const env = {
   },
 
   get appPassword(): string {
-    return required("APP_PASSWORD");
+    const value = required("APP_PASSWORD");
+    if (value.length < 12) throw new ConfigError("APP_PASSWORD must be at least 12 characters");
+    return value;
   },
 
   get sessionSecret(): string {
@@ -120,6 +122,30 @@ export const env = {
       .split(",")
       .map((s) => s.trim().toLowerCase())
       .filter((s) => s.includes("@"));
+  },
+
+  /**
+   * The historical import pauses when the database grows past this size
+   * (Supabase Free becomes read-only at 500 MB). Raise it on a paid plan.
+   */
+  get dbSizeLimitMb(): number {
+    const value = Number(read("DB_SIZE_LIMIT_MB") ?? 450);
+    return Number.isFinite(value) && value > 0 ? value : 450;
+  },
+
+  /** Optional OIDC check for Pub/Sub push (audience configured on the subscription). */
+  get pubsubAudience(): string | undefined {
+    return read("PUBSUB_AUDIENCE");
+  },
+
+  /** Optional: service account email the push subscription signs its OIDC tokens with. */
+  get pubsubServiceAccount(): string | undefined {
+    return read("PUBSUB_SERVICE_ACCOUNT");
+  },
+
+  /** Optional low-privilege connection used by Claude's read-only SQL tool. */
+  get databaseReadonlyUrl(): string | undefined {
+    return read("DATABASE_READONLY_URL");
   },
 
   get isProduction(): boolean {

@@ -13,13 +13,22 @@ export function deadlineFor(maxDurationSeconds: number, start: number = Date.now
 }
 
 /**
- * Fire-and-forget request to POST /api/sync/{accountId}?mode=… on this
- * deployment (Authorization: Bearer CRON_SECRET). Awaits only the 202
- * acknowledgement (short timeout); errors are logged, never thrown.
+ * Vercel blocks a function that keeps calling itself (508 after a few hops),
+ * so chains of self-requests are capped; the cron / Settings page / push
+ * notifications start fresh chains.
  */
-export async function triggerAccountJob(accountId: string, mode: "backfill" | "sync"): Promise<void> {
+export const MAX_CHAIN_HOPS = 3;
+
+/**
+ * Request POST /api/sync/{accountId}?mode=… on this deployment
+ * (Authorization: Bearer CRON_SECRET, header x-crm-hop: hop). Awaits only the
+ * 202 acknowledgement (10 s timeout). Returns false (and records last_error)
+ * when the request was not accepted; never throws.
+ */
+export async function triggerAccountJob(accountId: string, mode: "backfill" | "sync", options: { hop?: number } = {}): Promise<boolean> {
   void accountId;
   void mode;
+  void options;
   throw new Error("TODO");
 }
 
@@ -32,7 +41,7 @@ export async function triggerAccountJob(accountId: string, mode: "backfill" | "s
 export async function runAccountJob(
   accountId: string,
   mode: "backfill" | "sync",
-  options: { deadline: number },
+  options: { deadline: number; hop?: number },
 ): Promise<unknown> {
   void accountId;
   void mode;
@@ -41,9 +50,11 @@ export async function runAccountJob(
 }
 
 /**
- * Daily cron: for every active account, renew watches expiring within 48 h,
- * run a catch-up incremental sync, and resume unfinished imports (via
- * triggerAccountJob so each gets its own time budget).
+ * Cron (Vercel Cron and/or Supabase pg_cron): renew every active account's
+ * watch (idempotent; Google recommends daily), refresh aliases, reconcile self
+ * contacts, then fan out one job per account (sync when last_synced_at is older
+ * than 5 minutes; backfill when the import is unfinished and not locked), then
+ * runAutopilotIfDue (lib/ai/autopilot).
  */
 export async function runCron(options: { deadline: number }): Promise<unknown> {
   void options;
@@ -56,6 +67,12 @@ export async function handlePushNotification(
   options: { deadline: number },
 ): Promise<unknown> {
   void payload;
+  void options;
+  throw new Error("TODO");
+}
+
+/** Sync-on-visit: incremental sync for active accounts not synced in the last 10 minutes (called from after() in the app layout). */
+export async function syncStaleAccounts(options: { deadline: number; maxAgeMinutes?: number }): Promise<void> {
   void options;
   throw new Error("TODO");
 }

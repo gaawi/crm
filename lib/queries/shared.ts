@@ -15,7 +15,7 @@ export const contactSummaryColumns = () => sql`
   coalesce(nullif(btrim(c.name), ''), e.emails[1], 'Unknown') as display_name,
   e.emails[1] as primary_email,
   coalesce(e.emails, '{}') as emails,
-  case when o.id is null then null else json_build_object('id', o.id, 'name', o.name) end as organization,
+  case when o.id is null then null else json_build_object('id', o.id, 'name', o.name, 'kind', o.kind) end as organization,
   c.role,
   c.tags,
   c.status,

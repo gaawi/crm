@@ -1,4 +1,4 @@
-import type { ContactStatus, OpportunityStage } from "@/lib/types";
+import type { ContactStatus, OpportunityKind, OpportunityStage, OrganizationKind } from "@/lib/types";
 
 export const CONTACT_STATUSES: { value: ContactStatus; label: string; hint: string }[] = [
   { value: "new", label: "New", hint: "Auto-created from email, not reviewed yet" },
@@ -18,6 +18,41 @@ export const OPPORTUNITY_STAGES: { value: OpportunityStage; label: string; open:
 ];
 
 export const OPEN_STAGES: OpportunityStage[] = OPPORTUNITY_STAGES.filter((s) => s.open).map((s) => s.value);
+
+export const OPPORTUNITY_KINDS: { value: OpportunityKind; label: string }[] = [
+  { value: "booking", label: "Booking" },
+  { value: "fundraising", label: "Fundraising" },
+  { value: "partnership", label: "Partnership" },
+  { value: "grant", label: "Grant" },
+  { value: "press", label: "Press" },
+  { value: "sale", label: "Sale" },
+  { value: "other", label: "Other" },
+];
+
+/** Stage names as they read for each kind of opportunity (same six stages underneath). */
+export const STAGE_LABELS_BY_KIND: Record<OpportunityKind, Record<OpportunityStage, string>> = {
+  booking: { lead: "Lead", contacted: "Contacted", proposal: "Offer sent", negotiation: "Negotiating", won: "Confirmed", lost: "Declined" },
+  fundraising: { lead: "Prospect", contacted: "Cultivating", proposal: "Ask made", negotiation: "Negotiating", won: "Committed", lost: "Declined" },
+  partnership: { lead: "Idea", contacted: "Contacted", proposal: "Proposal", negotiation: "Negotiating", won: "Partner", lost: "Declined" },
+  grant: { lead: "Researching", contacted: "Contacted", proposal: "Submitted", negotiation: "Under review", won: "Awarded", lost: "Rejected" },
+  press: { lead: "Pitch idea", contacted: "Pitched", proposal: "Interested", negotiation: "Scheduled", won: "Published", lost: "Passed" },
+  sale: { lead: "Lead", contacted: "Contacted", proposal: "Quote sent", negotiation: "Negotiating", won: "Won", lost: "Lost" },
+  other: { lead: "Lead", contacted: "Contacted", proposal: "Proposal", negotiation: "Negotiation", won: "Won", lost: "Lost" },
+};
+
+export function stageLabel(stage: OpportunityStage, kind: OpportunityKind = "other"): string {
+  return STAGE_LABELS_BY_KIND[kind]?.[stage] ?? OPPORTUNITY_STAGES.find((s) => s.value === stage)?.label ?? stage;
+}
+
+export const ORGANIZATION_KINDS: { value: OrganizationKind; label: string; hint: string }[] = [
+  { value: "venue", label: "Venue", hint: "Concert hall, chamber music hall, theater, festival" },
+  { value: "funder", label: "Funder", hint: "Foundation, private donor, sponsor" },
+  { value: "partner", label: "Partner", hint: "Co-producer, collaborator, brand partner" },
+  { value: "press", label: "Press", hint: "Magazine, newspaper, radio, blog" },
+  { value: "agency", label: "Agency", hint: "Booking or artist agency, PR agency" },
+  { value: "institution", label: "Institution", hint: "School, university, museum, government" },
+  { value: "other", label: "Other", hint: "" },
+];
 
 /** Project colors → Tailwind classes for the small dot / badge. */
 export const PROJECT_COLORS: Record<string, { dot: string; badge: string }> = {

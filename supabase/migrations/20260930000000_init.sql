@@ -45,12 +45,14 @@ create trigger projects_updated_at before update on projects
   for each row execute function set_updated_at();
 
 insert into projects (name, color, sort_order) values
-  ('CreArtBox', 'violet', 1),
-  ('ADAR',      'blue',   2),
-  ('Personal',  'green',  3),
-  ('Booking',   'amber',  4),
-  ('Press',     'rose',   5),
-  ('Grants',    'teal',   6);
+  ('CreArtBox',   'violet', 1),
+  ('ADAR',        'blue',   2),
+  ('Personal',    'green',  3),
+  ('Booking',     'amber',  4),
+  ('Press',       'rose',   5),
+  ('Grants',      'teal',   6),
+  ('Fundraising', 'orange', 7),
+  ('Partners',    'pink',   8);
 
 -- ---------------------------------------------------------------------------
 -- Connected Gmail accounts + sync state
@@ -113,6 +115,9 @@ create view self_addresses as
 create table organizations (
   id          uuid primary key default gen_random_uuid(),
   name        text not null check (btrim(name) <> ''),
+  -- venue = concert hall, chamber music hall, theater, festival, club…
+  kind        text check (kind in ('venue', 'funder', 'partner', 'press', 'agency', 'institution', 'other')),
+  city        text,
   -- Email domains owned by the organization (lowercase, e.g. {'moma.org'}).
   -- New contacts with a matching address are linked automatically, and the
   -- organization's correspondence includes anyone at these domains.
@@ -124,6 +129,7 @@ create table organizations (
   updated_at  timestamptz not null default now()
 );
 create unique index organizations_name_key on organizations (lower(name));
+create index organizations_kind_idx on organizations (kind);
 create index organizations_domains_idx on organizations using gin (domains);
 create trigger organizations_updated_at before update on organizations
   for each row execute function set_updated_at();
@@ -233,6 +239,8 @@ create table messages (
 create index messages_sent_at_idx on messages (sent_at desc);
 create index messages_thread_idx on messages (account_id, gmail_thread_id, sent_at);
 create index messages_rfc822_idx on messages (rfc822_message_id);
+-- Mail client views (Inbox, Starred, Sent, unread…) filter on current labels.
+create index messages_labels_idx on messages using gin (label_ids);
 
 -- Full-text search vector, computed on the fly (an index on the expression is
 -- far smaller than a stored column). Queries must use exactly this call:
@@ -274,6 +282,10 @@ create index message_participants_domain_idx on message_participants (split_part
 create table opportunities (
   id               uuid primary key default gen_random_uuid(),
   title            text not null check (btrim(title) <> ''),
+  -- booking (a concert/show at a venue), fundraising (private donors),
+  -- partnership, grant, press, sale, other. Stage labels adapt to the kind.
+  kind             text not null default 'other'
+                     check (kind in ('booking', 'fundraising', 'partnership', 'grant', 'press', 'sale', 'other')),
   stage            text not null default 'lead'
                      check (stage in ('lead', 'contacted', 'proposal', 'negotiation', 'won', 'lost')),
   contact_id       uuid references contacts (id) on delete set null,
@@ -289,12 +301,66 @@ create table opportunities (
   updated_at       timestamptz not null default now()
 );
 create index opportunities_stage_idx on opportunities (stage);
+create index opportunities_kind_idx on opportunities (kind);
 create index opportunities_contact_idx on opportunities (contact_id);
 create index opportunities_organization_idx on opportunities (organization_id);
 create index opportunities_project_idx on opportunities (project_id);
 create index opportunities_follow_up_idx on opportunities (follow_up_at) where follow_up_at is not null;
 create trigger opportunities_updated_at before update on opportunities
   for each row execute function set_updated_at();
+
+-- ---------------------------------------------------------------------------
+-- Outgoing email approval queue
+--
+-- Claude (assistant or autopilot) proposes emails; each proposal is also saved
+-- as a real Gmail draft. The owner approves (→ sent through Gmail), edits,
+-- asks Claude to revise it with a note, or discards it. Nothing is sent
+-- without the owner's approval.
+-- ---------------------------------------------------------------------------
+create table email_drafts (
+  id                   uuid primary key default gen_random_uuid(),
+  account_id           uuid not null references gmail_accounts (id) on delete cascade,
+  contact_id           uuid references contacts (id) on delete set null,
+  opportunity_id       uuid references opportunities (id) on delete set null,
+  -- Reply in this message's thread (messages.id) when set.
+  reply_to_message_id  uuid references messages (id) on delete set null,
+  purpose              text not null default 'follow_up'
+                         check (purpose in ('reply', 'follow_up', 'nudge', 'outreach', 'other')),
+  origin               text not null default 'assistant' check (origin in ('assistant', 'autopilot', 'owner')),
+  status               text not null default 'proposed'
+                         check (status in ('proposed', 'revising', 'sending', 'sent', 'discarded', 'failed')),
+  to_emails            text[] not null default '{}',
+  cc_emails            text[] not null default '{}',
+  subject              text not null default '',
+  body_text            text not null default '',
+  -- One sentence from Claude: why this email, why now.
+  rationale            text,
+  -- Owner notes and previous versions: [{at, note, subject, body}]
+  revisions            jsonb not null default '[]',
+  gmail_draft_id       text,
+  gmail_thread_id      text,
+  sent_gmail_message_id text,
+  error                text,
+  created_at           timestamptz not null default now(),
+  updated_at           timestamptz not null default now(),
+  sent_at              timestamptz
+);
+create index email_drafts_status_idx on email_drafts (status, created_at desc);
+create index email_drafts_contact_idx on email_drafts (contact_id);
+-- The autopilot never stacks two open proposals for the same person.
+create unique index email_drafts_one_open_autopilot on email_drafts (contact_id)
+  where origin = 'autopilot' and status in ('proposed', 'revising');
+create trigger email_drafts_updated_at before update on email_drafts
+  for each row execute function set_updated_at();
+
+-- ---------------------------------------------------------------------------
+-- Small key/value settings edited in the app (autopilot, signature, …)
+-- ---------------------------------------------------------------------------
+create table app_settings (
+  key         text primary key,
+  value       jsonb not null,
+  updated_at  timestamptz not null default now()
+);
 
 -- ---------------------------------------------------------------------------
 -- Login throttling (per client IP and a global bucket)
@@ -457,6 +523,8 @@ alter table messages             enable row level security;
 alter table message_participants enable row level security;
 alter table opportunities        enable row level security;
 alter table login_attempts       enable row level security;
+alter table email_drafts         enable row level security;
+alter table app_settings         enable row level security;
 
 revoke execute on function refresh_contact_stats(uuid[]) from public;
 revoke execute on function merge_contacts(uuid, uuid) from public;

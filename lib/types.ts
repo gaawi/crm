@@ -5,6 +5,11 @@
 
 export type ContactStatus = "new" | "lead" | "active" | "inactive" | "archived";
 export type OpportunityStage = "lead" | "contacted" | "proposal" | "negotiation" | "won" | "lost";
+export type OpportunityKind = "booking" | "fundraising" | "partnership" | "grant" | "press" | "sale" | "other";
+export type OrganizationKind = "venue" | "funder" | "partner" | "press" | "agency" | "institution" | "other";
+export type DraftStatus = "proposed" | "revising" | "sending" | "sent" | "discarded" | "failed";
+export type DraftPurpose = "reply" | "follow_up" | "nudge" | "outreach" | "other";
+export type DraftOrigin = "assistant" | "autopilot" | "owner";
 export type Direction = "inbound" | "outbound";
 export type AccountStatus = "active" | "reauth_required" | "disconnected";
 export type BackfillStatus = "pending" | "running" | "done" | "error";
@@ -30,6 +35,7 @@ export interface ProjectRef {
 export interface OrganizationRef {
   id: string;
   name: string;
+  kind?: OrganizationKind | null;
 }
 
 export interface ContactRef {
@@ -95,6 +101,8 @@ export interface EmailMessage {
 export interface Organization {
   id: string;
   name: string;
+  kind: OrganizationKind | null;
+  city: string | null;
   domains: string[];
   website: string | null;
   notes: string | null;
@@ -119,6 +127,7 @@ export interface Project {
 export interface Opportunity {
   id: string;
   title: string;
+  kind: OpportunityKind;
   stage: OpportunityStage;
   contact: ContactRef | null;
   organization: OrganizationRef | null;
@@ -166,4 +175,31 @@ export interface FollowUps {
   awaitingReply: ContactSummary[];
   /** Open opportunities with follow_up_at <= today. */
   opportunities: Opportunity[];
+}
+
+/** An email waiting for the owner's approval (see email_drafts). */
+export interface EmailDraft {
+  id: string;
+  accountId: string;
+  accountEmail: string;
+  contact: ContactRef | null;
+  opportunityId: string | null;
+  replyToMessageId: string | null;
+  /** Subject of the message being replied to, for context. */
+  replyToSubject: string | null;
+  purpose: DraftPurpose;
+  origin: DraftOrigin;
+  status: DraftStatus;
+  to: string[];
+  cc: string[];
+  subject: string;
+  body: string;
+  rationale: string | null;
+  revisions: { at: string; note: string | null; subject: string; body: string }[];
+  gmailDraftId: string | null;
+  gmailThreadId: string | null;
+  error: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  sentAt: Date | null;
 }

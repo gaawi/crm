@@ -3,7 +3,7 @@ const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL ?? "postgres://postgres:
 
 process.env.DATABASE_URL = TEST_DATABASE_URL;
 process.env.APP_URL = "http://localhost:3000";
-process.env.APP_PASSWORD = "test-password";
+process.env.APP_PASSWORD = "test-password-1234";
 process.env.SESSION_SECRET = "test-session-secret-0123456789abcdef";
 process.env.TOKEN_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString("base64");
 process.env.GOOGLE_CLIENT_ID = "test-client-id.apps.googleusercontent.com";

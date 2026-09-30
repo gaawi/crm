@@ -8,7 +8,7 @@ for (const scheme of ["light", "dark"]) {
   const context = await browser.newContext({ viewport: { width: 1360, height: 900 }, colorScheme: scheme });
   const page = await context.newPage();
   await page.goto(`${base}/login`);
-  await page.fill('input[name="password"]', process.env.APP_PASSWORD ?? "demo-password");
+  await page.fill('input[name="password"]', process.env.APP_PASSWORD ?? "demo-password-123");
   await Promise.all([page.waitForURL((u) => !u.pathname.startsWith("/login")), page.click('button[type="submit"]')]);
   for (const p of paths) {
     await page.goto(`${base}${p}`, { waitUntil: "networkidle" });

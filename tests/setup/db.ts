@@ -19,11 +19,12 @@ export function useTestDatabase() {
 
 export async function resetDatabase() {
   await sql.unsafe(`
-    truncate table message_participants, messages, opportunities, contact_projects,
-      contact_emails, contacts, organizations, projects, gmail_accounts restart identity cascade;
+    truncate table email_drafts, app_settings, login_attempts, message_participants, messages, opportunities,
+      contact_projects, contact_emails, contacts, organizations, projects, gmail_accounts restart identity cascade;
     insert into projects (name, color, sort_order) values
       ('CreArtBox','violet',1),('ADAR','blue',2),('Personal','green',3),
-      ('Booking','amber',4),('Press','rose',5),('Grants','teal',6);
+      ('Booking','amber',4),('Press','rose',5),('Grants','teal',6),
+      ('Fundraising','orange',7),('Partners','pink',8);
   `);
 }
 

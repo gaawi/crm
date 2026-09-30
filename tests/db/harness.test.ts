@@ -7,7 +7,7 @@ describe.skipIf(process.env.SKIP_DB_TESTS === "1")("test database", () => {
 
   it("has the schema, seeded projects and camelCase results", async () => {
     const projects = await sql<{ name: string; sortOrder: number }[]>`select name, sort_order from projects order by sort_order`;
-    expect(projects.map((p) => p.name)).toEqual(["CreArtBox", "ADAR", "Personal", "Booking", "Press", "Grants"]);
+    expect(projects.map((p) => p.name)).toEqual(["CreArtBox", "ADAR", "Personal", "Booking", "Press", "Grants", "Fundraising", "Partners"]);
     expect(projects[0].sortOrder).toBe(1);
   });
 
