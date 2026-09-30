@@ -104,7 +104,6 @@ export function participantRows(
 export function cleanDisplayName(name: string | null | undefined, email: string): string | null {
   if (typeof name !== "string") return null;
   let value = name
-    // eslint-disable-next-line no-control-regex
     .replace(/[\u0000-\u001F\u007F]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();

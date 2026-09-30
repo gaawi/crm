@@ -15,7 +15,7 @@ select cron.schedule(
   '*/5 * * * *',
   $$
     select net.http_get(
-      url := 'https://YOUR-APP.vercel.app/api/cron/sync',
+      url := 'https://YOUR-APP.vercel.app/api/cron/sync?async=1',
       headers := jsonb_build_object('Authorization', 'Bearer YOUR_CRON_SECRET'),
       timeout_milliseconds := 10000
     );

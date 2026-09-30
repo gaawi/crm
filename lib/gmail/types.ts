@@ -35,6 +35,24 @@ export interface GmailMessage {
   payload?: GmailMessagePart;
 }
 
+export interface GmailThread {
+  id: string;
+  historyId?: string;
+  snippet?: string;
+  messages?: GmailMessage[];
+}
+
+export interface GmailLabel {
+  id: string;
+  name: string;
+  type?: "system" | "user";
+  messageListVisibility?: "show" | "hide";
+  labelListVisibility?: "labelShow" | "labelShowIfUnread" | "labelHide";
+  messagesUnread?: number;
+  threadsUnread?: number;
+  color?: { textColor?: string; backgroundColor?: string };
+}
+
 export interface GmailMessageRef {
   id: string;
   threadId: string;

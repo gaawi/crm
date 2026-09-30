@@ -1,16 +1,24 @@
 import Link from "next/link";
-import { connection } from "next/server";
+import { after, connection } from "next/server";
 import { Search } from "lucide-react";
 import { requireSession } from "@/lib/auth";
 import { countPendingDrafts } from "@/lib/queries/drafts";
 import { getOverviewCounts } from "@/lib/queries/stats";
+import { deadlineFor, syncStaleAccounts } from "@/lib/sync/runner";
 import { SideNav, TabBar } from "@/components/nav";
 import { logout } from "@/app/(auth)/login/actions";
+
+/** Also the limit for server actions (Claude drafting, import chunks) and the sync-on-visit below. */
+export const maxDuration = 300;
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   // Everything behind the login reads live data: never prerender at build time.
   await connection();
   await requireSession();
+  // Sync-on-visit: mailboxes not synced in the last 10 minutes catch up after
+  // the page is sent (covers missed push notifications; never throws). The
+  // deadline keeps a safety margin for the time the render already took.
+  after(() => syncStaleAccounts({ deadline: deadlineFor(maxDuration) - 15_000 }));
   const [approvals, counts] = await Promise.all([countPendingDrafts(), getOverviewCounts()]);
 
   return (

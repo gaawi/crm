@@ -31,10 +31,11 @@ const MAX_FAILURE_CHARS = 300;
  * 2. create contacts for unknown candidate addresses (rules.selectContactCandidates)
  *    of the inserted messages, under pg_advisory_xact_lock so concurrent runs
  *    never duplicate a contact; link each new contact to the organization whose
- *    domains contain its domain (never for FREE_MAIL_DOMAINS); fill empty names
- *    of existing contacts from display names;
- * 3. add every candidate's contact to the account's default project, if any;
- * 4. refresh_contact_stats for every contact owning any participant address.
+ *    domains contain its domain (never for FREE_MAIL_DOMAINS);
+ * 3. refresh_contact_stats for every contact owning any participant address;
+ * 4. fill empty names of existing contacts from display names, and add every
+ *    candidate's contact to the account's default project, if any (after the
+ *    stats refresh so contact rows are always locked in id order first).
  */
 export async function ingestMessages(
   accountId: string,
@@ -70,7 +71,7 @@ export async function ingestMessages(
               ${message.from?.name ?? null}, ${message.subject}, ${message.snippet}, ${message.bodyText},
               ${message.sentAt}, ${message.labelIds ?? []}::text[], ${message.isAutomated},
               ${message.isAutomated ? (message.automatedReason ?? null) : null}, ${message.hasAttachments},
-              ${JSON.stringify(message.attachments ?? [])}::jsonb
+              ${sp.json(attachmentsJson(message))}::jsonb
             )
             on conflict (account_id, gmail_message_id) do update
                set label_ids = excluded.label_ids
@@ -116,56 +117,50 @@ export async function ingestMessages(
 
       await tx`select pg_advisory_xact_lock(hashtext('crm:contact-create'))`;
 
-      const created = await tx<{ contactId: string }[]>`
-        with input as (
-          select * from unnest(${emails}::text[], ${names}::text[], ${domains}::text[]) as t(email, name, domain)
-        ),
-        fresh as materialized (
-          select gen_random_uuid() as id, i.email, i.name, i.domain
-            from input i
-           where not exists (select 1 from contact_emails ce where ce.email = i.email)
-             and not exists (select 1 from self_addresses s where s.email = i.email)
-        ),
-        new_contacts as (
-          insert into contacts (id, name, status, source, organization_id)
-          select f.id, f.name, 'new', 'gmail',
-                 (select o.id from organizations o
-                   where f.domain is not null and f.domain = any (o.domains)
-                   order by o.created_at, o.id limit 1)
-            from fresh f
-          returning id
-        )
-        insert into contact_emails (email, contact_id, is_primary)
-        select f.email, f.id, true from fresh f join new_contacts n on n.id = f.id
-        returning contact_id
-      `;
+      // Contacts created elsewhere (the UI) do not take the advisory lock: if
+      // one appears between our check and insert, retry once in a savepoint.
+      const createContacts = () =>
+        tx.savepoint((sp) => sp<{ contactId: string }[]>`
+          with input as (
+            select * from unnest(${emails}::text[], ${names}::text[], ${domains}::text[]) as t(email, name, domain)
+          ),
+          fresh as materialized (
+            select gen_random_uuid() as id, i.email, i.name, i.domain
+              from input i
+             where not exists (select 1 from contact_emails ce where ce.email = i.email)
+               and not exists (select 1 from self_addresses s where s.email = i.email)
+          ),
+          new_contacts as (
+            insert into contacts (id, name, status, source, organization_id)
+            select f.id, f.name, 'new', 'gmail',
+                   (select o.id from organizations o
+                     where f.domain is not null and f.domain = any (o.domains)
+                     order by o.created_at, o.id limit 1)
+              from fresh f
+            returning id
+          )
+          insert into contact_emails (email, contact_id, is_primary)
+          select f.email, f.id, true from fresh f join new_contacts n on n.id = f.id
+          returning contact_id
+        `);
+      let created: { contactId: string }[];
+      try {
+        created = await createContacts();
+      } catch (error) {
+        if ((error as { code?: string })?.code !== "23505") throw error;
+        created = await createContacts();
+      }
       result.contactsCreated = created.length;
-
-      await tx`
-        update contacts c set name = i.name
-          from unnest(${emails}::text[], ${names}::text[]) as i(email, name)
-          join contact_emails ce on ce.email = i.email
-         where c.id = ce.contact_id
-           and i.name is not null
-           and (c.name is null or btrim(c.name) = '')
-      `;
 
       const owners = await tx<{ contactId: string }[]>`
         select distinct contact_id from contact_emails where email = any(${emails}::text[])
       `;
       candidateContactIds = owners.map((r) => r.contactId);
-
-      if (candidateContactIds.length > 0) {
-        await tx`
-          insert into contact_projects (contact_id, project_id)
-          select c.id, a.default_project_id
-            from gmail_accounts a, unnest(${candidateContactIds}::uuid[]) as c(id)
-           where a.id = ${accountId} and a.default_project_id is not null
-          on conflict do nothing
-        `;
-      }
     }
 
+    // Stats first: refresh_contact_stats locks the contacts in id order, so the
+    // updates below (which touch the same rows) cannot deadlock with another
+    // transaction refreshing stats.
     const statEmails = [...new Set([...participantEmails, ...candidates.keys()])];
     if (statEmails.length > 0) {
       const owners = await tx<{ contactId: string }[]>`
@@ -176,8 +171,41 @@ export async function ingestMessages(
         await tx`select refresh_contact_stats(${result.contactIds}::uuid[])`;
       }
     }
+
+    if (candidates.size > 0) {
+      const emails = [...candidates.keys()];
+      const names = emails.map((email) => candidates.get(email) ?? null);
+      // Existing contacts without a name pick up the display name.
+      await tx`
+        update contacts c set name = i.name
+          from unnest(${emails}::text[], ${names}::text[]) as i(email, name)
+          join contact_emails ce on ce.email = i.email
+         where c.id = ce.contact_id
+           and i.name is not null
+           and (c.name is null or btrim(c.name) = '')
+      `;
+    }
+
+    if (candidateContactIds.length > 0) {
+      await tx`
+        insert into contact_projects (contact_id, project_id)
+        select c.id, a.default_project_id
+          from gmail_accounts a, unnest(${candidateContactIds}::uuid[]) as c(id)
+         where a.id = ${accountId} and a.default_project_id is not null
+        on conflict do nothing
+      `;
+    }
     return result;
   });
+}
+
+/** Attachment metadata as plain JSON (sql.json serializes it exactly once). */
+function attachmentsJson(message: ParsedMessage) {
+  return (message.attachments ?? []).map((a) => ({
+    filename: String(a.filename ?? ""),
+    mimeType: String(a.mimeType ?? ""),
+    size: Number.isFinite(a.size) ? a.size : 0,
+  }));
 }
 
 /** Contacts owning a participant address of these stored messages. */
@@ -235,7 +263,7 @@ export async function updateMessageLabels(
     if (change?.gmailMessageId && Array.isArray(change.labelIds)) latest.set(change.gmailMessageId, change.labelIds);
   }
   if (latest.size === 0) return 0;
-  const payload = JSON.stringify([...latest].map(([g, l]) => ({ g, l })));
+  const payload = sql.json([...latest].map(([g, l]) => ({ g, l })));
   const rows = await sql`
     update messages m
        set label_ids = c.l

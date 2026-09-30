@@ -9,6 +9,7 @@ import { approveAndSend, discardDraft, DraftError, proposeFollowUp, reviseDraft,
 import { draftErrorMessage } from "@/lib/ai/draft";
 import { getCrmTools, runCrmTool } from "@/lib/ai/tools";
 import { runAutopilotIfDue } from "@/lib/ai/autopilot";
+import { DraftError as GmailDraftError } from "@/lib/sync/drafts";
 import { splitList } from "@/lib/utils";
 
 /** Server actions behind the chat confirmation cards, the Approvals page and "Draft with Claude". */
@@ -18,7 +19,7 @@ export type ActionResult = { ok: true; message?: string } | { ok: false; error: 
 const uuid = z.string().regex(/^[0-9a-f-]{36}$/i);
 
 function failure(error: unknown): ActionResult {
-  if (error instanceof DraftError) return { ok: false, error: error.message };
+  if (error instanceof DraftError || error instanceof GmailDraftError) return { ok: false, error: error.message };
   return { ok: false, error: draftErrorMessage(error) };
 }
 
