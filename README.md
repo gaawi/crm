@@ -1,36 +1,77 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# CRM
 
-## Getting Started
+A private CRM built on your Gmail accounts, for an arts producer: bookings
+with venues (concert halls, chamber music halls, theaters, festivals), private
+fundraising, partners, press and grants.
 
-First, run the development server:
+- **Every Gmail account in one place.** Connect several accounts with OAuth.
+  Past mail is imported, then kept in sync live (Pub/Sub push plus Gmail
+  history). Each message records which account it came from.
+- **Contacts appear by themselves.** People are matched by email address, and
+  one person's history is merged across all their addresses and all your
+  accounts.
+- **Contacts:** organization, role, notes, tags, projects (CreArtBox, ADAR,
+  Personal, Booking, Press, Grants, Fundraising, Partners…), status, follow-up
+  date and note, last contact, and the full email history.
+- **Organizations** (venues, funders, partners, press…), each with its people,
+  deals and all correspondence.
+- **Pipeline:** deals by stage, per kind (booking, fundraising, partnership,
+  grant, press).
+- **Today:** follow-ups due, people waiting for your reply, people you're
+  waiting on, and what's coming up.
+- **Approvals:**
+  - Claude prepares emails, which also appear as real Gmail drafts.
+  - You approve one with two taps, edit it, or leave a note ("shorter", "mention
+    Oct 12") and Claude rewrites it.
+  - **Nothing is sent without your approval.**
+  - The optional daily autopilot drafts replies, due follow-ups and nudges.
+- **Claude assistant.** Ask things like "Who haven't I followed up with?",
+  "When did I last write to Anna?", "Show me everything with the Harbor Arts
+  Foundation", "Draft a follow-up to Tom" or "Who's interested in ADAR?".
+  Claude answers from the CRM, and changes need your tap to confirm.
+- **Mail:** a Gmail-style client (inbox tabs, labels, search with Gmail
+  operators, archive, star, reply, compose) with the CRM and Claude alongside
+  every conversation.
+- **iPhone:** a real app feel, with a tab bar, large titles, swipe actions and
+  full-screen sheets. Add it to the Home Screen.
+- **Private by design.**
+  - One owner, one password.
+  - Gmail tokens are encrypted.
+  - No tracking pixels, and email images from other servers are never loaded.
+  - HTML email is shown in a sandbox that can't run code.
+
+## Stack
+
+- Next.js 16 on Vercel
+- Supabase Postgres
+- Gmail API with OAuth (`gmail.modify`: read, labels, drafts and send, never
+  permanent deletion)
+- Google Pub/Sub
+- Claude API
+
+## Docs
+
+- [docs/SETUP.md](docs/SETUP.md): deploy it (Supabase, Google Cloud, Vercel).
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): decisions, data model, screens,
+  roadmap.
+- [docs/SYNC_SPEC.md](docs/SYNC_SPEC.md) and
+  [docs/MAIL_CLIENT_SPEC.md](docs/MAIL_CLIENT_SPEC.md): detailed specs.
+- [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md): run it locally, tests,
+  conventions.
+
+## Quick start (local)
 
 ```bash
+npm install
+cp .env.example .env.local   # DATABASE_URL, APP_PASSWORD, SESSION_SECRET, TOKEN_ENCRYPTION_KEY…
+npm run db:migrate
+node scripts/seed-demo.mjs   # optional: fictional demo data (local databases only)
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Tests
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm test                     # unit + Postgres integration tests (in-memory fake Gmail)
+SKIP_DB_TESTS=1 npm test     # unit tests only
+```
