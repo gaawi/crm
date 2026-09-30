@@ -3,6 +3,14 @@
 About 30 minutes, done once. You need: a Supabase project, a Google Cloud
 project (free), a Vercel account, and an Anthropic API key.
 
+**Plans.** Supabase Free (500 MB) holds a few years of mail for a couple of
+accounts — bodies are stored as trimmed plain text and the import pauses at
+`DB_SIZE_LIMIT_MB` (450 by default) before Supabase would turn the database
+read-only; Settings shows the usage. With many or very large mailboxes use
+Supabase Pro (8 GB) and raise `DB_SIZE_LIMIT_MB`. Vercel Hobby works for
+personal use (daily cron → add the Supabase scheduler in step 6); Vercel's
+terms require **Pro** for commercial use, which also allows frequent cron.
+
 ## 1. Database (Supabase)
 
 1. Create a project (region close to you, e.g. `us-east-1` for New York).
@@ -14,9 +22,12 @@ project (free), a Vercel account, and an Anthropic API key.
    - paste `supabase/migrations/20260930000000_init.sql` into the Supabase SQL
      editor and run it.
 
-Row Level Security is on for every table with no policies, so the public
-Supabase API (anon key) cannot read anything. The app only talks to Postgres
-directly from the server.
+Row Level Security is on for every table with no policies, and the `anon` /
+`authenticated` roles have no privileges, so the public Supabase API cannot
+read anything. The app only talks to Postgres directly from the server.
+
+Optional: `supabase/optional/readonly-role.sql` creates a SELECT-only role for
+Claude's SQL tool (`DATABASE_READONLY_URL`).
 
 ## 2. Google Cloud: OAuth client + Gmail API
 
@@ -32,8 +43,10 @@ In <https://console.cloud.google.com> create (or pick) a project, then:
      verification for personal use (fewer than 100 users you know): each time
      you connect a mailbox you will see "Google hasn't verified this app" →
      **Advanced → Go to … (unsafe)**. That is expected for a private tool.
-3. **Data Access → Add scopes**: `…/auth/gmail.readonly`, `…/auth/gmail.compose`
-   (plus `openid`, `email`, `profile`).
+3. **Data Access → Add scopes**: `…/auth/gmail.modify` (plus `openid`,
+   `email`, `profile`). One scope covers reading, labels (archive, read,
+   star), drafts and sending — never permanent deletion — so mailboxes never
+   need to re-consent when features are added.
 4. **Clients → Create client → Web application**:
    - Authorized redirect URIs:
      - `https://YOUR-APP.vercel.app/api/google/callback`
@@ -72,14 +85,21 @@ gcloud pubsub subscriptions create gmail-crm-push \
 Set `GMAIL_PUBSUB_TOPIC=projects/$PROJECT/topics/gmail-crm` and
 `PUBSUB_VERIFICATION_TOKEN=$TOKEN`.
 
+Optional, stronger authentication: create a service account
+(`gcloud iam service-accounts create gmail-crm-push`), add
+`--push-auth-service-account=gmail-crm-push@$PROJECT.iam.gserviceaccount.com
+--push-auth-token-audience=$APP/api/gmail/push` to the subscription, and set
+`PUBSUB_SERVICE_ACCOUNT` / `PUBSUB_AUDIENCE` to the same values. The app then
+also verifies Google's signed token on every push.
+
 If the IAM binding fails with a *domain restricted sharing* error (common in
 Google Cloud projects owned by a Workspace organization), an org admin must
 allow the `system.gserviceaccount.com` domain in the
 `iam.allowedPolicyMemberDomains` organization policy for this project — or use
 a project outside the organization.
 
-Without Pub/Sub the app still works: it syncs when you press **Sync now** and
-once a day via the cron job.
+Without Pub/Sub the app still works: it syncs when you open the app, when you
+press **Sync now**, and on every scheduler run (step 6).
 
 ## 4. Vercel
 
@@ -99,8 +119,9 @@ once a day via the cron job.
    | `ANTHROPIC_API_KEY` | from console.anthropic.com |
 
 3. Deploy. `vercel.json` registers a daily cron (`/api/cron/sync`) that renews
-   Gmail watches and catches up anything missed. On the Pro plan you can make it
-   more frequent (e.g. `*/30 * * * *`).
+   Gmail watches, continues imports, catches up anything missed and runs the
+   autopilot. On the Pro plan make it more frequent (e.g. `*/10 * * * *`), or
+   use the Supabase scheduler (step 6).
 4. Keep Deployment Protection off for the **production** domain (Pub/Sub, the
    cron job and the import's self-requests must reach it). Preview deployments
    can stay protected.
@@ -115,9 +136,18 @@ once a day via the cron job.
 3. Review auto-created contacts (status **New**) as they appear: archive noise,
    merge duplicates, assign organizations and projects.
 
-## Optional: Claude Desktop / Claude Code (MCP)
+## 6. Scheduler (recommended on Vercel Hobby)
 
-Set `MCP_API_KEY` (e.g. `openssl rand -hex 32`) and redeploy. Then, for Claude Code:
+Vercel Hobby runs cron once a day. To keep imports moving and the autopilot
+on time, let Supabase call the endpoint every 5 minutes: edit the URL and
+`CRON_SECRET` in `supabase/optional/scheduler.sql` and run it in the SQL
+editor (uses the `pg_cron` and `pg_net` extensions; `select
+cron.unschedule('crm-sync')` removes it).
+
+## Optional: Claude Code (MCP)
+
+The same CRM tools Claude uses in the app are available to Claude Code over
+MCP. Set `MCP_API_KEY` (e.g. `openssl rand -hex 32`) and redeploy, then:
 
 ```bash
 claude mcp add --transport http crm https://YOUR-APP.vercel.app/api/mcp \
