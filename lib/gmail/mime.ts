@@ -78,6 +78,8 @@ export function buildRawMessage(params: {
   from: Address;
   to: Address[];
   cc?: Address[];
+  /** Only for messages.send: Gmail delivers to Bcc and strips the header. */
+  bcc?: Address[];
   subject: string;
   bodyText: string;
   inReplyTo?: string | null;
@@ -96,6 +98,8 @@ export function buildRawMessage(params: {
   if (to) headers.push(foldHeader("To", to));
   const cc = addressList(params.cc);
   if (cc) headers.push(foldHeader("Cc", cc));
+  const bcc = addressList(params.bcc);
+  if (bcc) headers.push(foldHeader("Bcc", bcc));
 
   headers.push(foldHeader("Subject", encodeHeaderValue(cleanHeaderText(params.subject))));
   headers.push(`Date: ${formatDate(params.date ?? new Date())}`);

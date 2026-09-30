@@ -1,11 +1,13 @@
 import type {
   GmailDraft,
   GmailHistoryResponse,
+  GmailLabel,
   GmailListMessagesResponse,
   GmailMessage,
   GmailMessageRef,
   GmailProfile,
   GmailSendAs,
+  GmailThread,
   GmailWatchResponse,
 } from "@/lib/gmail/types";
 
@@ -284,6 +286,69 @@ export class GmailClient {
   async getDraft(id: string, format: "full" | "metadata" | "minimal" = "metadata"): Promise<GmailDraftDetail | null> {
     try {
       return await this.request<GmailDraftDetail>("GET", `drafts/${encodeURIComponent(id)}`, { query: { format } });
+    } catch (error) {
+      if (error instanceof GmailApiError && error.status === 404) return null;
+      throw error;
+    }
+  }
+
+  /* Mail client ----------------------------------------------------------- */
+
+  /** threads.get (format=full by default). Returns null when the thread no longer exists (404). */
+  async getThread(id: string, format: "full" | "metadata" | "minimal" = "full"): Promise<GmailThread | null> {
+    try {
+      return await this.request<GmailThread>("GET", `threads/${encodeURIComponent(id)}`, { query: { format } });
+    } catch (error) {
+      if (error instanceof GmailApiError && error.status === 404) return null;
+      throw error;
+    }
+  }
+
+  /** threads.modify: add/remove labels on every message of the thread (archive = remove INBOX). */
+  modifyThread(id: string, change: { addLabelIds?: string[]; removeLabelIds?: string[] }): Promise<GmailThread> {
+    return this.request<GmailThread>("POST", `threads/${encodeURIComponent(id)}/modify`, {
+      body: { addLabelIds: change.addLabelIds ?? [], removeLabelIds: change.removeLabelIds ?? [] },
+      idempotent: true,
+    });
+  }
+
+  /** messages.batchModify (up to 1,000 ids). */
+  async batchModifyMessages(ids: string[], change: { addLabelIds?: string[]; removeLabelIds?: string[] }): Promise<void> {
+    if (!ids.length) return;
+    await this.request<unknown>("POST", "messages/batchModify", {
+      body: { ids, addLabelIds: change.addLabelIds ?? [], removeLabelIds: change.removeLabelIds ?? [] },
+      idempotent: true,
+    });
+  }
+
+  /** threads.trash / threads.untrash (recoverable for 30 days; never a permanent delete). */
+  trashThread(id: string): Promise<GmailThread> {
+    return this.request<GmailThread>("POST", `threads/${encodeURIComponent(id)}/trash`, { idempotent: true });
+  }
+
+  untrashThread(id: string): Promise<GmailThread> {
+    return this.request<GmailThread>("POST", `threads/${encodeURIComponent(id)}/untrash`, { idempotent: true });
+  }
+
+  /** messages.send. Never retried (a network error may hide a sent message). */
+  sendMessage(params: { raw: string; threadId?: string }): Promise<GmailMessageRef> {
+    const body: { raw: string; threadId?: string } = { raw: params.raw };
+    if (params.threadId) body.threadId = params.threadId;
+    return this.request<GmailMessageRef>("POST", "messages/send", { body, idempotent: false });
+  }
+
+  async listLabels(): Promise<GmailLabel[]> {
+    const response = await this.request<{ labels?: GmailLabel[] }>("GET", "labels");
+    return Array.isArray(response?.labels) ? response.labels : [];
+  }
+
+  /** messages.attachments.get: base64url data. Returns null when gone (404). */
+  async getAttachment(messageId: string, attachmentId: string): Promise<{ size: number; data: string } | null> {
+    try {
+      return await this.request<{ size: number; data: string }>(
+        "GET",
+        `messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}`,
+      );
     } catch (error) {
       if (error instanceof GmailApiError && error.status === 404) return null;
       throw error;
