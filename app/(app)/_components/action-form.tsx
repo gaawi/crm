@@ -27,6 +27,7 @@ export function ActionForm({
   className,
   onDone,
   messageClassName,
+  id,
 }: {
   action: (state: ActionResult, formData: FormData) => Promise<ActionResult>;
   children: ReactNode;
@@ -34,6 +35,8 @@ export function ActionForm({
   /** Called after an action returned without an error (client parents only). */
   onDone?: (result: ActionResult) => void;
   messageClassName?: string;
+  /** Lets a submit button outside the form (e.g. a sheet's header) target it with form={id}. */
+  id?: string;
 }) {
   const [state, dispatch, pending] = useActionState(async (prev: ActionResult, formData: FormData) => {
     const result = (await action(prev, formData)) ?? {};
@@ -49,7 +52,7 @@ export function ActionForm({
   }
 
   return (
-    <form onSubmit={onSubmit} className={className} aria-busy={pending}>
+    <form id={id} onSubmit={onSubmit} className={className} aria-busy={pending}>
       <PendingContext.Provider value={pending}>{children}</PendingContext.Provider>
       {state.error ? (
         <p role="alert" className={cn("text-sm text-danger", messageClassName)}>

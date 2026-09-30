@@ -177,7 +177,7 @@ export async function mergeIntoContact(targetId: string, sourceId: string): Prom
 }
 
 /** Merge from the add-address flow; reports errors inline instead of throwing. */
-export async function mergeFromAddEmail(targetId: string, sourceId: string, _prev: ActionResult): Promise<ActionResult> {
+export async function mergeFromAddEmail(targetId: string, sourceId: string): Promise<ActionResult> {
   await requireSession();
   const target = parseId(targetId);
   const source = parseId(sourceId);

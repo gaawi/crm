@@ -35,7 +35,7 @@ export function EmailTimeline({
 
   return (
     <div>
-      <ol className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-surface">
+      <ol className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface md:rounded-lg">
         {messages.map((m) => {
           const outbound = m.direction === "outbound";
           const Icon = outbound ? ArrowUpRight : ArrowDownLeft;
@@ -47,7 +47,7 @@ export function EmailTimeline({
           return (
             <li key={m.id}>
               <details className="group">
-                <summary className="flex cursor-pointer list-none gap-3 px-4 py-3 hover:bg-surface-2/60 [&::-webkit-details-marker]:hidden">
+                <summary className="flex cursor-pointer list-none gap-3 px-4 py-3 active:bg-surface-2 md:hover:bg-surface-2/60 [&::-webkit-details-marker]:hidden">
                   <Icon
                     className={cn("mt-0.5 size-4 shrink-0", outbound ? "text-subtle" : "text-fg")}
                     strokeWidth={1.75}
@@ -55,8 +55,8 @@ export function EmailTimeline({
                   />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                      <span className="text-sm font-medium text-fg">{who(m.from, selfEmails)}</span>
-                      {toLabel ? <span className="text-xs text-subtle">→ {toLabel}</span> : null}
+                      <span className="min-w-0 truncate text-[15px] font-medium text-fg md:text-sm">{who(m.from, selfEmails)}</span>
+                      {toLabel ? <span className="min-w-0 truncate text-[13px] text-subtle md:text-xs">→ {toLabel}</span> : null}
                       {m.isAutomated ? <Badge>automated</Badge> : null}
                       {m.hasAttachments ? <Paperclip className="size-3 text-subtle" aria-label="Has attachments" /> : null}
                       <span
@@ -66,13 +66,13 @@ export function EmailTimeline({
                         {formatRelative(m.sentAt, timezone)}
                       </span>
                     </div>
-                    <p className={cn("truncate text-sm", m.isAutomated ? "text-muted" : "text-fg")}>
+                    <p className={cn("truncate text-[15px] md:text-sm", m.isAutomated ? "text-muted" : "text-fg")}>
                       {m.subject || "(no subject)"}
                     </p>
-                    <p className="truncate text-xs text-muted group-open:hidden">{m.snippet}</p>
+                    <p className="line-clamp-2 text-[13px] text-muted group-open:hidden md:line-clamp-1 md:text-xs">{m.snippet}</p>
                   </div>
                 </summary>
-                <div className="border-t border-border bg-bg/40 px-4 py-3 pl-11">
+                <div className="border-t border-border bg-bg/40 px-4 py-3 md:pl-11">
                   <div className="mb-3 flex flex-wrap items-center gap-1.5 text-xs text-muted">
                     <span>{formatDateTime(m.sentAt, timezone)}</span>
                     <span className="text-subtle">·</span>
@@ -105,7 +105,7 @@ export function EmailTimeline({
                       </>
                     ) : null}
                   </dl>
-                  <div className="prose-plain text-sm leading-relaxed text-fg">
+                  <div className="prose-plain text-[15px] leading-relaxed text-fg md:text-sm">
                     {m.bodyText || m.snippet || <span className="text-muted">No text content.</span>}
                   </div>
                   {m.attachments.length ? (
@@ -128,7 +128,11 @@ export function EmailTimeline({
       </ol>
       {olderHref ? (
         <div className="mt-3 text-center">
-          <Link href={olderHref} className="text-sm text-muted hover:text-fg" scroll={false}>
+          <Link
+            href={olderHref}
+            className="inline-flex h-11 items-center px-4 text-[15px] text-muted active:opacity-60 md:h-auto md:text-sm md:hover:text-fg"
+            scroll={false}
+          >
             Older emails →
           </Link>
         </div>

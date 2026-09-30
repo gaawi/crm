@@ -48,7 +48,7 @@ export function FormActions({ children, className }: { children: ReactNode; clas
   return (
     <div
       className={cn(
-        "flex flex-col gap-2 pt-2 md:flex-row md:items-center md:pt-1 [&>*]:w-full md:[&>*]:w-auto",
+        "flex flex-col gap-2 pt-2 md:flex-row md:items-center md:pt-1 [&>*]:w-full [&>form>*]:w-full md:[&>*]:w-auto md:[&>form>*]:w-auto",
         className,
       )}
     >
@@ -95,10 +95,12 @@ export function HeaderAddButton({ href, label }: { href: string; label: string }
       >
         <Plus className="size-7" strokeWidth={1.75} />
       </Link>
-      <ButtonLink href={href} variant="primary" className="hidden md:inline-flex">
-        <Plus className="size-4" strokeWidth={1.75} />
-        {label}
-      </ButtonLink>
+      <span className="hidden md:inline-flex">
+        <ButtonLink href={href} variant="primary">
+          <Plus className="size-4" strokeWidth={1.75} />
+          {label}
+        </ButtonLink>
+      </span>
     </>
   );
 }
