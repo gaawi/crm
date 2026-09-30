@@ -20,7 +20,8 @@ import {
   listOrganizations,
 } from "@/lib/queries/organizations";
 import { getProjectByName, listProjects } from "@/lib/queries/projects";
-import { saveGmailDraft } from "@/lib/sync/drafts";
+import { DraftError, proposeEmail } from "@/lib/ai/approvals";
+import { runReadonlyQuery } from "@/lib/ai/readonly-sql";
 import type { Contact, ContactStatus, ContactSummary, EmailMessage, Opportunity, OpportunityStage } from "@/lib/types";
 import { errorMessage, normalizeTag, truncate } from "@/lib/utils";
 
@@ -38,8 +39,15 @@ export interface CrmTool<Schema extends z.ZodType = z.ZodType> {
   name: string;
   description: string;
   inputSchema: Schema;
-  /** True for tools that change data (update_contact, create_gmail_draft). */
+  /** True for tools that change data (update_contact, propose_email). */
   mutates: boolean;
+  /**
+   * In the in-app chat the change is shown to the owner as a card and only
+   * runs after they tap Confirm (MCP clients ask for approval themselves).
+   */
+  confirm?: boolean;
+  /** One-line human description of a pending call, for the confirmation card. */
+  summarize?: (input: z.infer<Schema>) => string;
   run: (input: z.infer<Schema>, context: ToolContext) => Promise<unknown>;
 }
 
@@ -498,25 +506,29 @@ const queryDatabase = tool({
     sql: z.string().min(1).max(8000).describe("A single SELECT (or WITH ... SELECT) statement"),
   }),
   async run(input) {
-    const query = input.sql.trim().replace(/;+\s*$/, "");
-    if (!/^(select|with)\b/i.test(query)) return { error: "Only SELECT / WITH queries are allowed" };
-    if (/(refresh_token|access_token)/i.test(query)) return { error: "OAuth token columns are not available" };
-    const rows = await sql.begin("read only", async (tx) => {
-      await tx.unsafe("set local statement_timeout = '5s'");
-      const [row] = await tx.unsafe<{ rowsJson: string }[]>(
-        `select coalesce(json_agg(q), '[]'::json)::text as rows_json from (select * from (${query}) as inner_query limit 200) as q`,
-      );
-      return JSON.parse(row.rowsJson) as unknown[];
-    });
-    return { row_count: rows.length, rows };
+    const { rows, truncated } = await runReadonlyQuery(input.sql);
+    return { row_count: rows.length, truncated, rows };
   },
 });
 
 const updateContactTool = tool({
   name: "update_contact",
   description:
-    "Change a contact: set or clear the follow-up date and note, change status, add/remove tags, add/remove projects (by name), or append a line to the notes. Only do this when the owner asked for it.",
+    "Change a contact: set or clear the follow-up date and note, change status, add/remove tags, add/remove projects (by name), or append a line to the notes. Only do this when the owner asked for it. In the app the owner confirms the change with one tap before it is applied — tell them what you proposed.",
   mutates: true,
+  confirm: true,
+  summarize(input) {
+    const parts: string[] = [];
+    if (input.follow_up_date !== undefined) parts.push(input.follow_up_date ? `follow up on ${input.follow_up_date}` : "clear the follow-up");
+    if (input.follow_up_note) parts.push(`note "${input.follow_up_note}"`);
+    if (input.status) parts.push(`status → ${input.status}`);
+    if (input.add_tags?.length) parts.push(`add tags ${input.add_tags.join(", ")}`);
+    if (input.remove_tags?.length) parts.push(`remove tags ${input.remove_tags.join(", ")}`);
+    if (input.add_projects?.length) parts.push(`add to ${input.add_projects.join(", ")}`);
+    if (input.remove_projects?.length) parts.push(`remove from ${input.remove_projects.join(", ")}`);
+    if (input.append_note) parts.push(`add note "${truncate(input.append_note, 80)}"`);
+    return parts.join(" · ") || "no changes";
+  },
   inputSchema: z.object({
     contact_id: uuid,
     follow_up_date: isoDate.nullable().optional().describe("YYYY-MM-DD, or null to clear"),
@@ -555,66 +567,55 @@ const updateContactTool = tool({
   },
 });
 
-const createGmailDraft = tool({
-  name: "create_gmail_draft",
+const proposeEmailTool = tool({
+  name: "propose_email",
   description:
-    "Save an email as a DRAFT in one of the owner's connected Gmail accounts (it is never sent; the owner reviews and sends it from Gmail). To reply in an existing conversation pass reply_to_message_id (an email id from get_correspondence); by default the draft is created in the account that last corresponded with the contact. Only do this when the owner asked for a draft.",
+    "Put an email in the owner's approval queue (it is also saved as a draft in the right Gmail account). It is NEVER sent by you: the owner approves and sends it, edits it, or asks you to revise it in Approvals. Use it when the owner asks you to prepare/draft/write an email. Recipients must be the contact's addresses or people already in the replied thread. To continue a conversation pass reply_to_message_id (an email id from get_correspondence).",
   mutates: true,
   inputSchema: z.object({
     contact_id: uuid.optional().describe("Recipient contact (their primary address is used when `to` is empty)"),
     to: z.array(z.string()).max(20).optional(),
     cc: z.array(z.string()).max(20).optional(),
     subject: z.string().min(1).max(300),
-    body: z.string().min(1).max(20000).describe("Plain text"),
-    account_email: z.string().optional().describe("Connected account to draft from"),
+    body: z.string().min(1).max(20000).describe("Plain text, greeting to sign-off"),
     reply_to_message_id: uuid.optional(),
+    purpose: z.enum(["reply", "follow_up", "nudge", "outreach", "other"]).optional(),
+    rationale: z.string().max(300).optional().describe("One sentence for the owner: why this email, why now"),
+    account_email: z.string().optional().describe("Connected account to send from (default: the one that last corresponded)"),
   }),
   async run(input) {
-    let to = input.to ?? [];
-    if (!to.length && input.contact_id) {
-      const contact = await getContact(input.contact_id);
-      if (!contact?.primaryEmail) return { error: "Contact has no email address" };
-      to = [contact.primaryEmail];
-    }
-    if (!to.length) return { error: "Give `to` or contact_id" };
-
-    let accountId: string | undefined;
+    let accountId: string | null = null;
     if (input.account_email) {
       const [row] = await sql<{ id: string }[]>`select id from gmail_accounts where email = ${input.account_email.toLowerCase()} and status = 'active'`;
       if (!row) return { error: `Not an active connected account: ${input.account_email}` };
       accountId = row.id;
-    } else if (input.reply_to_message_id) {
-      const [row] = await sql<{ accountId: string }[]>`
-        select m.account_id from messages m join gmail_accounts a on a.id = m.account_id
-         where m.id = ${input.reply_to_message_id} and a.status = 'active'`;
-      accountId = row?.accountId;
     }
-    if (!accountId && input.contact_id) {
-      const [row] = await sql<{ accountId: string }[]>`
-        select m.account_id
-          from contact_emails ce
-          join message_participants mp on mp.email = ce.email
-          join messages m on m.id = mp.message_id
-          join gmail_accounts a on a.id = m.account_id and a.status = 'active'
-         where ce.contact_id = ${input.contact_id}
-         order by m.sent_at desc limit 1`;
-      accountId = row?.accountId;
+    try {
+      const draft = await proposeEmail({
+        contactId: input.contact_id ?? null,
+        accountId,
+        to: input.to,
+        cc: input.cc,
+        subject: input.subject,
+        body: input.body,
+        replyToMessageId: input.reply_to_message_id ?? null,
+        purpose: input.purpose,
+        rationale: input.rationale,
+        origin: "assistant",
+        restrictRecipients: true,
+      });
+      if (!draft) return { error: "There is already an open proposal for this contact in Approvals." };
+      return {
+        queued_for_approval: true,
+        from_account: draft.accountEmail,
+        to: draft.to,
+        saved_in_gmail_drafts: Boolean(draft.gmailDraftId),
+        approvals_url: "/approvals",
+      };
+    } catch (error) {
+      if (error instanceof DraftError) return { error: error.message };
+      throw error;
     }
-    if (!accountId) {
-      const [row] = await sql<{ id: string }[]>`select id from gmail_accounts where status = 'active' order by created_at limit 1`;
-      if (!row) return { error: "No connected Gmail account" };
-      accountId = row.id;
-    }
-    const draft = await saveGmailDraft({
-      accountId,
-      to,
-      cc: input.cc,
-      subject: input.subject,
-      body: input.body,
-      replyToMessageId: input.reply_to_message_id ?? null,
-    });
-    const [account] = await sql<{ email: string }[]>`select email from gmail_accounts where id = ${accountId}`;
-    return { saved_as_draft: true, account: account?.email, draft_id: draft.draftId, open_in_gmail: draft.gmailUrl };
   },
 });
 
@@ -630,7 +631,7 @@ const TOOLS: CrmTool[] = [
   findPeopleForProject,
   queryDatabase,
   updateContactTool,
-  createGmailDraft,
+  proposeEmailTool,
 ];
 
 /** All tools, in a stable order (the order is part of the prompt-cache prefix). */
@@ -659,8 +660,8 @@ export function toolLabel(name: string): string {
     list_projects: "Listing projects",
     find_people_for_project: "Finding people for the project",
     query_database: "Querying the database",
-    update_contact: "Updating contact",
-    create_gmail_draft: "Saving Gmail draft",
+    update_contact: "Preparing a change",
+    propose_email: "Preparing an email for approval",
   };
   return labels[name] ?? name;
 }

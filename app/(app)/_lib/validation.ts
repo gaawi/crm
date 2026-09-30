@@ -1,13 +1,13 @@
 import "server-only";
 import { z } from "zod";
-import { CONTACT_STATUSES } from "@/lib/constants";
-import type { ContactStatus } from "@/lib/types";
+import { CONTACT_STATUSES, OPPORTUNITY_KINDS, OPPORTUNITY_STAGES, ORGANIZATION_KINDS } from "@/lib/constants";
+import type { ContactStatus, OpportunityKind, OpportunityStage, OrganizationKind } from "@/lib/types";
 import { isValidEmail, normalizeEmail, normalizeTag, splitList } from "@/lib/utils";
 
 /**
- * Input parsing shared by the contact server actions. Everything that arrives
- * from a form (or a bound argument, which the client can tamper with) goes
- * through here before it reaches lib/queries.
+ * Input parsing shared by the server actions of the app. Everything that
+ * arrives from a form (or a bound argument, which the client can tamper with)
+ * goes through here before it reaches lib/queries.
  */
 
 /** Any 8-4-4-4-12 hex id (Postgres uuid shape). */
@@ -17,11 +17,25 @@ export function parseId(value: unknown): string {
   return idSchema.parse(value);
 }
 
+export function isId(value: unknown): value is string {
+  return idSchema.safeParse(value).success;
+}
+
 export const statusSchema = z.enum(CONTACT_STATUSES.map((s) => s.value) as [ContactStatus, ...ContactStatus[]]);
+export const stageSchema = z.enum(OPPORTUNITY_STAGES.map((s) => s.value) as [OpportunityStage, ...OpportunityStage[]]);
+export const opportunityKindSchema = z.enum(OPPORTUNITY_KINDS.map((k) => k.value) as [OpportunityKind, ...OpportunityKind[]]);
+export const organizationKindSchema = z.enum(
+  ORGANIZATION_KINDS.map((k) => k.value) as [OrganizationKind, ...OrganizationKind[]],
+);
 
 /** "" → null, otherwise a real YYYY-MM-DD date. */
 export const optionalDateSchema = z
   .union([z.literal(""), z.iso.date()])
+  .transform((value) => (value === "" ? null : value));
+
+/** "" → null, otherwise a uuid. */
+export const optionalIdSchema = z
+  .union([z.literal(""), idSchema])
   .transform((value) => (value === "" ? null : value));
 
 export function field(formData: FormData, name: string): string {
@@ -63,3 +77,11 @@ export function parseEmail(value: string): string | null {
 /** Single-line text, trimmed and capped. */
 export const shortText = z.string().trim().max(300);
 export const longText = z.string().max(20_000);
+
+/**
+ * In-app path to go back to after a form (e.g. "/contacts/<id>?tab=deals").
+ * Anything that is not a plain same-origin path falls back to `fallback`.
+ */
+export function safeReturnPath(value: string, fallback: string): string {
+  return /^\/(?!\/)[\w\-/?=&%.]*$/.test(value) && value.length <= 500 ? value : fallback;
+}

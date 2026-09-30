@@ -3,10 +3,24 @@ import type {
   GmailHistoryResponse,
   GmailListMessagesResponse,
   GmailMessage,
+  GmailMessageRef,
   GmailProfile,
   GmailSendAs,
   GmailWatchResponse,
 } from "@/lib/gmail/types";
+
+/** users.drafts.get: the draft with its message in the requested format. */
+export interface GmailDraftDetail {
+  id: string;
+  message: GmailMessage;
+}
+
+/** users.drafts.list */
+export interface GmailListDraftsResponse {
+  drafts?: GmailDraft[];
+  nextPageToken?: string;
+  resultSizeEstimate?: number;
+}
 
 /**
  * Minimal Gmail REST client (https://gmail.googleapis.com/gmail/v1/users/me/...).
@@ -226,9 +240,59 @@ export class GmailClient {
     return this.request<GmailDraft>("POST", "drafts", { body: { message }, idempotent: false });
   }
 
+  /** drafts.update: replace a draft's content. Pass threadId to keep the draft in its thread. */
+  updateDraft(params: { id: string; raw: string; threadId?: string }): Promise<GmailDraft> {
+    const message: { raw: string; threadId?: string } = { raw: params.raw };
+    if (params.threadId) message.threadId = params.threadId;
+    return this.request<GmailDraft>("PUT", `drafts/${encodeURIComponent(params.id)}`, {
+      body: { id: params.id, message },
+      idempotent: true,
+    });
+  }
+
+  /**
+   * drafts.send. Sending consumes the draft, so a repeated request cannot send
+   * twice (it gets 404); network errors are still not retried.
+   */
+  sendDraft(id: string): Promise<GmailMessageRef> {
+    return this.request<GmailMessageRef>("POST", "drafts/send", { body: { id }, idempotent: false });
+  }
+
+  /** drafts.delete. Returns false when the draft no longer exists (404). */
+  async deleteDraft(id: string): Promise<boolean> {
+    try {
+      await this.request<unknown>("DELETE", `drafts/${encodeURIComponent(id)}`, { idempotent: true });
+      return true;
+    } catch (error) {
+      if (error instanceof GmailApiError && error.status === 404) return false;
+      throw error;
+    }
+  }
+
+  /** drafts.list (ids only; newest first as Gmail orders them). */
+  listDrafts(params: { pageToken?: string; maxResults?: number; q?: string } = {}): Promise<GmailListDraftsResponse> {
+    return this.request<GmailListDraftsResponse>("GET", "drafts", {
+      query: {
+        q: params.q?.trim() || undefined,
+        pageToken: params.pageToken || undefined,
+        maxResults: clampInt(params.maxResults, 100, 1, 500),
+      },
+    });
+  }
+
+  /** drafts.get (format=metadata by default). Returns null when the draft no longer exists (404). */
+  async getDraft(id: string, format: "full" | "metadata" | "minimal" = "metadata"): Promise<GmailDraftDetail | null> {
+    try {
+      return await this.request<GmailDraftDetail>("GET", `drafts/${encodeURIComponent(id)}`, { query: { format } });
+    } catch (error) {
+      if (error instanceof GmailApiError && error.status === 404) return null;
+      throw error;
+    }
+  }
+
   /* ---------------------------------------------------------------------- */
 
-  private async request<T>(method: "GET" | "POST", path: string, options: RequestOptions = {}): Promise<T> {
+  private async request<T>(method: "GET" | "POST" | "PUT" | "DELETE", path: string, options: RequestOptions = {}): Promise<T> {
     const url = buildUrl(path, options.query);
     const idempotent = options.idempotent ?? method === "GET";
     const body = options.body === undefined ? undefined : JSON.stringify(options.body);
@@ -253,7 +317,7 @@ export class GmailClient {
         response = await this.fetchImpl(url, {
           method,
           headers,
-          body: method === "POST" ? (body ?? "") : undefined,
+          body: method === "POST" || method === "PUT" ? (body ?? "") : undefined,
           signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
         });
         text = await response.text();

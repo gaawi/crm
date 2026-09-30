@@ -10,9 +10,22 @@ import { Notice } from "@/components/ui/layout";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { CONTACT_STATUSES } from "@/lib/constants";
 import type { ProjectRef } from "@/lib/types";
+import { FormActions } from "../../_components/ui";
 import { createContactAction, type NewContactState } from "./actions";
 
-export function NewContactForm({ projects, organizations }: { projects: ProjectRef[]; organizations: string[] }) {
+export function NewContactForm({
+  projects,
+  organizations,
+  defaultOrganization = "",
+  defaultEmail = "",
+}: {
+  projects: ProjectRef[];
+  organizations: string[];
+  /** Prefill from ?org=<name>. */
+  defaultOrganization?: string;
+  /** Prefill from ?email=<address>. */
+  defaultEmail?: string;
+}) {
   const [state, formAction] = useActionState<NewContactState, FormData>(createContactAction, {});
   const v = state.values;
 
@@ -35,7 +48,7 @@ export function NewContactForm({ projects, organizations }: { projects: ProjectR
       ) : null}
 
       <Field label="Name" htmlFor="name">
-        <Input id="name" name="name" defaultValue={v?.name} autoComplete="off" autoFocus />
+        <Input id="name" name="name" defaultValue={v?.name} autoComplete="off" autoCapitalize="words" autoFocus />
       </Field>
 
       <Field
@@ -47,8 +60,10 @@ export function NewContactForm({ projects, organizations }: { projects: ProjectR
           id="emails"
           name="emails"
           rows={2}
-          defaultValue={v?.emails}
+          defaultValue={v?.emails ?? defaultEmail}
           placeholder="name@example.com"
+          inputMode="email"
+          autoCapitalize="off"
           autoComplete="off"
           spellCheck={false}
           aria-invalid={state.taken ? true : undefined}
@@ -61,7 +76,7 @@ export function NewContactForm({ projects, organizations }: { projects: ProjectR
             id="organization"
             name="organization"
             list="organization-options"
-            defaultValue={v?.organization}
+            defaultValue={v?.organization ?? defaultOrganization}
             autoComplete="off"
           />
           <datalist id="organization-options">
@@ -97,7 +112,7 @@ export function NewContactForm({ projects, organizations }: { projects: ProjectR
             {projects.map((p) => (
               <label
                 key={p.id}
-                className="group inline-flex h-7 cursor-pointer select-none items-center gap-1.5 rounded-full border border-border px-2.5 text-xs text-muted transition-colors hover:border-border-strong hover:text-fg has-checked:border-border-strong has-checked:bg-surface-2 has-checked:text-fg has-focus-visible:ring-2 has-focus-visible:ring-ring"
+                className="group inline-flex h-9 cursor-pointer select-none items-center gap-1.5 rounded-full border border-border bg-surface px-3 text-[13px] text-muted md:h-7 md:px-2.5 md:text-xs transition-colors hover:border-border-strong hover:text-fg has-checked:border-border-strong has-checked:bg-surface-2 has-checked:text-fg has-focus-visible:ring-2 has-focus-visible:ring-ring"
               >
                 <input
                   type="checkbox"
@@ -134,12 +149,12 @@ export function NewContactForm({ projects, organizations }: { projects: ProjectR
         <Textarea id="notes" name="notes" rows={5} defaultValue={v?.notes} />
       </Field>
 
-      <div className="flex items-center gap-2 border-t border-border pt-5">
+      <FormActions className="border-t border-border pt-5">
         <SubmitButton pendingLabel="Creating…">Create contact</SubmitButton>
         <ButtonLink href="/contacts" variant="ghost">
           Cancel
         </ButtonLink>
-      </div>
+      </FormActions>
     </form>
   );
 }

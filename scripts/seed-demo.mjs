@@ -78,7 +78,7 @@ const OPPORTUNITIES = [
 
 try {
   await sql.begin(async (tx) => {
-    await tx`truncate table message_participants, messages, opportunities, contact_projects, contact_emails, contacts, organizations, gmail_accounts restart identity cascade`;
+    await tx`truncate table email_drafts, message_participants, messages, opportunities, contact_projects, contact_emails, contacts, organizations, gmail_accounts restart identity cascade`;
 
     const accountIds = [];
     for (const [i, a] of ACCOUNTS.entries()) {
@@ -138,6 +138,24 @@ try {
     }
 
     await tx`select refresh_contact_stats(array(select id from contacts))`;
+
+    // Two emails waiting for approval.
+    const liam = contactIds["liam@northsidefest.org"];
+    const [liamMsg] = await tx`select m.id from messages m join message_participants mp on mp.message_id = m.id
+                                where mp.email = 'liam@northsidefest.org' order by m.sent_at desc limit 1`;
+    await tx`
+      insert into email_drafts (account_id, contact_id, reply_to_message_id, purpose, origin, status, to_emails, subject, body_text, rationale)
+      values (${accountIds[0]}, ${liam}, ${liamMsg.id}, 'reply', 'autopilot', 'proposed', ${["liam@northsidefest.org"]},
+              'Re: Booking inquiry: summer 2027 stage',
+              ${"Hi Liam,\n\nThank you for thinking of us for the 2027 edition — we'd love to be part of it.\n\nFor a live installation on the main stage our fee is [fee], including [what's included]. We're currently available on June 12–14 and June 19–21.\n\nWould a short call next week work to go over the technical rider?\n\nBest,\n[Your name]"},
+              'Liam asked about fees and June availability two days ago and is waiting for an answer.')`;
+    const maya = contactIds["maya@harborarts.org"];
+    await tx`
+      insert into email_drafts (account_id, contact_id, purpose, origin, status, to_emails, subject, body_text, rationale)
+      values (${accountIds[0]}, ${maya}, 'follow_up', 'owner', 'proposed', ${["maya@harborarts.org"]},
+              'Spring application — budget',
+              ${"Hi Maya,\n\nAs promised, here is the draft budget for the spring application, including the documentation line item you suggested.\n\nLet me know if anything should be adjusted before the Oct 15 deadline.\n\nThanks again,\n[Your name]"},
+              'Your follow-up with Maya was due two days ago: send the budget before the Oct 15 deadline.')`;
   });
   console.log("Demo data loaded.");
 } catch (error) {

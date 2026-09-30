@@ -1,24 +1,28 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { Archive, Check, ChevronLeft, ChevronRight, Plus, Search } from "lucide-react";
-import { ProjectBadge, StatusBadge } from "@/components/ui/badge";
-import { Button, ButtonLink } from "@/components/ui/button";
-import { Input, Select } from "@/components/ui/field";
+import type { ReactNode } from "react";
+import { Archive, Check, ChevronLeft, ChevronRight, SlidersHorizontal, X } from "lucide-react";
+import { ProjectBadge, ProjectDot, StatusBadge } from "@/components/ui/badge";
+import { ButtonLink } from "@/components/ui/button";
+import { Select } from "@/components/ui/field";
 import { Avatar, EmptyState, Notice, PageHeader } from "@/components/ui/layout";
-import { SubmitButton } from "@/components/ui/submit-button";
 import { formatDateTime, formatDue, formatRelative, todayIn } from "@/lib/dates";
 import { env } from "@/lib/env";
 import { listContacts, listTags, type ContactFilters } from "@/lib/queries/contacts";
 import { listProjects } from "@/lib/queries/projects";
 import { getOverviewCounts } from "@/lib/queries/stats";
-import type { ContactStatus, ContactSummary } from "@/lib/types";
+import type { ContactStatus, ContactSummary, Project } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { Dropdown } from "../_components/dropdown";
+import { FilterForm } from "../_components/filter-form";
+import { HeaderAddButton, SearchInput } from "../_components/ui";
+import { hrefWith, param } from "../_lib/url";
 import { triageContact } from "./actions";
-import { FilterForm } from "./filter-form";
 
 export const metadata: Metadata = { title: "Contacts" };
 
 const PAGE_SIZE = 100;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const STATUS_OPTIONS: { value: "" | ContactStatus | "all"; label: string }[] = [
   { value: "", label: "All but archived" },
@@ -37,24 +41,26 @@ const SORT_OPTIONS: { value: "" | NonNullable<ContactFilters["sort"]>; label: st
   { value: "follow_up", label: "Follow-up" },
 ];
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function first(value: string | string[] | undefined): string {
-  return (Array.isArray(value) ? value[0] : value)?.trim() ?? "";
-}
-
 function pick<T extends string>(value: string, options: { value: T }[]): T | "" {
   return (options.find((o) => o.value === value)?.value ?? "") as T | "";
 }
 
+interface Current {
+  q: string;
+  project: string;
+  tag: string;
+  status: string;
+  sort: string;
+}
+
 export default async function ContactsPage({ searchParams }: PageProps<"/contacts">) {
   const sp = await searchParams;
-  const q = first(sp.q).slice(0, 200);
-  const projectId = UUID_RE.test(first(sp.project)) ? first(sp.project) : "";
-  const tag = first(sp.tag).slice(0, 100);
-  const status = pick(first(sp.status), STATUS_OPTIONS);
-  const sort = pick(first(sp.sort), SORT_OPTIONS);
-  const offset = Math.max(0, Math.floor(Number(first(sp.offset)) || 0));
+  const q = param(sp, "q");
+  const projectId = UUID_RE.test(param(sp, "project")) ? param(sp, "project") : "";
+  const tag = param(sp, "tag", 100);
+  const status = pick(param(sp, "status"), STATUS_OPTIONS);
+  const sort = pick(param(sp, "sort"), SORT_OPTIONS);
+  const offset = Math.max(0, Math.floor(Number(param(sp, "offset")) || 0));
 
   const timezone = env.timezone;
   const today = todayIn(timezone);
@@ -74,17 +80,20 @@ export default async function ContactsPage({ searchParams }: PageProps<"/contact
     getOverviewCounts(),
   ]);
 
-  const current: Record<string, string> = { q, project: projectId, tag, status, sort };
+  const current: Current = { q, project: projectId, tag, status, sort };
   const filtered = Boolean(q || projectId || tag || status);
   const triage = status === "new";
+  const pageHref = (nextOffset: number) => hrefWith("/contacts", { ...current, offset: nextOffset > 0 ? nextOffset : null });
+  const without = (key: keyof Current) => hrefWith("/contacts", { ...current, [key]: "" });
 
-  const pageHref = (nextOffset: number) => {
-    const params = new URLSearchParams();
-    for (const [key, value] of Object.entries(current)) if (value) params.set(key, value);
-    if (nextOffset > 0) params.set("offset", String(nextOffset));
-    const qs = params.toString();
-    return qs ? `/contacts?${qs}` : "/contacts";
-  };
+  const project = projects.find((p) => p.id === projectId);
+  const chips: { key: keyof Current; label: ReactNode }[] = [];
+  if (project) chips.push({ key: "project", label: project.name });
+  if (tag) chips.push({ key: "tag", label: `#${tag}` });
+  if (status) chips.push({ key: "status", label: STATUS_OPTIONS.find((o) => o.value === status)?.label });
+  if (sort) chips.push({ key: "sort", label: `Sort: ${SORT_OPTIONS.find((o) => o.value === sort)?.label}` });
+
+  const selects = <FilterSelects projects={projects} tags={tags} current={current} />;
 
   return (
     <>
@@ -92,78 +101,72 @@ export default async function ContactsPage({ searchParams }: PageProps<"/contact
         title={
           <>
             Contacts
-            <span className="ml-2 text-base font-normal tabular-nums text-subtle">{counts.contacts}</span>
+            <span className="ml-2 text-lg font-normal tabular-nums text-subtle md:text-base">{counts.contacts}</span>
           </>
         }
         description={
           counts.newContacts > 0 && !triage ? (
-            <Link href="/contacts?status=new" className="hover:text-fg">
+            <Link href="/contacts?status=new" className="text-[15px] hover:text-fg md:text-sm">
               {counts.newContacts} new from email to review →
             </Link>
           ) : undefined
         }
-        actions={
-          <ButtonLink href="/contacts/new" variant="primary">
-            <Plus className="size-4" strokeWidth={1.75} />
-            New contact
-          </ButtonLink>
-        }
+        actions={<HeaderAddButton href="/contacts/new" label="New contact" />}
       />
 
-      <FilterForm action="/contacts" className="mb-4 flex flex-wrap items-center gap-2" role="search" aria-label="Filter contacts">
-        <div className="relative min-w-56 flex-1">
-          <Search
-            className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-subtle"
-            strokeWidth={1.75}
-            aria-hidden
-          />
-          <Input
-            type="search"
-            name="q"
-            defaultValue={q}
-            placeholder="Search name, email, organization, role or tag"
-            aria-label="Search contacts"
-            className="pl-8"
-          />
-        </div>
-        <Select name="project" defaultValue={projectId} aria-label="Project" className="w-auto">
-          <option value="">All projects</option>
-          {projects.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </Select>
-        <Select name="tag" defaultValue={tag} aria-label="Tag" className="w-auto">
-          <option value="">All tags</option>
-          {tags.map((t) => (
-            <option key={t.tag} value={t.tag}>
-              #{t.tag} ({t.count})
-            </option>
-          ))}
-          {tag && !tags.some((t) => t.tag === tag) ? <option value={tag}>#{tag}</option> : null}
-        </Select>
-        <Select name="status" defaultValue={status} aria-label="Status" className="w-auto">
-          {STATUS_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </Select>
-        <Select name="sort" defaultValue={sort} aria-label="Sort by" className="w-auto">
-          {SORT_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              Sort: {o.label}
-            </option>
-          ))}
-        </Select>
-        <Button type="submit">Filter</Button>
+      {/* Desktop: one compact row. */}
+      <FilterForm action="/contacts" className="mb-4 hidden items-center gap-2 md:flex" role="search" aria-label="Filter contacts">
+        <SearchInput name="q" defaultValue={q} placeholder="Search name, email, organization, role or tag" aria-label="Search contacts" className="flex-1" />
+        {selects}
         {filtered || sort ? (
-          <Link href="/contacts" className="px-1 text-sm text-muted hover:text-fg">
+          <Link href="/contacts" className="shrink-0 px-1 text-sm text-muted hover:text-fg">
             Clear
           </Link>
         ) : null}
       </FilterForm>
+
+      {/* Phone: search + a Filters menu. */}
+      <div className="mb-4 md:hidden">
+        <FilterForm action="/contacts" className="relative flex items-center gap-2" role="search" aria-label="Filter contacts">
+          <SearchInput name="q" defaultValue={q} placeholder="Search" aria-label="Search contacts" className="flex-1" />
+          <Dropdown
+            label="Filters"
+            positioned={false}
+            summaryClassName="flex h-11 cursor-pointer items-center gap-1.5 rounded-lg border border-border bg-surface px-3 text-[15px] text-fg active:bg-surface-2"
+            panelClassName="inset-x-0 mt-2 gap-0 p-0 overflow-hidden divide-y divide-border"
+            trigger={
+              <>
+                <SlidersHorizontal className="size-4" strokeWidth={1.75} />
+                Filters
+                {chips.length ? (
+                  <span className="min-w-5 rounded-full bg-accent px-1.5 text-center text-xs font-semibold leading-5 text-accent-fg">
+                    {chips.length}
+                  </span>
+                ) : null}
+              </>
+            }
+          >
+            <FilterSelects projects={projects} tags={tags} current={current} stacked />
+          </Dropdown>
+        </FilterForm>
+        {chips.length ? (
+          <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+            {chips.map((chip) => (
+              <Link
+                key={chip.key}
+                href={without(chip.key)}
+                className="inline-flex h-8 max-w-full items-center gap-1 rounded-full bg-surface-2 pl-3 pr-2 text-[13px] text-fg active:opacity-60"
+              >
+                <span className="truncate">{chip.label}</span>
+                <X className="size-3.5 shrink-0 text-muted" strokeWidth={2} aria-label="Remove filter" />
+              </Link>
+            ))}
+            <Link href={q ? hrefWith("/contacts", { q }) : "/contacts"} className="px-2 text-[13px] text-muted active:opacity-60">
+              Clear all
+            </Link>
+          </div>
+        ) : null}
+      </div>
 
       {triage && contacts.length ? (
         <div className="mb-4">
@@ -178,46 +181,29 @@ export default async function ContactsPage({ searchParams }: PageProps<"/contact
       {contacts.length ? (
         <>
           {filtered ? (
-            <p className="mb-2 text-xs text-subtle">
+            <p className="mb-2 px-4 text-[13px] text-subtle md:px-0 md:text-xs">
               {total} {total === 1 ? "contact" : "contacts"} {q ? <>matching “{q}”</> : "match these filters"}
             </p>
           ) : null}
-          <div className="overflow-hidden rounded-lg border border-border bg-surface">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-xs text-subtle">
-                  <th scope="col" className="px-4 py-2 font-medium">
-                    Name
-                  </th>
-                  <th scope="col" className="hidden px-3 py-2 font-medium md:table-cell">
-                    Projects
-                  </th>
-                  <th scope="col" className="hidden px-3 py-2 font-medium sm:table-cell">
-                    Last contact
-                  </th>
-                  <th scope="col" className="hidden px-3 py-2 font-medium lg:table-cell">
-                    Follow-up
-                  </th>
-                  <th scope="col" className={cn("hidden py-2 font-medium sm:table-cell", triage ? "px-3" : "pl-3 pr-4")}>
-                    Status
-                  </th>
-                  {triage ? (
-                    <th scope="col" className="py-2 pl-3 pr-4 text-right font-medium">
-                      <span className="sr-only">Review</span>
-                    </th>
-                  ) : null}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {contacts.map((c) => (
-                  <ContactTableRow key={c.id} contact={c} timezone={timezone} today={today} triage={triage} />
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface md:rounded-lg">
+            <li
+              aria-hidden
+              className="hidden items-center gap-3 px-4 py-2 text-xs font-medium text-subtle md:flex"
+            >
+              <span className="flex-1 pl-11">Name</span>
+              <span className="hidden w-44 shrink-0 lg:block">Projects</span>
+              <span className="w-24 shrink-0">Last contact</span>
+              <span className="hidden w-24 shrink-0 xl:block">Follow-up</span>
+              <span className="w-20 shrink-0">Status</span>
+              {triage ? <span className="w-[9.5rem] shrink-0" /> : null}
+            </li>
+            {contacts.map((c) => (
+              <ContactListRow key={c.id} contact={c} timezone={timezone} today={today} triage={triage} />
+            ))}
+          </ul>
 
           {total > PAGE_SIZE ? (
-            <nav aria-label="Pages" className="mt-4 flex items-center justify-between gap-3 text-sm">
+            <nav aria-label="Pages" className="mt-4 flex items-center justify-between gap-3 px-1 text-sm">
               <span className="text-xs tabular-nums text-subtle">
                 {offset + 1}–{Math.min(offset + contacts.length, total)} of {total}
               </span>
@@ -271,7 +257,69 @@ export default async function ContactsPage({ searchParams }: PageProps<"/contact
   );
 }
 
-function ContactTableRow({
+/** The four filter selects: inline (desktop) or as labelled rows (phone menu). */
+function FilterSelects({
+  projects,
+  tags,
+  current,
+  stacked = false,
+}: {
+  projects: Project[];
+  tags: { tag: string; count: number }[];
+  current: Current;
+  stacked?: boolean;
+}) {
+  const controls: { name: keyof Current; label: string; options: { value: string; label: string }[] }[] = [
+    {
+      name: "project",
+      label: "Project",
+      options: [{ value: "", label: "All projects" }, ...projects.map((p) => ({ value: p.id, label: p.name }))],
+    },
+    {
+      name: "tag",
+      label: "Tag",
+      options: [
+        { value: "", label: "All tags" },
+        ...tags.map((t) => ({ value: t.tag, label: `#${t.tag} (${t.count})` })),
+        ...(current.tag && !tags.some((t) => t.tag === current.tag) ? [{ value: current.tag, label: `#${current.tag}` }] : []),
+      ],
+    },
+    { name: "status", label: "Status", options: STATUS_OPTIONS },
+    { name: "sort", label: "Sort by", options: SORT_OPTIONS },
+  ];
+
+  if (!stacked) {
+    return controls.map((c) => (
+      <Select key={c.name} name={c.name} defaultValue={current[c.name]} aria-label={c.label} className="w-auto max-w-44 shrink-0">
+        {c.options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {c.name === "sort" ? `Sort: ${o.label}` : o.label}
+          </option>
+        ))}
+      </Select>
+    ));
+  }
+
+  return controls.map((c) => (
+    <label key={c.name} className="flex min-h-12 items-center justify-between gap-4 px-4">
+      <span className="shrink-0 text-[15px] text-fg">{c.label}</span>
+      <select
+        name={c.name}
+        defaultValue={current[c.name]}
+        className="min-w-0 flex-1 appearance-none truncate bg-transparent py-3 text-right text-base text-muted focus:outline-none"
+      >
+        {c.options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+      <ChevronRight className="size-4 shrink-0 text-subtle" strokeWidth={1.75} aria-hidden />
+    </label>
+  ));
+}
+
+function ContactListRow({
   contact: c,
   timezone,
   today,
@@ -284,77 +332,111 @@ function ContactTableRow({
 }) {
   const subtitle =
     [c.role, c.organization?.name].filter(Boolean).join(" · ") ||
-    (c.primaryEmail && c.primaryEmail !== c.displayName ? c.primaryEmail : "");
+    (c.primaryEmail && c.primaryEmail !== c.displayName ? c.primaryEmail : "") ||
+    (c.status === "new" ? "New from email — add details" : "");
   const overdue = c.followUpAt !== null && c.followUpAt < today;
   const extraProjects = c.projects.length - 3;
 
   return (
-    <tr className="hover:bg-surface-2/40">
-      <td className="w-full max-w-0 px-4 py-2.5">
-        <div className="flex min-w-0 items-center gap-3">
-          <Avatar name={c.displayName} />
-          <div className="min-w-0">
-            <Link href={`/contacts/${c.id}`} className="block truncate font-medium text-fg hover:underline">
-              {c.displayName}
-            </Link>
-            {subtitle ? <p className="truncate text-xs text-muted">{subtitle}</p> : null}
-            {triage && c.messageCount > 0 ? (
-              <p className="truncate text-xs text-subtle">
-                {c.messageCount} {c.messageCount === 1 ? "email" : "emails"} · last {formatRelative(c.lastContactedAt, timezone)}
-              </p>
-            ) : null}
-          </div>
+    <li className="relative flex min-h-[60px] items-center gap-3 px-4 py-2.5 active:bg-surface-2 md:min-h-0 md:hover:bg-surface-2/40 md:active:bg-surface-2/40">
+      <Avatar name={c.displayName} />
+      <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <Link
+            href={`/contacts/${c.id}`}
+            className="truncate text-[15px] font-medium text-fg after:absolute after:inset-0 md:text-sm md:hover:underline"
+          >
+            {c.displayName}
+          </Link>
+          {c.projects.length ? (
+            <span className="flex shrink-0 items-center gap-1 lg:hidden" title={c.projects.map((p) => p.name).join(", ")}>
+              {c.projects.slice(0, 4).map((p) => (
+                <ProjectDot key={p.id} color={p.color} />
+              ))}
+            </span>
+          ) : null}
         </div>
-      </td>
-      <td className="hidden px-3 py-2.5 md:table-cell">
-        {c.projects.length ? (
-          <div className="flex items-center gap-1">
-            {c.projects.slice(0, 3).map((p) => (
-              <ProjectBadge key={p.id} project={p} />
-            ))}
-            {extraProjects > 0 ? (
-              <span className="text-xs text-subtle" title={c.projects.slice(3).map((p) => p.name).join(", ")}>
-                +{extraProjects}
-              </span>
-            ) : null}
-          </div>
+        {subtitle ? <p className="truncate text-[13px] text-muted md:text-xs">{subtitle}</p> : null}
+        {triage && c.messageCount > 0 ? (
+          <p className="truncate text-[13px] text-subtle md:text-xs">
+            {c.messageCount} {c.messageCount === 1 ? "email" : "emails"} · last {formatRelative(c.lastContactedAt, timezone)}
+          </p>
         ) : null}
-      </td>
-      <td className="hidden whitespace-nowrap px-3 py-2.5 text-xs text-muted sm:table-cell">
-        {c.lastContactedAt ? (
-          <span title={formatDateTime(c.lastContactedAt, timezone)}>{formatRelative(c.lastContactedAt, timezone)}</span>
-        ) : (
-          <span className="text-subtle">—</span>
-        )}
-      </td>
-      <td className="hidden whitespace-nowrap px-3 py-2.5 text-xs lg:table-cell">
+      </div>
+
+      <div className="hidden w-44 shrink-0 items-center gap-1 overflow-hidden lg:flex">
+        {c.projects.slice(0, 3).map((p) => (
+          <span key={p.id} className="relative z-10 min-w-0">
+            <ProjectBadge project={p} />
+          </span>
+        ))}
+        {extraProjects > 0 ? (
+          <span className="text-xs text-subtle" title={c.projects.slice(3).map((p) => p.name).join(", ")}>
+            +{extraProjects}
+          </span>
+        ) : null}
+      </div>
+      <span
+        className={cn("shrink-0 text-[13px] tabular-nums text-subtle md:w-24 md:text-xs md:text-muted", triage && "hidden md:block")}
+        title={c.lastContactedAt ? formatDateTime(c.lastContactedAt, timezone) : undefined}
+      >
+        {c.lastContactedAt ? formatRelative(c.lastContactedAt, timezone) : <span className="text-subtle">—</span>}
+      </span>
+      <span className="hidden w-24 shrink-0 text-xs xl:block">
         {c.followUpAt ? (
           <span className={overdue ? "text-danger" : "text-muted"} title={c.followUpNote ?? undefined}>
             {formatDue(c.followUpAt, today)}
           </span>
         ) : null}
-      </td>
-      <td className={cn("hidden py-2.5 sm:table-cell", triage ? "px-3" : "pl-3 pr-4")}>
+      </span>
+      <span className="hidden w-20 shrink-0 md:block">
         <StatusBadge status={c.status} />
-      </td>
+      </span>
+
       {triage ? (
-        <td className="py-2.5 pl-3 pr-4">
-          <div className="flex items-center justify-end gap-1">
-            <form action={triageContact.bind(null, c.id, "active")}>
-              <SubmitButton variant="secondary" size="sm" aria-label={`Keep ${c.displayName}`} title="Keep — mark as Active">
-                <Check className="size-3.5" strokeWidth={1.75} />
-                Keep
-              </SubmitButton>
-            </form>
-            <form action={triageContact.bind(null, c.id, "archived")}>
-              <SubmitButton variant="ghost" size="sm" aria-label={`Archive ${c.displayName}`} title="Archive — hide from lists">
-                <Archive className="size-3.5" strokeWidth={1.75} />
-                Archive
-              </SubmitButton>
-            </form>
-          </div>
-        </td>
+        <div className="relative z-10 flex shrink-0 items-center gap-2 md:w-[9.5rem] md:justify-end md:gap-1">
+          <TriageButton action={triageContact.bind(null, c.id, "active")} label={`Keep ${c.displayName}`} title="Keep — mark as Active">
+            <Check className="size-5 md:size-3.5" strokeWidth={1.75} />
+            <span className="hidden md:inline">Keep</span>
+          </TriageButton>
+          <TriageButton action={triageContact.bind(null, c.id, "archived")} label={`Archive ${c.displayName}`} title="Archive — hide from lists" quiet>
+            <Archive className="size-5 md:size-3.5" strokeWidth={1.75} />
+            <span className="hidden md:inline">Archive</span>
+          </TriageButton>
+        </div>
       ) : null}
-    </tr>
+    </li>
+  );
+}
+
+function TriageButton({
+  action,
+  label,
+  title,
+  quiet = false,
+  children,
+}: {
+  action: () => Promise<void>;
+  label: string;
+  title: string;
+  quiet?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <form action={action}>
+      <button
+        type="submit"
+        aria-label={label}
+        title={title}
+        className={cn(
+          "inline-flex size-10 items-center justify-center rounded-full transition-colors active:opacity-60 md:h-7 md:w-auto md:gap-1.5 md:rounded-md md:px-2.5 md:text-xs md:font-medium",
+          quiet
+            ? "text-muted md:hover:bg-surface-2 md:hover:text-fg"
+            : "border border-border bg-surface text-fg md:hover:bg-surface-2",
+        )}
+      >
+        {children}
+      </button>
+    </form>
   );
 }

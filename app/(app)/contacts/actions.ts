@@ -4,7 +4,7 @@ import { refresh } from "next/cache";
 import { z } from "zod";
 import { requireSession } from "@/lib/auth";
 import { updateContact } from "@/lib/queries/contacts";
-import { parseId } from "./validation";
+import { parseId } from "../_lib/validation";
 
 const triageStatus = z.enum(["active", "archived"]);
 

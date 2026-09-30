@@ -14,7 +14,7 @@ import {
   parseTags,
   shortText,
   statusSchema,
-} from "../validation";
+} from "../../_lib/validation";
 
 export interface NewContactValues {
   name: string;

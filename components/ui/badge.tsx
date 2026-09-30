@@ -41,9 +41,10 @@ const stageStyles: Record<OpportunityStage, string> = {
   lost: "bg-surface-2 text-subtle",
 };
 
-export function StageBadge({ stage }: { stage: OpportunityStage }) {
-  const label = OPPORTUNITY_STAGES.find((s) => s.value === stage)?.label ?? stage;
-  return <Badge className={stageStyles[stage]}>{label}</Badge>;
+/** `label` overrides the generic stage name (e.g. stageLabel(stage, kind) → "Offer sent"). */
+export function StageBadge({ stage, label }: { stage: OpportunityStage; label?: string }) {
+  const text = label ?? OPPORTUNITY_STAGES.find((s) => s.value === stage)?.label ?? stage;
+  return <Badge className={stageStyles[stage]}>{text}</Badge>;
 }
 
 export function ProjectDot({ color, className }: { color: string; className?: string }) {

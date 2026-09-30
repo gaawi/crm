@@ -5,7 +5,7 @@ import type { GmailHeader, GmailMessage, GmailMessagePart, ParsedMessage } from 
 
 export const MAX_BODY_CHARS = 20_000;
 /** Automated mail keeps a short body (a human reply sent through a marketing tool still shows). */
-export const MAX_AUTOMATED_BODY_CHARS = 2_000;
+export const MAX_AUTOMATED_BODY_CHARS = 500;
 /** Header-derived strings (subject, Message-ID, References, names) are truncated to this. */
 export const MAX_HEADER_CHARS = 2_000;
 
@@ -1087,30 +1087,77 @@ export function isNoReplyAddress(email: string): boolean {
   return NOREPLY_LOCAL_RE.test(base) || NOREPLY_PART_RE.test(local);
 }
 
-/**
- * Newsletter / notification / bulk detection: List-Unsubscribe or List-Id
- * header, Precedence bulk|list|junk, Auto-Submitted other than "no",
- * CATEGORY_PROMOTIONS|SOCIAL label, or a no-reply sender. (Not UPDATES/FORUMS:
- * Gmail files plenty of human mail there.) Outbound messages are never automated.
- * Only used to decide contact auto-creation, body length and default filtering.
- */
-export function detectAutomated(params: {
+/** Why a message counts as automated (stored in messages.automated_reason). */
+export type AutomatedReason = "list_id" | "precedence" | "auto_submitted" | "unsubscribe" | "category" | "noreply";
+
+export interface AutomatedParams {
   headers: GmailHeader[] | undefined;
   labelIds: readonly string[];
   fromEmail: string | null;
   outbound: boolean;
-}): boolean {
-  if (params.outbound) return false;
+  /** Reply-To addresses; enables the contact-form rule. */
+  replyTo?: readonly (Address | string)[];
+  /** My own addresses: a Reply-To pointing at me is not a contact-form sender. */
+  selfEmails?: ReadonlySet<string>;
+}
+
+const PRECEDENCE_BULK_RE = /^(?:bulk|list|junk)\b/;
+
+/**
+ * A contact-form notification (Squarespace, Typeform, Wix…): sent from a
+ * no-reply address with the real person in Reply-To, and no mailing-list
+ * headers. Such mail is human correspondence.
+ */
+function hasRealReplyTo(params: AutomatedParams, fromEmail: string): boolean {
+  for (const entry of params.replyTo ?? []) {
+    const raw = typeof entry === "string" ? entry : entry?.email;
+    if (typeof raw !== "string") continue;
+    const email = raw.trim().toLowerCase();
+    if (!EMAIL_RE.test(email) || email === fromEmail || isNoReplyAddress(email)) continue;
+    if (params.selfEmails?.has(email)) continue;
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Why the message looks like a newsletter / notification / bulk mail, strongest
+ * signal first: List-Id → "list_id"; Precedence bulk|list|junk → "precedence";
+ * Auto-Submitted other than "no" → "auto_submitted"; List-Unsubscribe →
+ * "unsubscribe"; CATEGORY_PROMOTIONS|SOCIAL label → "category" (not
+ * UPDATES/FORUMS: Gmail files plenty of human mail there); a no-reply sender →
+ * "noreply". Null when none applies, for outbound mail, and for contact forms
+ * (no-reply sender + a real Reply-To address + no List-Id / List-Unsubscribe /
+ * Precedence bulk header).
+ */
+export function automatedReason(params: AutomatedParams): AutomatedReason | null {
+  if (params.outbound) return null;
   const { headers } = params;
-  if (getHeader(headers, "List-Unsubscribe")?.trim()) return true;
-  if (getHeader(headers, "List-Id")?.trim()) return true;
-  const precedence = getHeader(headers, "Precedence")?.trim().toLowerCase();
-  if (precedence && /^(?:bulk|list|junk)\b/.test(precedence)) return true;
+  const listId = Boolean(getHeader(headers, "List-Id")?.trim());
+  const unsubscribe = Boolean(getHeader(headers, "List-Unsubscribe")?.trim());
+  const precedence = PRECEDENCE_BULK_RE.test(getHeader(headers, "Precedence")?.trim().toLowerCase() ?? "");
+  const fromEmail = typeof params.fromEmail === "string" ? params.fromEmail.trim().toLowerCase() : "";
+  const noReplySender = fromEmail !== "" && isNoReplyAddress(fromEmail);
+
+  if (noReplySender && !listId && !unsubscribe && !precedence && hasRealReplyTo(params, fromEmail)) return null;
+  if (listId) return "list_id";
+  if (precedence) return "precedence";
   const autoSubmitted = getHeader(headers, "Auto-Submitted")?.trim().toLowerCase();
-  if (autoSubmitted && autoSubmitted.split(/[\s;(]/)[0] !== "no") return true;
+  if (autoSubmitted && autoSubmitted.split(/[\s;(]/)[0] !== "no") return "auto_submitted";
+  if (unsubscribe) return "unsubscribe";
   const labels = new Set(params.labelIds ?? []);
-  if (labels.has("CATEGORY_PROMOTIONS") || labels.has("CATEGORY_SOCIAL")) return true;
-  return params.fromEmail !== null && params.fromEmail !== "" && isNoReplyAddress(params.fromEmail);
+  if (labels.has("CATEGORY_PROMOTIONS") || labels.has("CATEGORY_SOCIAL")) return "category";
+  if (noReplySender) return "noreply";
+  return null;
+}
+
+/**
+ * Newsletter / notification / bulk detection: `automatedReason(params) !== null`.
+ * Outbound messages are never automated. Only used to decide contact
+ * auto-creation, body length, stats and default filtering.
+ */
+export function detectAutomated(params: AutomatedParams): boolean {
+  return automatedReason(params) !== null;
 }
 
 /* ------------------------------------------------------------------------ */
@@ -1241,10 +1288,19 @@ export function parseGmailMessage(message: GmailMessage, options: { selfEmails: 
     null,
   );
 
-  const isAutomated = attempt(
-    () => detectAutomated({ headers, labelIds, fromEmail: from?.email ?? null, outbound }),
-    false,
+  const reason = attempt(
+    () =>
+      automatedReason({
+        headers,
+        labelIds,
+        fromEmail: from?.email ?? null,
+        outbound,
+        replyTo,
+        selfEmails: options.selfEmails,
+      }),
+    null,
   );
+  const isAutomated = reason !== null;
 
   const bodyText = attempt(() => {
     const { text, html } = extractBodies(payload);
@@ -1277,6 +1333,7 @@ export function parseGmailMessage(message: GmailMessage, options: { selfEmails: 
     bodyText,
     sentAt,
     isAutomated,
+    automatedReason: reason,
     hasAttachments: attachments.length > 0,
     attachments,
   };

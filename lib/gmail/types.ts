@@ -124,6 +124,8 @@ export interface ParsedMessage {
   /** From internalDate. */
   sentAt: Date;
   isAutomated: boolean;
+  /** Why it is automated (messages.automated_reason, see automatedReason in parse.ts); null when not automated. */
+  automatedReason: string | null;
   hasAttachments: boolean;
   attachments: Attachment[];
 }
