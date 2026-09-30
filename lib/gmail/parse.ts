@@ -4,9 +4,13 @@ import type { GmailHeader, GmailMessage, GmailMessagePart, ParsedMessage } from 
 /** Pure functions: Gmail API message → ParsedMessage. No I/O. */
 
 export const MAX_BODY_CHARS = 20_000;
+/** Automated mail keeps a short body (a human reply sent through a marketing tool still shows). */
+export const MAX_AUTOMATED_BODY_CHARS = 2_000;
+/** Header-derived strings (subject, Message-ID, References, names) are truncated to this. */
+export const MAX_HEADER_CHARS = 2_000;
 
-/** Gmail system labels that are never imported. */
-export const EXCLUDED_LABELS = ["SPAM", "TRASH", "DRAFT", "CHAT"] as const;
+/** Gmail system labels whose messages are not imported (when not already stored). */
+export const EXCLUDED_LABELS = ["SPAM", "TRASH", "DRAFT", "CHAT", "SCHEDULED"] as const;
 
 /** "promotions" → "CATEGORY_PROMOTIONS" */
 export function categoryLabel(category: string): string {
@@ -99,8 +103,9 @@ export function isNoReplyAddress(email: string): boolean {
 /**
  * Newsletter / notification / bulk detection: List-Unsubscribe or List-Id
  * header, Precedence bulk|list|junk, Auto-Submitted other than "no",
- * CATEGORY_PROMOTIONS|SOCIAL|UPDATES|FORUMS label, or a no-reply sender.
- * Outbound (SENT) messages are never automated.
+ * CATEGORY_PROMOTIONS|SOCIAL label, or a no-reply sender. (Not UPDATES/FORUMS:
+ * Gmail files plenty of human mail there.) Outbound messages are never automated.
+ * Only used to decide contact auto-creation, body length and default filtering.
  */
 export function detectAutomated(params: {
   headers: GmailHeader[] | undefined;
@@ -112,8 +117,24 @@ export function detectAutomated(params: {
   throw new Error("TODO");
 }
 
-/** Full conversion. `sentAt` from internalDate (falls back to Date header, then now). */
-export function parseGmailMessage(message: GmailMessage): ParsedMessage {
+/** Remove NUL and other characters Postgres text cannot store; truncate to `max`. */
+export function sanitizeText(value: string | null | undefined, max?: number): string | null {
+  void value;
+  void max;
+  throw new Error("TODO");
+}
+
+/**
+ * Full conversion. Headers are looked up case-insensitively. Text parts are
+ * decoded with their Content-Type charset (utf-8 fallback). `sentAt` from
+ * internalDate (falls back to the Date header, then now). Direction is
+ * outbound when labels include SENT or From is one of `selfEmails`.
+ * All strings are sanitized (sanitizeText); header-derived strings truncated to
+ * MAX_HEADER_CHARS; addresses validated like the DB check
+ * (lower-case, contains "@", no spaces).
+ */
+export function parseGmailMessage(message: GmailMessage, options: { selfEmails: ReadonlySet<string> }): ParsedMessage {
   void message;
+  void options;
   throw new Error("TODO");
 }

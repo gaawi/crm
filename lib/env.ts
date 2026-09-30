@@ -99,11 +99,10 @@ export const env = {
     return read("APP_TIMEZONE") ?? "America/New_York";
   },
 
-  /** Gmail categories that are not imported, e.g. ["promotions", "social"]. */
+  /** Gmail categories that are not imported, e.g. ["promotions"]. Default: import everything. */
   get skipCategories(): string[] {
     const value = read("SYNC_SKIP_CATEGORIES");
-    if (value === undefined) return ["promotions", "social"];
-    if (value.toLowerCase() === "none") return [];
+    if (value === undefined || value.toLowerCase() === "none") return [];
     return value
       .split(",")
       .map((s) => s.trim().toLowerCase())
@@ -113,6 +112,14 @@ export const env = {
   /** Extra Gmail search terms for the first import, e.g. "after:2021/01/01". */
   get backfillQuery(): string | undefined {
     return read("GMAIL_BACKFILL_QUERY");
+  },
+
+  /** Extra addresses that are "me" but not connected (comma-separated), never contacts. */
+  get ownEmails(): string[] {
+    return (read("OWN_EMAILS") ?? "")
+      .split(",")
+      .map((s) => s.trim().toLowerCase())
+      .filter((s) => s.includes("@"));
   },
 
   get isProduction(): boolean {

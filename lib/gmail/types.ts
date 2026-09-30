@@ -109,15 +109,17 @@ export interface ParsedMessage {
   inReplyTo: string | null;
   /** Raw References header. */
   references: string | null;
-  /** SENT label ⇒ outbound. */
+  /** SENT label, or From is one of my own addresses ⇒ outbound. */
   direction: Direction;
   from: Address | null;
   to: Address[];
   cc: Address[];
   bcc: Address[];
+  /** Reply-To addresses (contact-form services put the real person here). */
+  replyTo: Address[];
   subject: string | null;
   snippet: string | null;
-  /** Stripped plain-text body, ≤ MAX_BODY_CHARS; null for automated mail. */
+  /** Stripped plain-text body: ≤ MAX_BODY_CHARS, or ≤ MAX_AUTOMATED_BODY_CHARS for automated mail. */
   bodyText: string | null;
   /** From internalDate. */
   sentAt: Date;

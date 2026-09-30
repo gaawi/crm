@@ -11,10 +11,16 @@ import type {
 /**
  * Minimal Gmail REST client (https://gmail.googleapis.com/gmail/v1/users/me/...).
  *
+ * - Quota: Gmail allows 6,000 units / minute / user (messages.get = 20 units,
+ *   messages.list = 5, history.list = 2, watch = 100). Requests are paced by an
+ *   in-process limiter (`maxRequestsPerSecond`, default 4) shared by all calls
+ *   of this client instance.
  * - Retries with exponential backoff + jitter on 429, 5xx, and 403 with reason
- *   rateLimitExceeded / userRateLimitExceeded (max `maxRetries`, honours Retry-After).
+ *   rateLimitExceeded / userRateLimitExceeded, honouring Retry-After; rate-limit
+ *   waits may add up to ~65 s (the quota window is one minute) before giving up.
  * - On 401 it calls getAccessToken(true) once and retries.
- * - Non-retryable errors throw GmailApiError.
+ * - Non-retryable errors throw GmailApiError (403 insufficientPermissions,
+ *   400 invalid pageToken, 404, ...).
  */
 
 export class GmailApiError extends Error {
@@ -36,6 +42,8 @@ export interface GmailClientOptions {
   maxRetries?: number;
   /** Base delay for backoff in ms (tests set 0). */
   retryBaseMs?: number;
+  /** Pacing for all requests of this instance (default 4/s; tests set Infinity). */
+  maxRequestsPerSecond?: number;
 }
 
 export class GmailClient {
@@ -65,8 +73,8 @@ export class GmailClient {
     throw new Error("TODO");
   }
 
-  /** Fetch many messages with bounded concurrency; missing (404) ones are omitted. */
-  getMessages(ids: string[], concurrency = 8): Promise<GmailMessage[]> {
+  /** Fetch many messages with bounded concurrency (paced by the limiter); missing (404) ones are omitted. */
+  getMessages(ids: string[], concurrency = 4): Promise<GmailMessage[]> {
     void ids;
     void concurrency;
     throw new Error("TODO");

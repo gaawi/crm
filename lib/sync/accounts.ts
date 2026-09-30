@@ -57,10 +57,13 @@ export async function getAccountByEmail(email: string): Promise<GmailAccountReco
 
 /**
  * Insert or update (by email) after a successful OAuth callback.
- * New account: history_id = profile historyId, backfill pending with the
- * current backfill query. Existing account: tokens replaced (refresh token kept
- * if Google did not return a new one), status → active, errors cleared; sync
- * cursors are kept.
+ * New account: history_id = profile historyId, backfill pending with
+ * buildBackfillQuery(env.skipCategories, env.backfillQuery), estimate =
+ * messagesTotal. Existing account (reconnect): tokens replaced (refresh token
+ * kept if Google did not return one — never overwritten with null), scopes and
+ * aliases updated, status → active, errors cleared; history_id is only set when
+ * it was null (the old cursor is kept so the gap is caught up by incremental
+ * sync / its 404 recovery); a backfill in 'error' goes back to 'pending'.
  */
 export async function upsertAccountFromOAuth(params: {
   email: string;
@@ -69,8 +72,24 @@ export async function upsertAccountFromOAuth(params: {
   historyId: string;
   messagesTotal: number;
   aliases: string[];
-}): Promise<GmailAccountRecord> {
+}): Promise<{ account: GmailAccountRecord; created: boolean }> {
   void params;
+  throw new Error("TODO");
+}
+
+/** Re-read users.settings.sendAs and store verified aliases (best effort). */
+export async function refreshAliases(accountId: string): Promise<void> {
+  void accountId;
+  throw new Error("TODO");
+}
+
+/**
+ * Own addresses must never be contacts: remove contact_emails rows whose
+ * address is now a self address (getSelfEmails) from auto-created
+ * (source = 'gmail') contacts, delete auto-created contacts left without any
+ * address, and refresh stats. Returns the number of addresses removed.
+ */
+export async function reconcileSelfContacts(): Promise<number> {
   throw new Error("TODO");
 }
 
@@ -101,7 +120,7 @@ export function gmailClientFor(accountId: string, fetchImpl?: typeof fetch): Gma
   throw new Error("TODO");
 }
 
-/** Addresses that are "me": every account email + aliases, lower-cased. */
+/** Addresses that are "me": every account email + aliases + env.ownEmails, lower-cased. */
 export async function getSelfEmails(): Promise<Set<string>> {
   throw new Error("TODO");
 }

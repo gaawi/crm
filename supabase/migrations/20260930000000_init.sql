@@ -211,14 +211,18 @@ create index messages_thread_idx on messages (account_id, gmail_thread_id);
 create index messages_rfc822_idx on messages (rfc822_message_id);
 create index messages_search_idx on messages using gin (search);
 
+-- reply_to is stored when it differs from the sender: contact-form services
+-- (Squarespace, Typeform, ...) send from no-reply@ with the real person there.
 create table message_participants (
   message_id  uuid not null references messages (id) on delete cascade,
-  role        text not null check (role in ('from', 'to', 'cc', 'bcc')),
+  role        text not null check (role in ('from', 'to', 'cc', 'bcc', 'reply_to')),
   email       text not null check (email = lower(email)),
   name        text,
   primary key (message_id, role, email)
 );
 create index message_participants_email_idx on message_participants (email, message_id);
+-- Organization correspondence includes anyone at the organization's domains.
+create index message_participants_domain_idx on message_participants (split_part(email, '@', 2));
 
 -- ---------------------------------------------------------------------------
 -- Pipeline
@@ -254,24 +258,37 @@ create trigger opportunities_updated_at before update on opportunities
 
 -- Recompute the denormalized history columns for the given contacts.
 -- Call after inserting/deleting messages, and after moving addresses.
+--
+-- A message counts as real correspondence ("human") unless it is automated —
+-- but an automated-looking message in a thread where I also wrote (a reply sent
+-- through HubSpot/Mailchimp, say) still counts.
 create or replace function refresh_contact_stats(p_contact_ids uuid[])
 returns void
 language sql as $$
   with ids as (
     select distinct unnest(p_contact_ids) as contact_id
   ),
-  stats as (
-    select ce.contact_id,
-           max(m.sent_at) filter (where not m.is_automated) as last_at,
-           max(m.sent_at) filter (where m.direction = 'inbound' and mp.role = 'from'
-                                    and not m.is_automated) as in_at,
-           max(m.sent_at) filter (where m.direction = 'outbound' and mp.role <> 'from') as out_at,
-           count(distinct coalesce(m.rfc822_message_id, m.id::text))::integer as cnt
+  rows as (
+    select ce.contact_id, m.sent_at, m.direction, mp.role,
+           coalesce(m.rfc822_message_id, m.id::text) as message_key,
+           (not m.is_automated
+             or exists (select 1 from messages o
+                         where o.account_id = m.account_id
+                           and o.gmail_thread_id = m.gmail_thread_id
+                           and o.direction = 'outbound')) as human
       from contact_emails ce
       join message_participants mp on mp.email = ce.email
       join messages m on m.id = mp.message_id
      where ce.contact_id = any (p_contact_ids)
-     group by ce.contact_id
+  ),
+  stats as (
+    select contact_id,
+           max(sent_at) filter (where human) as last_at,
+           max(sent_at) filter (where direction = 'inbound' and role in ('from', 'reply_to') and human) as in_at,
+           max(sent_at) filter (where direction = 'outbound' and role in ('to', 'cc', 'bcc')) as out_at,
+           count(distinct message_key)::integer as cnt
+      from rows
+     group by contact_id
   )
   update contacts c
      set last_contacted_at = s.last_at,
