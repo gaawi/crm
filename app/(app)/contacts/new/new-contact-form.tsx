@@ -18,6 +18,7 @@ export function NewContactForm({
   organizations,
   defaultOrganization = "",
   defaultEmail = "",
+  defaultName = "",
 }: {
   projects: ProjectRef[];
   organizations: string[];
@@ -25,6 +26,8 @@ export function NewContactForm({
   defaultOrganization?: string;
   /** Prefill from ?email=<address>. */
   defaultEmail?: string;
+  /** Prefill from the mail client's "Add as contact". */
+  defaultName?: string;
 }) {
   const [state, formAction] = useActionState<NewContactState, FormData>(createContactAction, {});
   const v = state.values;
@@ -48,7 +51,7 @@ export function NewContactForm({
       ) : null}
 
       <Field label="Name" htmlFor="name">
-        <Input id="name" name="name" defaultValue={v?.name} autoComplete="off" autoCapitalize="words" autoFocus />
+        <Input id="name" name="name" defaultValue={v?.name ?? defaultName} autoComplete="off" autoCapitalize="words" autoFocus />
       </Field>
 
       <Field

@@ -19,6 +19,8 @@ export function useShortcuts(handlers: Record<string, (event: KeyboardEvent) => 
       if (!window.matchMedia("(min-width: 768px)").matches) return;
       const target = event.target as HTMLElement | null;
       if (target?.closest("input, textarea, select, [contenteditable=''], [contenteditable='true'], [role='dialog']")) return;
+      // Enter keeps its meaning on focused links and buttons.
+      if (event.key === "Enter" && target?.closest("a, button, summary, [role='button']")) return;
       const handler = ref.current[event.key];
       if (!handler) return;
       event.preventDefault();

@@ -19,9 +19,8 @@ export default async function MailLayout({ children }: LayoutProps<"/mail">) {
   const [accounts, own] = await Promise.all([listAccounts(), getOwnAddresses()]);
   // Only what the client needs (never tokens); colors follow the account order everywhere.
   const options = accounts
-    .map((a, index) => ({ id: a.id, email: a.email, displayName: a.displayName, dot: accountDot(index), status: a.status }))
-    .filter((a) => a.status === "active")
-    .map(({ status: _status, ...rest }) => rest);
+    .filter((a) => a.status !== "disconnected")
+    .flatMap((a, index) => (a.status === "active" ? [{ id: a.id, email: a.email, displayName: a.displayName, dot: accountDot(index) }] : []));
 
   return (
     <MailProvider accounts={options} timezone={env.timezone} ownAddresses={[...own]}>

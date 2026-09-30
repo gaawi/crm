@@ -12,6 +12,7 @@ import {
   replyRecipients,
   type ReplySource,
 } from "@/lib/mail/compose";
+import { ATTACHMENT_PART_ID, attachmentContentType, contentDisposition } from "@/lib/mail/attachment";
 import { firstName, formatBytes, formatListDate, formatMessageDate, sendersText } from "@/lib/mail/format";
 import { mailListHref, nextPageHref, pageStart, parseMailParams, prevPageHref, threadHref, listTitle } from "@/lib/mail/params";
 import { REVEALED_WIDTH, SWIPE, swipeLock, swipeOffset, swipeRelease } from "@/lib/mail/swipe";
@@ -225,5 +226,24 @@ describe("swipe", () => {
     expect(swipeOffset(-500, 393)).toBe(-393);
     expect(swipeOffset(SWIPE.maxRight + 40, 393)).toBe(SWIPE.maxRight + 10);
     expect(swipeOffset(50, 393)).toBe(50);
+  });
+});
+
+describe("attachment headers", () => {
+  it("always downloads, with an RFC 5987 filename", () => {
+    expect(contentDisposition("floor plan.pdf")).toBe(`attachment; filename="floor plan.pdf"; filename*=UTF-8''floor%20plan.pdf`);
+    expect(contentDisposition('Ré"sumé;\r\n.pdf')).toBe(`attachment; filename="R__sum___.pdf"; filename*=UTF-8''R%C3%A9%22sum%C3%A9%3B_.pdf`);
+    expect(contentDisposition("../../etc/passwd")).toBe(`attachment; filename=".._.._etc_passwd"; filename*=UTF-8''.._.._etc_passwd`);
+    expect(contentDisposition("")).toContain('filename="attachment"');
+  });
+
+  it("never serves renderable types", () => {
+    expect(attachmentContentType("application/pdf")).toBe("application/pdf");
+    expect(attachmentContentType("image/jpeg")).toBe("image/jpeg");
+    for (const t of ["text/html", "image/svg+xml", "application/xhtml+xml", "text/plain", "application/javascript", "bogus", "a/b; x=1"]) {
+      expect(attachmentContentType(t), t).toBe("application/octet-stream");
+    }
+    expect(ATTACHMENT_PART_ID.test("1.2")).toBe(true);
+    expect(ATTACHMENT_PART_ID.test("1/../2")).toBe(false);
   });
 });

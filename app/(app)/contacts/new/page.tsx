@@ -27,6 +27,7 @@ export default async function NewContactPage({ searchParams }: PageProps<"/conta
         organizations={organizationNames}
         defaultOrganization={fromOrg?.name ?? org}
         defaultEmail={param(sp, "email", 300)}
+        defaultName={param(sp, "name", 200)}
       />
     </div>
   );

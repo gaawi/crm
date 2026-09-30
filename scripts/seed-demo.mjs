@@ -127,6 +127,12 @@ try {
 
     let n = 0;
     const nameOf = (email) => CONTACTS.find((c) => c.email === email)?.name ?? null;
+    // Gmail-style thread ids (16 hex digits), one per conversation key.
+    const threadIds = new Map();
+    const threadIdFor = (key) => {
+      if (!threadIds.has(key)) threadIds.set(key, `19a2${(threadIds.size + 1).toString(16).padStart(4, "0")}c7e1b3d0`);
+      return threadIds.get(key);
+    };
     for (const [email, accountIndex, direction, days, subject, body, options = {}] of THREADS) {
       n++;
       const account = ACCOUNTS[accountIndex];
@@ -139,7 +145,7 @@ try {
         insert into messages (account_id, gmail_message_id, gmail_thread_id, rfc822_message_id, direction, from_email, from_name,
                               subject, snippet, body_text, sent_at, label_ids, is_automated, automated_reason,
                               has_attachments, attachments)
-        values (${accountIds[accountIndex]}, ${"demo" + n}, ${options.thread ?? "thread-" + email}, ${`<demo-${n}@example.com>`}, ${direction},
+        values (${accountIds[accountIndex]}, ${"demo" + n}, ${threadIdFor(options.thread ?? "thread-" + email)}, ${`<demo-${n}@example.com>`}, ${direction},
                 ${from.email}, ${from.name}, ${subject}, ${body.replace(/\s+/g, " ").slice(0, 140)}, ${body},
                 ${ago(days, options.hours ?? n % 5)}, ${labels}, ${Boolean(options.automated)}, ${options.automated ?? null},
                 ${attachments.length > 0}, ${tx.json(attachments)})

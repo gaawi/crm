@@ -50,7 +50,7 @@ export interface ThreadTarget {
   key: string;
   accountId: string;
   threadId: string;
-  /** lastAt of the row the change was made on (a newer message voids the override). */
+  /** lastAt of the row the change was made on (a newer message voids the override); 0 = any. */
   lastAt: number;
 }
 
@@ -132,6 +132,8 @@ export function MailProvider({
   const [overrides, setOverrides] = useState<Record<string, ThreadOverride>>({});
   const [toastState, setToast] = useState<Toast | null>(null);
   const dirtyRef = useRef(false);
+  // Undo toasts call act again; the ref avoids a self-referencing callback.
+  const actRef = useRef<MailContextValue["act"] | null>(null);
 
   const toast = useCallback((t: Omit<Toast, "id">) => setToast({ ...t, id: nextId++ }), []);
 
@@ -212,7 +214,7 @@ export function MailProvider({
                 label: "Undo",
                 run: async () => {
                   for (const [i, a] of undo.entries()) {
-                    const ok = await act(targets, a, { toast: i === undo.length - 1 ? "Action undone." : undefined });
+                    const ok = await actRef.current?.(targets, a, { toast: i === undo.length - 1 ? "Action undone." : undefined });
                     if (!ok) break;
                   }
                 },
@@ -225,6 +227,10 @@ export function MailProvider({
     [router, toast],
   );
 
+  useEffect(() => {
+    actRef.current = act;
+  }, [act]);
+
   const settle = useCallback((rows: { key: string; lastAt: number; unread: boolean; starred: boolean }[]) => {
     setOverrides((prev) => {
       const byKey = new Map(rows.map((r) => [r.key, r]));
@@ -233,9 +239,12 @@ export function MailProvider({
       for (const [key, o] of Object.entries(prev)) {
         if (!o.done) continue;
         const row = byKey.get(key);
-        const settled = o.hidden
-          ? !row || row.lastAt !== o.lastAt
-          : !row || row.lastAt !== o.lastAt || ((o.unread === undefined || row.unread === o.unread) && (o.starred === undefined || row.starred === o.starred));
+        // Gone from the list, or a newer message arrived: nothing left to override.
+        let settled = !row || (o.lastAt !== 0 && row.lastAt !== o.lastAt);
+        // Still listed after a hiding change: wait for the refresh.
+        if (!settled && !o.hidden && row) {
+          settled = (o.unread === undefined || row.unread === o.unread) && (o.starred === undefined || row.starred === o.starred);
+        }
         if (settled) {
           delete next[key];
           changed = true;

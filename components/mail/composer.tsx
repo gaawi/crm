@@ -349,7 +349,8 @@ export function Composer({
             <div className="relative min-w-0 flex-1">
               <select
                 id="compose-from"
-                value={accountId}
+                data-bare
+                value={accountId ?? ""}
                 onChange={(e) => setAccountId(e.target.value)}
                 disabled={isReply || accounts.length < 2}
                 title={isReply ? "Replies are sent from the account that received the conversation" : undefined}
@@ -374,6 +375,7 @@ export function Composer({
             </label>
             <input
               id="compose-subject"
+              data-bare
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
               placeholder="Subject"
@@ -384,6 +386,7 @@ export function Composer({
 
           <textarea
             ref={bodyRef}
+            data-bare
             value={body}
             onChange={(e) => setBody(e.target.value)}
             aria-label="Message"
@@ -411,7 +414,7 @@ export function Composer({
                   type="button"
                   onClick={() => setShowAppendix((v) => !v)}
                   aria-expanded={showAppendix}
-                  className="inline-flex h-6 items-center rounded-full bg-surface-2 px-2 text-xs font-semibold tracking-widest text-muted hover:text-fg"
+                  className="inline-flex h-9 items-center rounded-full bg-surface-2 px-3 text-xs font-semibold tracking-widest text-muted hover:text-fg md:h-6 md:px-2"
                   title={showAppendix ? "Hide" : "Show"}
                 >
                   •••
@@ -443,6 +446,7 @@ export function Composer({
                   <Sparkles className="size-4 shrink-0 text-orange-500" strokeWidth={2} />
                   <input
                     value={prompt}
+                    data-bare
                     onChange={(e) => setPrompt(e.target.value)}
                     placeholder={initial.kind === "new" ? "What should Claude write?" : "Instructions for Claude (optional)"}
                     maxLength={2000}

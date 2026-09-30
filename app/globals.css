@@ -85,6 +85,11 @@ body {
   outline-offset: 2px;
 }
 
+/* Borderless fields inside a larger surface (the mail composer) show no ring. */
+[data-bare]:focus-visible {
+  outline: none;
+}
+
 /* Email bodies and notes keep their line breaks. */
 .prose-plain {
   white-space: pre-wrap;
@@ -152,4 +157,19 @@ body {
   border-left: 2px solid var(--border-strong);
   padding-left: 0.75rem;
   color: var(--muted);
+}
+
+/* Full-screen sheets slide up like iOS (Mail's Mailboxes sheet). */
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+}
+.animate-sheet-up {
+  animation: sheet-up 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-sheet-up {
+    animation: none;
+  }
 }

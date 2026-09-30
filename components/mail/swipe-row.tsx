@@ -11,6 +11,8 @@ export interface SwipeAction {
   /** Background color class. */
   tone: string;
   run: () => void;
+  /** The row leaves the list (archive in Inbox, trash…): slide it out. Otherwise it snaps back. */
+  removes?: boolean;
 }
 
 /**
@@ -42,6 +44,7 @@ export function SwipeRow({
   const [leaving, setLeaving] = useState<"slide" | "collapse" | null>(null);
   const gesture = useRef<{ x: number; y: number; t: number; base: number; lock: "horizontal" | "vertical" | null; id: number } | null>(null);
   const suppressClick = useRef(false);
+  const [rowWidth, setRowWidth] = useState(390);
   const revealed = secondary ? REVEALED_WIDTH : SWIPE.actionWidth;
 
   // Another row opened (or the list closed us): snap shut.
@@ -55,6 +58,11 @@ export function SwipeRow({
   const width = () => rootRef.current?.offsetWidth ?? 390;
 
   function runPrimary() {
+    if (!primary.removes) {
+      setOffset(0);
+      primary.run();
+      return;
+    }
     setLeaving("slide");
     setOffset(-width());
     window.setTimeout(() => setLeaving("collapse"), 180);
@@ -65,6 +73,7 @@ export function SwipeRow({
     if (e.pointerType === "mouse" && e.button !== 0) return;
     if (leaving) return;
     gesture.current = { x: e.clientX, y: e.clientY, t: e.timeStamp, base: open ? -revealed : 0, lock: null, id: e.pointerId };
+    setRowWidth(width());
     if (!open) onOpenChange(false);
   }
 
@@ -119,7 +128,7 @@ export function SwipeRow({
     }
   }
 
-  const full = -offset >= width() * SWIPE.fullRatio;
+  const full = -offset >= rowWidth * SWIPE.fullRatio;
   const trailingWidth = Math.max(0, -offset);
 
   return (
@@ -149,6 +158,11 @@ export function SwipeRow({
               type="button"
               onClick={() => {
                 onOpenChange(false);
+                if (!secondary.removes) {
+                  setOffset(0);
+                  secondary.run();
+                  return;
+                }
                 setLeaving("collapse");
                 window.setTimeout(() => secondary.run(), 200);
               }}

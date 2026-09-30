@@ -74,4 +74,5 @@ npm run dev
 ```bash
 npm test                     # unit + Postgres integration tests (in-memory fake Gmail)
 SKIP_DB_TESTS=1 npm test     # unit tests only
+node tests/e2e/mail-flow.mjs # browser walk-through of Mail on the demo data (dev server running)
 ```

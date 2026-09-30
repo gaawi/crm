@@ -98,7 +98,7 @@ export function RecipientInput({
               type="button"
               aria-label={`Remove ${a.email}`}
               onClick={() => onChange(value.filter((x) => x.email !== a.email))}
-              className="inline-flex size-6 shrink-0 items-center justify-center rounded-full text-subtle hover:bg-border hover:text-fg md:size-5"
+              className="-my-1 inline-flex size-9 shrink-0 items-center justify-center rounded-full text-subtle hover:bg-border hover:text-fg md:my-0 md:size-5"
             >
               <X className="size-3.5 md:size-3" strokeWidth={2} />
             </button>
@@ -107,6 +107,7 @@ export function RecipientInput({
         <input
           ref={inputRef}
           id={id}
+          data-bare
           value={pending}
           autoFocus={autoFocus}
           onChange={(e) => {
