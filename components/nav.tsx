@@ -30,7 +30,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/organizations", label: "Organizations", icon: Building2 },
   { href: "/projects", label: "Projects", icon: FolderKanban },
   { href: "/pipeline", label: "Pipeline", icon: LayoutList },
-  { href: "/assistant", label: "Assistant", icon: Sparkles },
+  { href: "/assistant", label: "Claude", icon: Sparkles },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 

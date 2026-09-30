@@ -3,6 +3,13 @@ import { env } from "@/lib/env";
 import { recordAccountError } from "@/lib/sync/accounts";
 import { errorMessage } from "@/lib/utils";
 
+/**
+ * Vercel blocks a function that keeps calling itself (508 after a few hops),
+ * so chains of self-requests are capped; the cron / Settings page / push
+ * notifications / page visits start fresh chains.
+ */
+export const MAX_CHAIN_HOPS = 3;
+
 /** Header carrying the number of self-requests in the current chain. */
 export const HOP_HEADER = "x-crm-hop";
 

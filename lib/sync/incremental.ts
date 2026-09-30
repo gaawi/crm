@@ -22,7 +22,7 @@ import {
   requestSync,
   takeSyncRequest,
 } from "@/lib/sync/locks";
-import { triggerAccountJob } from "@/lib/sync/trigger";
+import { MAX_CHAIN_HOPS, triggerAccountJob } from "@/lib/sync/trigger";
 import { errorMessage } from "@/lib/utils";
 
 export interface SyncResult {
@@ -35,8 +35,6 @@ export interface SyncResult {
 const HISTORY_TYPES = ["messageAdded", "messageDeleted", "labelAdded", "labelRemoved"] as const;
 /** New messages with these labels are never imported (drafts, chats, scheduled sends). */
 const IGNORED_ADDED_LABELS = new Set(["DRAFT", "CHAT", "SCHEDULED"]);
-/** Same cap as the self-request chains of the import (see runner.MAX_CHAIN_HOPS). */
-const MAX_SYNC_CHAIN_HOPS = 3;
 const INGEST_BATCH = 50;
 const DAY_MS = 86_400_000;
 
@@ -354,7 +352,7 @@ export async function runIncrementalSync(
 
   if (result.status === "recovered") {
     await triggerAccountJob(accountId, "backfill", { hop: hop + 1, fetchImpl: options.fetchImpl });
-  } else if (result.status === "ok" && hop < MAX_SYNC_CHAIN_HOPS) {
+  } else if (result.status === "ok" && hop < MAX_CHAIN_HOPS) {
     const [row] = await sql<{ syncRequested: boolean }[]>`select sync_requested from gmail_accounts where id = ${accountId}`;
     if (moreToDo || row?.syncRequested) {
       await triggerAccountJob(accountId, "sync", { hop: hop + 1, fetchImpl: options.fetchImpl });
