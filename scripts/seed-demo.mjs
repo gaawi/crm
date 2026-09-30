@@ -49,23 +49,35 @@ const CONTACTS = [
   { name: "Priya Patel", email: "priya@brooklynreview.net", org: "The Brooklyn Review", role: "Photo Editor", status: "new", projects: ["Press"] },
 ];
 
-// [contactEmail, account, direction, daysAgo, subject, body]
+// [contactEmail, account, direction, daysAgo, subject, body, options?]
+// Messages sharing a contact form one thread unless options.thread says otherwise.
+// Labels default to Gmail's: inbound INBOX + CATEGORY_PERSONAL (Primary), outbound SENT.
+const PRIMARY = ["INBOX", "CATEGORY_PERSONAL"];
 const THREADS = [
-  ["maya@harborarts.org", 0, "inbound", 21, "Spring cycle — open call", "Hi! Our spring grant cycle opens next month. Based on your ADAR proposal last year, I think you'd be a strong fit. Happy to talk through the budget section."],
-  ["maya@harborarts.org", 0, "outbound", 20, "Re: Spring cycle — open call", "Thanks Maya — we'd love to apply. I'll send a draft budget by the end of the month."],
-  ["maya@harborarts.org", 0, "inbound", 9, "Re: Spring cycle — open call", "Great. The deadline moved to Oct 15. Could you include a line item for documentation?"],
-  ["daniel@lumengallery.com", 0, "outbound", 14, "CreArtBox winter show", "Hi Daniel, attaching the updated floor plan for the winter show. Let me know what you think about the second room."],
-  ["daniel@lumengallery.com", 0, "inbound", 13, "Re: CreArtBox winter show", "Looks great. Let's lock Dec 4 for the opening. Can we do a walkthrough next Tuesday?"],
+  ["maya@harborarts.org", 0, "inbound", 21, "Spring cycle — open call", "Hi! Our spring grant cycle opens next month. Based on your ADAR proposal last year, I think you'd be a strong fit. Happy to talk through the budget section.", { labels: [...PRIMARY, "IMPORTANT"] }],
+  ["maya@harborarts.org", 0, "outbound", 20, "Re: Spring cycle — open call", "Thanks Maya — we'd love to apply. I'll send a draft budget by the end of the month.", { labels: ["SENT", "IMPORTANT"] }],
+  ["maya@harborarts.org", 0, "inbound", 9, "Re: Spring cycle — open call", "Great. The deadline moved to Oct 15. Could you include a line item for documentation?\n\nI've copied Tomás, who will review the budget with me.\n\nMaya", { labels: [...PRIMARY, "UNREAD", "IMPORTANT", "STARRED"], cc: ["tomas@harborarts.org"] }],
+  ["daniel@lumengallery.com", 0, "outbound", 14, "CreArtBox winter show", "Hi Daniel, attaching the updated floor plan for the winter show. Let me know what you think about the second room.", { attachments: [{ filename: "floor-plan-v3.pdf", mimeType: "application/pdf", size: 482133 }] }],
+  ["daniel@lumengallery.com", 0, "inbound", 13, "Re: CreArtBox winter show", "Looks great. Let's lock Dec 4 for the opening. Can we do a walkthrough next Tuesday?", { labels: [...PRIMARY, "IMPORTANT"] }],
   ["daniel@lumengallery.com", 0, "outbound", 12, "Re: CreArtBox winter show", "Tuesday works — 3pm?"],
+  ["daniel@lumengallery.com", 0, "inbound", 0, "Press preview guest list", "Hi! Could you send me the list of press guests for the preview by Friday? We need names for the door.\n\nThanks,\nDaniel", { thread: "thread-daniel-press", hours: 2, labels: [...PRIMARY, "UNREAD"] }],
   ["sofia@brooklynreview.net", 0, "outbound", 11, "Studio visit for the November issue?", "Hi Sofia, we're opening a new CreArtBox space in Bushwick and would love to invite you for a studio visit ahead of the November issue."],
-  ["liam@northsidefest.org", 0, "inbound", 2, "Booking inquiry: summer 2027 stage", "Hello! We're programming the 2027 edition and would like to book a live installation for our main stage. What are your fees and availability in June?"],
-  ["aisha.rahman@gmail.com", 1, "inbound", 3, "ADAR photos", "Here's the selection from last weekend. Let me know which ones you want in high-res."],
+  ["liam@northsidefest.org", 0, "inbound", 2, "Booking inquiry: summer 2027 stage", "Hello! We're programming the 2027 edition and would like to book a live installation for our main stage. What are your fees and availability in June?", { labels: [...PRIMARY, "UNREAD", "IMPORTANT"] }],
+  ["aisha.rahman@gmail.com", 1, "inbound", 3, "ADAR photos", "Here's the selection from last weekend. Let me know which ones you want in high-res.", { attachments: [{ filename: "ADAR-04.jpg", mimeType: "image/jpeg", size: 2311044 }, { filename: "ADAR-07.jpg", mimeType: "image/jpeg", size: 1988120 }, { filename: "ADAR-12.jpg", mimeType: "image/jpeg", size: 2560771 }] }],
   ["aisha.rahman@gmail.com", 1, "outbound", 1, "Re: ADAR photos", "These are beautiful — can you send 4, 7 and 12 in high-res?"],
-  ["tomas@harborarts.org", 0, "inbound", 30, "Final report received", "Thank you for submitting the final report for last year's grant. Everything looks complete."],
-  ["emma.l@lumengallery.com", 0, "inbound", 6, "Shipping for the winter show", "Our shipper can pick up the works on Nov 20 or 21. Which do you prefer?"],
+  ["tomas@harborarts.org", 0, "inbound", 30, "Final report received", "Thank you for submitting the final report for last year's grant. Everything looks complete.", { labels: ["CATEGORY_PERSONAL"] }],
+  ["emma.l@lumengallery.com", 0, "inbound", 6, "Shipping for the winter show", "Our shipper can pick up the works on Nov 20 or 21. Which do you prefer?", { labels: [...PRIMARY, "UNREAD"] }],
+  ["emma.l@lumengallery.com", 0, "inbound", 40, "Condition report — returned works", "Attached is the condition report for the works returned after the summer show. All good, one frame needs a touch-up.", { thread: "thread-emma-condition", labels: ["CATEGORY_PERSONAL"], attachments: [{ filename: "condition-report.pdf", mimeType: "application/pdf", size: 918222 }] }],
   ["noah.w@outlook.com", 1, "outbound", 120, "Thank you", "It was great seeing you at the opening. Enjoy the piece!"],
   ["jordan.lee@studiomail.io", 0, "inbound", 4, "Collaboration idea", "Hi — I run a small print studio and I'd love to collaborate on an edition for CreArtBox. Could we chat?"],
-  ["priya@brooklynreview.net", 0, "inbound", 5, "Photo request", "Sofia mentioned the new space — could we schedule a shoot for the feature?"],
+  ["priya@brooklynreview.net", 0, "inbound", 5, "Photo request", "Sofia mentioned the new space — could we schedule a shoot for the feature?", { labels: [...PRIMARY, "STARRED"] }],
+  // Automated mail in the other inbox tabs, one in Trash.
+  ["news@lumengallery.com", 0, "inbound", 1, "October openings at Lumen", "Three new shows open this month: Tidewater, Paper Rooms and Night Garden. Join us for the members' preview on Oct 8.", { name: "Lumen Gallery", automated: "list_id", labels: ["INBOX", "CATEGORY_PROMOTIONS", "UNREAD"] }],
+  ["hello@framingco.example", 0, "inbound", 3, "Fall sale: 20% off custom framing", "This week only: 20% off every custom frame, free pickup in Brooklyn and Queens.", { name: "Frame & Co.", automated: "unsubscribe", labels: ["INBOX", "CATEGORY_PROMOTIONS", "UNREAD"] }],
+  ["notify@picturegram.example", 1, "inbound", 1, "Aisha Rahman tagged you in a photo", "Aisha Rahman tagged you in a photo from ADAR — Night One.", { name: "Picturegram", automated: "noreply", labels: ["INBOX", "CATEGORY_SOCIAL", "UNREAD"] }],
+  ["tickets@northsidefest.org", 0, "inbound", 2, "Your artist pass is ready", "Your 2026 artist pass for Northside Festival is attached. Show it at the artist entrance on Kent Ave.", { name: "Northside Festival", automated: "noreply", labels: ["INBOX", "CATEGORY_UPDATES", "UNREAD"], attachments: [{ filename: "artist-pass.pdf", mimeType: "application/pdf", size: 120455 }] }],
+  ["digest@grantwatch.example", 0, "inbound", 7, "Weekly digest: 12 new arts funding opportunities", "This week: 12 new calls for performing and visual artists, 3 with deadlines in October.", { name: "GrantWatch", automated: "list_id", labels: ["INBOX", "CATEGORY_UPDATES"] }],
+  ["billing@printshop.example", 0, "inbound", 8, "Invoice #2291 overdue", "Your invoice #2291 is overdue. Pay now to avoid a late fee.", { name: "Quick Print Shop", automated: "noreply", labels: ["TRASH", "CATEGORY_UPDATES"] }],
 ];
 
 const OPPORTUNITIES = [
@@ -80,12 +92,15 @@ try {
   await sql.begin(async (tx) => {
     await tx`truncate table email_drafts, message_participants, messages, opportunities, contact_projects, contact_emails, contacts, organizations, gmail_accounts restart identity cascade`;
 
+    // Demo accounts have no Google tokens: a permanent sync lease keeps sync-on-visit
+    // from trying (and marking them "reconnect required"); the mail client shows
+    // their stored copies and reports Gmail actions as unavailable.
     const accountIds = [];
     for (const [i, a] of ACCOUNTS.entries()) {
       const [row] = await tx`
         insert into gmail_accounts (email, display_name, status, history_id, backfill_status, backfill_imported, backfill_scanned,
-                                    backfill_estimate, backfill_started_at, backfill_completed_at, last_synced_at, scopes)
-        values (${a.email}, ${a.displayName}, 'active', ${1000 + i}, 'done', 0, 0, 0, ${ago(2)}, ${ago(2)}, ${ago(0, 1)},
+                                    backfill_estimate, backfill_started_at, backfill_completed_at, last_synced_at, sync_locked_until, scopes)
+        values (${a.email}, ${a.displayName}, 'active', ${1000 + i}, 'done', 0, 0, 0, ${ago(2)}, ${ago(2)}, ${ago(0, 1)}, 'infinity',
                 ${["https://www.googleapis.com/auth/gmail.readonly", "https://www.googleapis.com/auth/gmail.compose"]})
         returning id`;
       accountIds.push(row.id);
@@ -111,21 +126,29 @@ try {
     }
 
     let n = 0;
-    for (const [email, accountIndex, direction, days, subject, body] of THREADS) {
+    const nameOf = (email) => CONTACTS.find((c) => c.email === email)?.name ?? null;
+    for (const [email, accountIndex, direction, days, subject, body, options = {}] of THREADS) {
       n++;
       const account = ACCOUNTS[accountIndex];
-      const contact = CONTACTS.find((c) => c.email === email);
-      const from = direction === "outbound" ? { email: account.email, name: account.displayName } : { email, name: contact?.name ?? null };
-      const to = direction === "outbound" ? { email, name: contact?.name ?? null } : { email: account.email, name: account.displayName };
+      const name = options.name ?? nameOf(email);
+      const from = direction === "outbound" ? { email: account.email, name: account.displayName } : { email, name };
+      const to = direction === "outbound" ? { email, name } : { email: account.email, name: account.displayName };
+      const labels = options.labels ?? (direction === "outbound" ? ["SENT"] : PRIMARY);
+      const attachments = options.attachments ?? [];
       const [m] = await tx`
         insert into messages (account_id, gmail_message_id, gmail_thread_id, rfc822_message_id, direction, from_email, from_name,
-                              subject, snippet, body_text, sent_at, label_ids)
-        values (${accountIds[accountIndex]}, ${"demo" + n}, ${"thread-" + email}, ${`<demo-${n}@example.com>`}, ${direction},
-                ${from.email}, ${from.name}, ${subject}, ${body.slice(0, 140)}, ${body}, ${ago(days, n % 5)},
-                ${direction === "outbound" ? ["SENT"] : ["INBOX", "CATEGORY_PERSONAL"]})
+                              subject, snippet, body_text, sent_at, label_ids, is_automated, automated_reason,
+                              has_attachments, attachments)
+        values (${accountIds[accountIndex]}, ${"demo" + n}, ${options.thread ?? "thread-" + email}, ${`<demo-${n}@example.com>`}, ${direction},
+                ${from.email}, ${from.name}, ${subject}, ${body.replace(/\s+/g, " ").slice(0, 140)}, ${body},
+                ${ago(days, options.hours ?? n % 5)}, ${labels}, ${Boolean(options.automated)}, ${options.automated ?? null},
+                ${attachments.length > 0}, ${tx.json(attachments)})
         returning id`;
       await tx`insert into message_participants (message_id, role, email, name) values (${m.id}, 'from', ${from.email}, ${from.name})`;
       await tx`insert into message_participants (message_id, role, email, name) values (${m.id}, 'to', ${to.email}, ${to.name})`;
+      for (const cc of options.cc ?? []) {
+        await tx`insert into message_participants (message_id, role, email, name) values (${m.id}, 'cc', ${cc}, ${nameOf(cc)})`;
+      }
     }
 
     for (const o of OPPORTUNITIES) {

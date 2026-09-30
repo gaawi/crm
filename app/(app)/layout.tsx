@@ -2,6 +2,7 @@ import Link from "next/link";
 import { after, connection } from "next/server";
 import { Search } from "lucide-react";
 import { requireSession } from "@/lib/auth";
+import { getMailCounts } from "@/lib/mail/queries";
 import { countPendingDrafts } from "@/lib/queries/drafts";
 import { getOverviewCounts } from "@/lib/queries/stats";
 import { deadlineFor, syncStaleAccounts } from "@/lib/sync/runner";
@@ -19,7 +20,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // the page is sent (covers missed push notifications; never throws). The
   // deadline keeps a safety margin for the time the render already took.
   after(() => syncStaleAccounts({ deadline: deadlineFor(maxDuration) - 15_000 }));
-  const [approvals, counts] = await Promise.all([countPendingDrafts(), getOverviewCounts()]);
+  const [approvals, counts, mail] = await Promise.all([countPendingDrafts(), getOverviewCounts(), getMailCounts()]);
 
   return (
     <div className="flex min-h-dvh">
@@ -38,7 +39,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             className="h-8 w-full rounded-md border border-border bg-bg pl-8 pr-2 text-sm placeholder:text-subtle focus:border-border-strong focus:outline-none"
           />
         </form>
-        <SideNav approvals={approvals} />
+        <SideNav approvals={approvals} mail={mail.inbox.primary} />
         <form action={logout} className="mt-auto">
           <button type="submit" className="px-2.5 text-xs text-subtle hover:text-muted">
             Sign out
@@ -56,12 +57,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             </Link>
           </div>
         ) : null}
-        <main className="mx-auto w-full max-w-6xl flex-1 px-4 pb-[calc(env(safe-area-inset-bottom)+5.5rem)] pt-[calc(env(safe-area-inset-top)+1rem)] md:px-8 md:py-8">
+        {/* Pages whose root has data-fullbleed (Mail) use the whole width and manage their own padding. */}
+        <main className="mx-auto w-full max-w-6xl flex-1 px-4 pb-[calc(env(safe-area-inset-bottom)+5.5rem)] pt-[calc(env(safe-area-inset-top)+1rem)] has-[>[data-fullbleed]]:max-w-none has-[>[data-fullbleed]]:p-0 md:px-8 md:py-8">
           {children}
         </main>
       </div>
 
-      <TabBar approvals={approvals} />
+      <TabBar approvals={approvals} mail={mail.inbox.primary} />
     </div>
   );
 }

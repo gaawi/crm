@@ -1,12 +1,16 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { Building2, ChevronRight, FolderKanban, LayoutList, LogOut, Search, Settings, type LucideIcon } from "lucide-react";
+import { Building2, ChevronRight, FolderKanban, LayoutList, LogOut, Search, Settings, Sparkles, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/ui/layout";
 import { logout } from "@/app/(auth)/login/actions";
 
 export const metadata: Metadata = { title: "More" };
 
 const GROUPS: { title: string; items: { href: string; label: string; icon: LucideIcon; tint: string }[] }[] = [
+  {
+    title: "Assistant",
+    items: [{ href: "/assistant", label: "Claude", icon: Sparkles, tint: "bg-orange-500" }],
+  },
   {
     title: "CRM",
     items: [

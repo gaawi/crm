@@ -8,6 +8,7 @@ import {
   FolderKanban,
   Inbox,
   LayoutList,
+  Mail,
   Menu,
   Send,
   Settings,
@@ -25,6 +26,7 @@ interface NavItem {
 
 export const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Today", icon: CalendarCheck },
+  { href: "/mail", label: "Mail", icon: Mail },
   { href: "/approvals", label: "Approvals", icon: Send },
   { href: "/contacts", label: "Contacts", icon: Users },
   { href: "/organizations", label: "Organizations", icon: Building2 },
@@ -34,17 +36,17 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
-/** iPhone tab bar: the four most used sections + More. */
+/** iPhone tab bar: the four most used sections + More (Claude lives in More and on Today). */
 const TAB_ITEMS: NavItem[] = [
   { href: "/", label: "Today", icon: CalendarCheck },
+  { href: "/mail", label: "Mail", icon: Mail },
   { href: "/approvals", label: "Approvals", icon: Inbox },
   { href: "/contacts", label: "Contacts", icon: Users },
-  { href: "/assistant", label: "Claude", icon: Sparkles },
   { href: "/more", label: "More", icon: Menu },
 ];
 
 /** Routes reached through "More" keep the More tab highlighted. */
-const MORE_ROUTES = ["/more", "/organizations", "/projects", "/pipeline", "/settings", "/search"];
+const MORE_ROUTES = ["/more", "/organizations", "/projects", "/pipeline", "/settings", "/search", "/assistant"];
 
 function isActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
@@ -61,7 +63,7 @@ function Count({ value }: { value?: number }) {
   );
 }
 
-export function SideNav({ approvals = 0 }: { approvals?: number }) {
+export function SideNav({ approvals = 0, mail = 0 }: { approvals?: number; mail?: number }) {
   const pathname = usePathname();
   return (
     <nav className="flex flex-col gap-0.5">
@@ -79,7 +81,7 @@ export function SideNav({ approvals = 0 }: { approvals?: number }) {
           >
             <Icon className="size-4 shrink-0" strokeWidth={1.75} />
             {label}
-            {href === "/approvals" ? <Count value={approvals} /> : null}
+            {href === "/approvals" ? <Count value={approvals} /> : href === "/mail" ? <Count value={mail} /> : null}
           </Link>
         );
       })}
@@ -87,8 +89,17 @@ export function SideNav({ approvals = 0 }: { approvals?: number }) {
   );
 }
 
+function TabBadge({ value }: { value: number }) {
+  if (!value) return null;
+  return (
+    <span className="absolute left-1/2 top-1 ml-2 min-w-[18px] rounded-full bg-danger px-1 text-center text-[11px] font-semibold leading-[18px] text-white">
+      {value > 99 ? "99+" : value}
+    </span>
+  );
+}
+
 /** Fixed bottom tab bar for phones (safe-area aware, 49pt like iOS). */
-export function TabBar({ approvals = 0 }: { approvals?: number }) {
+export function TabBar({ approvals = 0, mail = 0 }: { approvals?: number; mail?: number }) {
   const pathname = usePathname();
   return (
     <nav
@@ -110,11 +121,7 @@ export function TabBar({ approvals = 0 }: { approvals?: number }) {
               >
                 <Icon className="size-6" strokeWidth={active ? 2.1 : 1.6} />
                 {label}
-                {href === "/approvals" && approvals > 0 ? (
-                  <span className="absolute left-1/2 top-1 ml-2 min-w-[18px] rounded-full bg-danger px-1 text-center text-[11px] font-semibold leading-[18px] text-white">
-                    {approvals > 99 ? "99+" : approvals}
-                  </span>
-                ) : null}
+                <TabBadge value={href === "/approvals" ? approvals : href === "/mail" ? mail : 0} />
               </Link>
             </li>
           );

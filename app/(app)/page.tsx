@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { ArrowDownLeft, ArrowUpRight, Check, Clock } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Check, Clock, Sparkles } from "lucide-react";
 import { ContactRow, RowList } from "@/components/contact-row";
 import { StageBadge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
@@ -218,6 +218,15 @@ export default async function TodayPage() {
           </section>
         </aside>
       </div>
+
+      {/* Phones: Claude moved from the tab bar into More; this keeps it one tap away. */}
+      <Link
+        href="/assistant"
+        className="fixed bottom-[calc(env(safe-area-inset-bottom)+4.25rem)] right-4 z-20 flex h-12 items-center gap-2 rounded-full bg-accent pl-4 pr-5 text-[15px] font-semibold text-accent-fg shadow-lg shadow-black/15 active:opacity-80 md:hidden"
+      >
+        <Sparkles className="size-5" strokeWidth={2} />
+        Ask Claude
+      </Link>
     </>
   );
 }

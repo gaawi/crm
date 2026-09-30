@@ -386,3 +386,24 @@ export async function threadExists(accountId: string, threadId: string): Promise
   `;
   return Boolean(row);
 }
+
+/** Unread threads per user label, per account (label ids like Label_1 repeat across accounts). */
+export async function unreadLabelCountsByAccount(): Promise<Record<string, Record<string, number>>> {
+  const rows = await sql<{ accountId: string; label: string; count: number }[]>`
+    select m.account_id, l as label, count(distinct m.gmail_thread_id)::int as count
+      from messages m, unnest(m.label_ids) l
+     where m.label_ids @> '{UNREAD}' and not (m.label_ids && '{TRASH,SPAM,DELETED}') and l like 'Label\\_%'
+     group by m.account_id, l
+  `;
+  const out: Record<string, Record<string, number>> = {};
+  for (const row of rows) (out[row.accountId] ??= {})[row.label] = row.count;
+  return out;
+}
+
+/** Stored labels of each message of a thread (for the offline copy of a thread), by Gmail message id. */
+export async function storedThreadLabels(accountId: string, threadId: string): Promise<Record<string, string[]>> {
+  const rows = await sql<{ gmailMessageId: string; labelIds: string[] }[]>`
+    select gmail_message_id, label_ids from messages where account_id = ${accountId} and gmail_thread_id = ${threadId}
+  `;
+  return Object.fromEntries(rows.map((r) => [r.gmailMessageId, r.labelIds]));
+}
