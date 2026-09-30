@@ -1,10 +1,10 @@
 import "server-only";
 import { sql } from "@/lib/db";
 import type { ContactRef, Direction, EmailMessage } from "@/lib/types";
-import { clampLimit, messageColumns, toEmailMessage } from "@/lib/queries/shared";
+import { clampLimit, messageColumns, messageMatches, messageRank, toEmailMessage } from "@/lib/queries/shared";
 
 export interface MessageSearch {
-  /** websearch_to_tsquery('english', q) against messages.search; optional when other filters are given. */
+  /** Full-text query (English stemming + exact words); optional when other filters are given. */
   q?: string;
   since?: Date;
   until?: Date;
@@ -17,7 +17,7 @@ export interface MessageSearch {
 }
 
 export interface MessageHit extends EmailMessage {
-  /** ts_rank; 0 when no q. */
+  /** ts_rank of the returned rows; 0 when no q. Results are ordered by date. */
   rank: number;
   /** Contacts involved in the message (any role). */
   contacts: ContactRef[];
@@ -49,18 +49,18 @@ const isRepresentative = () => sql`
   )
 `;
 
-/** Full-text search, de-duplicated across accounts. Ordered by rank then date when q is given, else by date. */
+/** Full-text search, de-duplicated across accounts, newest first. */
 export async function searchMessages(search: MessageSearch): Promise<MessageHit[]> {
   const q = search.q?.trim() || null;
   const limit = clampLimit(search.limit, 25, 200);
   const rows = await sql`
     select ${messageColumns()},
-           ${q ? sql`ts_rank(m.search, websearch_to_tsquery('english', ${q}))` : sql`0::real`} as rank,
+           ${q ? messageRank(q) : sql`0::real`} as rank,
            ${messageContacts()}
       from messages m
       join gmail_accounts a on a.id = m.account_id
      where ${isRepresentative()}
-       ${q ? sql`and m.search @@ websearch_to_tsquery('english', ${q})` : sql``}
+       ${q ? sql`and ${messageMatches(q)}` : sql``}
        ${search.since ? sql`and m.sent_at >= ${search.since}` : sql``}
        ${search.until ? sql`and m.sent_at < ${search.until}` : sql``}
        ${search.accountId ? sql`and m.account_id = ${search.accountId}` : sql``}
@@ -83,7 +83,7 @@ export async function searchMessages(search: MessageSearch): Promise<MessageHit[
                 where mp.message_id = m.id and c.organization_id = ${search.organizationId})`
            : sql``
        }
-     order by ${q ? sql`rank desc, m.sent_at desc` : sql`m.sent_at desc`}
+     order by m.sent_at desc
      limit ${limit}
   `;
   return rows.map((row) => {

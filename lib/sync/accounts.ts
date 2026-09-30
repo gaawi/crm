@@ -1,4 +1,7 @@
 import "server-only";
+import { sql } from "@/lib/db";
+import { env } from "@/lib/env";
+import { getOwnAddresses } from "@/lib/queries/stats";
 import type { GmailClient } from "@/lib/gmail/client";
 import type { OAuthTokens } from "@/lib/gmail/oauth";
 import type { AccountStatus, BackfillStatus, GmailAccountView } from "@/lib/types";
@@ -37,22 +40,41 @@ export interface GmailAccountRecord {
 
 /** For the Settings page: no secrets, plus message counts and derived flags. */
 export async function listAccountViews(): Promise<GmailAccountView[]> {
-  throw new Error("TODO");
+  const pushConfigured = Boolean(env.pubsubTopic);
+  return sql<GmailAccountView[]>`
+    select a.id, a.email, a.display_name, a.status,
+           a.backfill_status, a.backfill_imported, a.backfill_scanned, a.backfill_estimate,
+           a.backfill_started_at, a.backfill_completed_at,
+           (a.status = 'active'
+             and a.backfill_status in ('pending', 'running', 'error')
+             and (a.backfill_locked_until is null or a.backfill_locked_until < now())) as backfill_stalled,
+           a.last_synced_at, a.watch_expires_at,
+           (${pushConfigured} and a.status = 'active' and a.watch_expires_at > now()) as push_active,
+           a.last_error, a.last_error_at,
+           (select count(*)::int from messages m where m.account_id = a.id) as message_count,
+           a.created_at
+      from gmail_accounts a
+     order by a.created_at
+  `;
 }
 
 export async function listAccounts(options: { activeOnly?: boolean } = {}): Promise<GmailAccountRecord[]> {
-  void options;
-  throw new Error("TODO");
+  return sql<GmailAccountRecord[]>`
+    select * from gmail_accounts
+     where ${options.activeOnly ? sql`status = 'active'` : sql`true`}
+     order by created_at
+  `;
 }
 
 export async function getAccount(id: string): Promise<GmailAccountRecord | null> {
-  void id;
-  throw new Error("TODO");
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
+  const [row] = await sql<GmailAccountRecord[]>`select * from gmail_accounts where id = ${id}`;
+  return row ?? null;
 }
 
 export async function getAccountByEmail(email: string): Promise<GmailAccountRecord | null> {
-  void email;
-  throw new Error("TODO");
+  const [row] = await sql<GmailAccountRecord[]>`select * from gmail_accounts where email = ${email.trim().toLowerCase()}`;
+  return row ?? null;
 }
 
 /**
@@ -122,7 +144,7 @@ export function gmailClientFor(accountId: string, fetchImpl?: typeof fetch): Gma
 
 /** Addresses that are "me": every account email + aliases + env.ownEmails, lower-cased. */
 export async function getSelfEmails(): Promise<Set<string>> {
-  throw new Error("TODO");
+  return getOwnAddresses();
 }
 
 export async function recordAccountError(accountId: string, error: unknown): Promise<void> {

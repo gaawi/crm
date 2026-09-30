@@ -1,6 +1,7 @@
 import "server-only";
 import { sql } from "@/lib/db";
 import type { ContactSummary, EmailMessage, Organization } from "@/lib/types";
+import { FREE_MAIL_DOMAINS } from "@/lib/constants";
 import { normalizeTag } from "@/lib/utils";
 import {
   clampLimit,
@@ -8,6 +9,7 @@ import {
   contactSummaryJoins,
   likePattern,
   messageColumns,
+  messageMatches,
   toEmailMessage,
 } from "@/lib/queries/shared";
 
@@ -53,7 +55,7 @@ export async function getOrganizationByName(name: string): Promise<Organization 
 
 export interface OrganizationInput {
   name?: string;
-  /** Lower-cased, "@" and "www." stripped, de-duplicated. */
+  /** Lower-cased, "@" and "www." stripped, de-duplicated; free-mail domains (gmail.com, …) are dropped. */
   domains?: string[];
   website?: string | null;
   notes?: string | null;
@@ -156,19 +158,21 @@ export async function getOrganizationHistory(
         from org, message_participants mp
        where cardinality(org.domains) > 0
          and split_part(mp.email, '@', 2) = any(org.domains)
+         and mp.email not in (select email from self_addresses)
+    ),
+    picked as (
+      select distinct on (coalesce(m.rfc822_message_id, m.id::text)) m.id
+        from ids
+        join messages m on m.id = ids.message_id
+       where true
+         ${options.before ? sql`and m.sent_at < ${options.before}` : sql``}
+         ${q ? sql`and ${messageMatches(q)}` : sql``}
+       order by coalesce(m.rfc822_message_id, m.id::text), (m.direction = 'inbound'), m.created_at, m.id
     )
     select ${messageColumns()}
-      from ids
-      join messages m on m.id = ids.message_id
+      from picked p
+      join messages m on m.id = p.id
       join gmail_accounts a on a.id = m.account_id
-     where not exists (
-             select 1 from messages d
-              where d.rfc822_message_id = m.rfc822_message_id
-                and d.id in (select message_id from ids)
-                and (d.direction = 'inbound', d.created_at, d.id) < (m.direction = 'inbound', m.created_at, m.id)
-           )
-       ${options.before ? sql`and m.sent_at < ${options.before}` : sql``}
-       ${q ? sql`and m.search @@ websearch_to_tsquery('english', ${q})` : sql``}
      order by m.sent_at desc, m.id
      limit ${limit}
   `;
@@ -201,7 +205,7 @@ export function normalizeDomains(values: string[]): string[] {
     if (!value) continue;
     value = value.replace(/^[a-z]+:\/\//, "").replace(/^[^@]*@/, "").replace(/^www\./, "");
     value = value.split(/[/?#:\s]/)[0];
-    if (/^[a-z0-9.-]+\.[a-z]{2,}$/.test(value)) out.add(value);
+    if (/^[a-z0-9.-]+\.[a-z]{2,}$/.test(value) && !FREE_MAIL_DOMAINS.has(value)) out.add(value);
   }
   return [...out];
 }

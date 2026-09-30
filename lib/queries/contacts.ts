@@ -9,6 +9,7 @@ import {
   contactSummaryJoins,
   likePattern,
   messageColumns,
+  messageMatches,
   toEmailMessage,
 } from "@/lib/queries/shared";
 
@@ -298,20 +299,22 @@ export async function getContactHistory(
         from contact_emails ce
         join message_participants mp on mp.email = ce.email
        where ce.contact_id = ${contactId}
+    ),
+    picked as (
+      -- One row per RFC 822 message: the outbound copy, else the first stored.
+      select distinct on (coalesce(m.rfc822_message_id, m.id::text)) m.id
+        from ids
+        join messages m on m.id = ids.message_id
+       where true
+         ${options.before ? sql`and m.sent_at < ${options.before}` : sql``}
+         ${q ? sql`and ${messageMatches(q)}` : sql``}
+         ${options.includeAutomated === false ? sql`and not m.is_automated` : sql``}
+       order by coalesce(m.rfc822_message_id, m.id::text), (m.direction = 'inbound'), m.created_at, m.id
     )
     select ${messageColumns()}
-      from ids
-      join messages m on m.id = ids.message_id
+      from picked p
+      join messages m on m.id = p.id
       join gmail_accounts a on a.id = m.account_id
-     where not exists (
-             select 1 from messages d
-              where d.rfc822_message_id = m.rfc822_message_id
-                and d.id in (select message_id from ids)
-                and (d.direction = 'inbound', d.created_at, d.id) < (m.direction = 'inbound', m.created_at, m.id)
-           )
-       ${options.before ? sql`and m.sent_at < ${options.before}` : sql``}
-       ${q ? sql`and m.search @@ websearch_to_tsquery('english', ${q})` : sql``}
-       ${options.includeAutomated === false ? sql`and not m.is_automated` : sql``}
      order by m.sent_at desc, m.id
      limit ${limit}
   `;

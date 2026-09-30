@@ -28,70 +28,6 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------------
--- Connected Gmail accounts + sync state
--- ---------------------------------------------------------------------------
-create table gmail_accounts (
-  id                      uuid primary key default gen_random_uuid(),
-  email                   text not null unique check (email = lower(email)),
-  display_name            text,
-  -- "Send mail as" addresses of this mailbox (lowercase). Never become contacts.
-  aliases                 text[] not null default '{}',
-  status                  text not null default 'active'
-                            check (status in ('active', 'reauth_required', 'disconnected')),
-  scopes                  text[] not null default '{}',
-  -- OAuth tokens, AES-256-GCM encrypted with TOKEN_ENCRYPTION_KEY.
-  refresh_token_enc       text,
-  access_token_enc        text,
-  access_token_expires_at timestamptz,
-
-  -- Incremental sync (Gmail history API + Pub/Sub push).
-  history_id              bigint,          -- last fully processed mailbox historyId
-  last_synced_at          timestamptz,
-  sync_locked_until       timestamptz,     -- lease lock: one incremental run at a time
-  sync_requested          boolean not null default false, -- a push arrived while locked
-  watch_expires_at        timestamptz,     -- users.watch expiration (renew before)
-
-  -- Initial historical import.
-  backfill_status         text not null default 'pending'
-                            check (backfill_status in ('pending', 'running', 'done', 'error')),
-  backfill_query          text,            -- Gmail search query used for the import
-  backfill_page_token     text,            -- resume cursor for messages.list
-  backfill_scanned        integer not null default 0,  -- message ids listed so far
-  backfill_imported       integer not null default 0,  -- messages stored so far
-  backfill_estimate       integer,         -- mailbox size estimate, for progress display
-  backfill_started_at     timestamptz,
-  backfill_completed_at   timestamptz,
-  backfill_locked_until   timestamptz,     -- lease lock: one import run at a time
-
-  last_error              text,
-  last_error_at           timestamptz,
-  created_at              timestamptz not null default now(),
-  updated_at              timestamptz not null default now()
-);
-create trigger gmail_accounts_updated_at before update on gmail_accounts
-  for each row execute function set_updated_at();
-
--- ---------------------------------------------------------------------------
--- Organizations
--- ---------------------------------------------------------------------------
-create table organizations (
-  id          uuid primary key default gen_random_uuid(),
-  name        text not null check (btrim(name) <> ''),
-  -- Email domains owned by the organization (lowercase, e.g. {'moma.org'}).
-  -- New contacts with a matching address are linked automatically.
-  domains     text[] not null default '{}',
-  website     text,
-  notes       text,
-  tags        text[] not null default '{}',
-  created_at  timestamptz not null default now(),
-  updated_at  timestamptz not null default now()
-);
-create unique index organizations_name_key on organizations (lower(name));
-create index organizations_domains_idx on organizations using gin (domains);
-create trigger organizations_updated_at before update on organizations
-  for each row execute function set_updated_at();
-
--- ---------------------------------------------------------------------------
 -- Projects (CreArtBox, ADAR, Personal, Booking, Press, Grants, ...)
 -- ---------------------------------------------------------------------------
 create table projects (
@@ -117,32 +53,110 @@ insert into projects (name, color, sort_order) values
   ('Grants',    'teal',   6);
 
 -- ---------------------------------------------------------------------------
+-- Connected Gmail accounts + sync state
+-- ---------------------------------------------------------------------------
+create table gmail_accounts (
+  id                      uuid primary key default gen_random_uuid(),
+  email                   text not null unique check (email = lower(email)),
+  display_name            text,
+  -- "Send mail as" addresses of this mailbox (lowercase). Never become contacts.
+  aliases                 text[] not null default '{}',
+  status                  text not null default 'active'
+                            check (status in ('active', 'reauth_required', 'disconnected')),
+  scopes                  text[] not null default '{}',
+  -- People you correspond with through this mailbox join this project
+  -- (e.g. the ADAR mailbox → ADAR).
+  default_project_id      uuid references projects (id) on delete set null,
+  -- OAuth tokens, AES-256-GCM encrypted with TOKEN_ENCRYPTION_KEY.
+  refresh_token_enc       text,
+  access_token_enc        text,
+  access_token_expires_at timestamptz,
+
+  -- Incremental sync (Gmail history API + Pub/Sub push).
+  history_id              bigint,          -- last processed mailbox historyId (only moves forward)
+  last_synced_at          timestamptz,
+  sync_locked_until       timestamptz,     -- lease lock: one incremental run at a time
+  sync_requested          boolean not null default false, -- a push arrived while locked
+  watch_expires_at        timestamptz,     -- users.watch expiration
+  watch_renewed_at        timestamptz,
+
+  -- Initial historical import (also reused to re-list a gap after the
+  -- history id expired).
+  backfill_status         text not null default 'pending'
+                            check (backfill_status in ('pending', 'running', 'done', 'error')),
+  backfill_query          text,            -- Gmail search query used for the import
+  backfill_page_token     text,            -- resume cursor for messages.list
+  backfill_scanned        integer not null default 0,  -- message ids listed so far
+  backfill_imported       integer not null default 0,  -- messages stored so far
+  backfill_estimate       integer,         -- mailbox size estimate, for progress display
+  backfill_started_at     timestamptz,
+  backfill_completed_at   timestamptz,
+  backfill_locked_until   timestamptz,     -- lease lock: one import run at a time
+
+  last_error              text,
+  last_error_at           timestamptz,
+  created_at              timestamptz not null default now(),
+  updated_at              timestamptz not null default now()
+);
+create trigger gmail_accounts_updated_at before update on gmail_accounts
+  for each row execute function set_updated_at();
+
+-- Every address that is "me".
+create view self_addresses as
+  select lower(email) as email from gmail_accounts
+  union
+  select lower(unnest(aliases)) from gmail_accounts;
+
+-- ---------------------------------------------------------------------------
+-- Organizations
+-- ---------------------------------------------------------------------------
+create table organizations (
+  id          uuid primary key default gen_random_uuid(),
+  name        text not null check (btrim(name) <> ''),
+  -- Email domains owned by the organization (lowercase, e.g. {'moma.org'}).
+  -- New contacts with a matching address are linked automatically, and the
+  -- organization's correspondence includes anyone at these domains.
+  domains     text[] not null default '{}',
+  website     text,
+  notes       text,
+  tags        text[] not null default '{}',
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+create unique index organizations_name_key on organizations (lower(name));
+create index organizations_domains_idx on organizations using gin (domains);
+create trigger organizations_updated_at before update on organizations
+  for each row execute function set_updated_at();
+
+-- ---------------------------------------------------------------------------
 -- Contacts
 -- ---------------------------------------------------------------------------
 create table contacts (
-  id                  uuid primary key default gen_random_uuid(),
-  name                text,
-  organization_id     uuid references organizations (id) on delete set null,
-  role                text,
-  notes               text,
-  tags                text[] not null default '{}',
+  id                    uuid primary key default gen_random_uuid(),
+  name                  text,
+  organization_id       uuid references organizations (id) on delete set null,
+  role                  text,
+  notes                 text,
+  tags                  text[] not null default '{}',
   -- new = auto-created from Gmail and not reviewed yet; archived = hidden noise.
-  status              text not null default 'new'
-                        check (status in ('new', 'lead', 'active', 'inactive', 'archived')),
-  follow_up_at        date,
-  follow_up_note      text,
-  source              text not null default 'manual' check (source in ('manual', 'gmail')),
+  status                text not null default 'new'
+                          check (status in ('new', 'lead', 'active', 'inactive', 'archived')),
+  follow_up_at          date,
+  follow_up_note        text,
+  source                text not null default 'manual' check (source in ('manual', 'gmail')),
 
   -- Denormalized from the email history by refresh_contact_stats().
-  last_contacted_at   timestamptz,   -- latest non-automated message either way
-  last_inbound_at     timestamptz,   -- latest message *from* them
-  last_outbound_at    timestamptz,   -- latest message from me *to* them
-  message_count       integer not null default 0,
+  last_contacted_at     timestamptz,   -- latest direct exchange either way
+  last_inbound_at       timestamptz,   -- latest message *from* them
+  last_outbound_at      timestamptz,   -- latest message from me *to* them (To:)
+  -- My latest email to them (To:) in a thread where nobody has answered since.
+  awaiting_reply_since  timestamptz,
+  message_count         integer not null default 0,
   -- "Mark done" on needs-reply / awaiting-reply lists: hidden until newer mail.
-  reply_dismissed_at  timestamptz,
+  reply_dismissed_at    timestamptz,
 
-  created_at          timestamptz not null default now(),
-  updated_at          timestamptz not null default now()
+  created_at            timestamptz not null default now(),
+  updated_at            timestamptz not null default now()
 );
 create index contacts_organization_idx on contacts (organization_id);
 create index contacts_last_contacted_idx on contacts (last_contacted_at desc nulls last);
@@ -155,13 +169,25 @@ create trigger contacts_updated_at before update on contacts
 -- One row per address; an address belongs to exactly one contact.
 create table contact_emails (
   email       text primary key
-                check (email = lower(email) and position('@' in email) > 1),
+                check (email = lower(email) and position('@' in email) > 1 and email !~ '\s'),
   contact_id  uuid not null references contacts (id) on delete cascade,
   is_primary  boolean not null default false,
   created_at  timestamptz not null default now()
 );
 create index contact_emails_contact_idx on contact_emails (contact_id);
 create unique index contact_emails_one_primary on contact_emails (contact_id) where is_primary;
+
+-- My own addresses can never belong to a contact.
+create or replace function contact_emails_not_self() returns trigger
+language plpgsql as $$
+begin
+  if exists (select 1 from self_addresses where email = new.email) then
+    raise exception '% is one of your own addresses', new.email using errcode = 'check_violation';
+  end if;
+  return new;
+end $$;
+create trigger contact_emails_not_self before insert or update of email on contact_emails
+  for each row execute function contact_emails_not_self();
 
 create table contact_projects (
   contact_id  uuid not null references contacts (id) on delete cascade,
@@ -189,27 +215,45 @@ create table messages (
   from_name           text,
   subject             text,
   snippet             text,
-  -- Plain-text body with quoted replies stripped, capped in length.
-  -- Null for automated/bulk mail (snippet only) to keep the database small.
+  -- Plain-text body with quoted replies stripped, capped in length
+  -- (short for automated mail).
   body_text           text,
   sent_at             timestamptz not null,
   label_ids           text[] not null default '{}',
-  -- Newsletters, notifications, receipts... (List-Unsubscribe, Precedence, etc.)
+  -- Newsletters, notifications, receipts... Only used for contact
+  -- auto-creation, stats and default filtering — the mail is still stored.
   is_automated        boolean not null default false,
+  -- list_id | precedence | auto_submitted | unsubscribe | category | noreply
+  automated_reason    text,
   has_attachments     boolean not null default false,
   attachments         jsonb not null default '[]',  -- [{filename, mimeType, size}]
-  search              tsvector generated always as (
-                        setweight(to_tsvector('english', coalesce(subject, '')), 'A') ||
-                        setweight(to_tsvector('simple', coalesce(from_name, '') || ' ' || coalesce(from_email, '')), 'B') ||
-                        setweight(to_tsvector('english', left(coalesce(body_text, snippet, ''), 20000)), 'C')
-                      ) stored,
   created_at          timestamptz not null default now(),
   unique (account_id, gmail_message_id)
 );
 create index messages_sent_at_idx on messages (sent_at desc);
-create index messages_thread_idx on messages (account_id, gmail_thread_id);
+create index messages_thread_idx on messages (account_id, gmail_thread_id, sent_at);
 create index messages_rfc822_idx on messages (rfc822_message_id);
-create index messages_search_idx on messages using gin (search);
+
+-- Full-text search vector, computed on the fly (an index on the expression is
+-- far smaller than a stored column). Queries must use exactly this call:
+--   message_search_vector(subject, from_name, from_email, coalesce(body_text, snippet))
+create or replace function message_search_vector(subject text, from_name text, from_email text, body text)
+returns tsvector
+language sql immutable parallel safe as $$
+  select setweight(to_tsvector('english', coalesce(subject, '')), 'A')
+      || setweight(to_tsvector('simple', coalesce(from_name, '') || ' ' || coalesce(from_email, '')), 'B')
+      || setweight(to_tsvector('english', left(coalesce(body, ''), 20000)), 'C')
+$$;
+create index messages_search_idx on messages
+  using gin (message_search_vector(subject, from_name, from_email, coalesce(body_text, snippet)));
+
+-- The tsquery for user input: English stemming, plus exact words so names
+-- and stopword-like words ("Will") still match.
+create or replace function message_search_query(q text)
+returns tsquery
+language sql immutable parallel safe as $$
+  select websearch_to_tsquery('english', q) || websearch_to_tsquery('simple', q)
+$$;
 
 -- reply_to is stored when it differs from the sender: contact-form services
 -- (Squarespace, Typeform, ...) send from no-reply@ with the real person there.
@@ -253,29 +297,49 @@ create trigger opportunities_updated_at before update on opportunities
   for each row execute function set_updated_at();
 
 -- ---------------------------------------------------------------------------
+-- Login throttling (per client IP and a global bucket)
+-- ---------------------------------------------------------------------------
+create table login_attempts (
+  bucket        text primary key,
+  failures      integer not null default 0,
+  window_start  timestamptz not null default now()
+);
+
+-- ---------------------------------------------------------------------------
 -- Functions
 -- ---------------------------------------------------------------------------
 
 -- Recompute the denormalized history columns for the given contacts.
 -- Call after inserting/deleting messages, and after moving addresses.
 --
--- A message counts as real correspondence ("human") unless it is automated —
--- but an automated-looking message in a thread where I also wrote (a reply sent
--- through HubSpot/Mailchimp, say) still counts.
+-- Only direct exchanges count: mail from them (From, or Reply-To for contact
+-- forms) and mail from me with them in To. Being cc'd on someone else's thread
+-- does not make someone "last contacted" or "awaiting a reply".
+--
+-- Automated-looking mail counts as real correspondence only when it came from
+-- a marketing tool or was categorized by Gmail (reason unsubscribe/category)
+-- AND I also wrote in that thread (a reply sent through HubSpot, say). Mailing
+-- lists, bulk mail and auto-replies never count.
 create or replace function refresh_contact_stats(p_contact_ids uuid[])
 returns void
-language sql as $$
+language plpgsql as $$
+begin
+  -- Lock in a deterministic order so concurrent refreshes cannot deadlock,
+  -- then compute with a snapshot taken after the locks are held.
+  perform 1 from contacts where id = any (p_contact_ids) order by id for update;
+
   with ids as (
     select distinct unnest(p_contact_ids) as contact_id
   ),
   rows as (
-    select ce.contact_id, m.sent_at, m.direction, mp.role,
+    select ce.contact_id, m.id as message_id, m.account_id, m.gmail_thread_id, m.sent_at, m.direction, mp.role,
            coalesce(m.rfc822_message_id, m.id::text) as message_key,
            (not m.is_automated
-             or exists (select 1 from messages o
-                         where o.account_id = m.account_id
-                           and o.gmail_thread_id = m.gmail_thread_id
-                           and o.direction = 'outbound')) as human
+             or (m.automated_reason in ('unsubscribe', 'category')
+                 and exists (select 1 from messages o
+                              where o.account_id = m.account_id
+                                and o.gmail_thread_id = m.gmail_thread_id
+                                and o.direction = 'outbound'))) as human
       from contact_emails ce
       join message_participants mp on mp.email = ce.email
       join messages m on m.id = mp.message_id
@@ -283,24 +347,33 @@ language sql as $$
   ),
   stats as (
     select contact_id,
-           max(sent_at) filter (where human) as last_at,
            max(sent_at) filter (where direction = 'inbound' and role in ('from', 'reply_to') and human) as in_at,
-           max(sent_at) filter (where direction = 'outbound' and role in ('to', 'cc', 'bcc')) as out_at,
+           max(sent_at) filter (where direction = 'outbound' and role = 'to') as out_at,
+           max(sent_at) filter (where direction = 'outbound' and role in ('to', 'cc', 'bcc')) as out_any_at,
+           max(sent_at) filter (
+             where direction = 'outbound' and role = 'to'
+               and not exists (select 1 from messages r
+                                where r.account_id = rows.account_id
+                                  and r.gmail_thread_id = rows.gmail_thread_id
+                                  and r.direction = 'inbound'
+                                  and r.sent_at > rows.sent_at)
+           ) as awaiting_at,
            count(distinct message_key)::integer as cnt
       from rows
      group by contact_id
   )
   update contacts c
-     set last_contacted_at = s.last_at,
-         last_inbound_at   = s.in_at,
-         last_outbound_at  = s.out_at,
-         message_count     = coalesce(s.cnt, 0)
+     set last_contacted_at    = greatest(s.in_at, s.out_any_at),
+         last_inbound_at      = s.in_at,
+         last_outbound_at     = s.out_at,
+         awaiting_reply_since = s.awaiting_at,
+         message_count        = coalesce(s.cnt, 0)
     from ids
     left join stats s on s.contact_id = ids.contact_id
    where c.id = ids.contact_id
-     and (c.last_contacted_at, c.last_inbound_at, c.last_outbound_at, c.message_count)
-         is distinct from (s.last_at, s.in_at, s.out_at, coalesce(s.cnt, 0));
-$$;
+     and (c.last_contacted_at, c.last_inbound_at, c.last_outbound_at, c.awaiting_reply_since, c.message_count)
+         is distinct from (greatest(s.in_at, s.out_any_at), s.in_at, s.out_at, s.awaiting_at, coalesce(s.cnt, 0));
+end $$;
 
 -- Merge p_source into p_target: addresses, projects and opportunities move to
 -- the target, empty target fields are filled from the source, tags are unioned,
@@ -310,21 +383,29 @@ returns void
 language plpgsql as $$
 declare
   s contacts%rowtype;
+  t contacts%rowtype;
 begin
   if p_target = p_source then
     raise exception 'cannot merge a contact into itself';
   end if;
 
-  perform 1 from contacts where id = p_target for update;
+  -- Lock both rows in id order.
+  perform 1 from contacts where id in (p_target, p_source) order by id for update;
+  select * into t from contacts where id = p_target;
   if not found then
     raise exception 'target contact % not found', p_target;
   end if;
-  select * into s from contacts where id = p_source for update;
+  select * into s from contacts where id = p_source;
   if not found then
     raise exception 'source contact % not found', p_source;
   end if;
 
-  update contact_emails set contact_id = p_target, is_primary = false
+  -- Keep the target's primary address; the source's primary becomes primary
+  -- only if the target has none.
+  update contact_emails
+     set contact_id = p_target,
+         is_primary = is_primary and not exists (
+           select 1 from contact_emails x where x.contact_id = p_target and x.is_primary)
    where contact_id = p_source;
 
   insert into contact_projects (contact_id, project_id)
@@ -333,18 +414,20 @@ begin
 
   update opportunities set contact_id = p_target where contact_id = p_source;
 
-  update contacts t
-     set name            = coalesce(t.name, s.name),
+  update contacts c
+     set name            = coalesce(nullif(btrim(t.name), ''), s.name),
          organization_id = coalesce(t.organization_id, s.organization_id),
-         role            = coalesce(t.role, s.role),
+         role            = coalesce(nullif(btrim(t.role), ''), s.role),
          notes           = case
                              when coalesce(btrim(s.notes), '') = '' then t.notes
                              when coalesce(btrim(t.notes), '') = '' then s.notes
                              else t.notes || E'\n\n' || s.notes
                            end,
          tags            = array(select distinct x from unnest(t.tags || s.tags) as x order by x),
-         follow_up_at    = least(t.follow_up_at, s.follow_up_at),
-         follow_up_note  = coalesce(t.follow_up_note, s.follow_up_note),
+         -- The earliest follow-up wins, with its own note.
+         (follow_up_at, follow_up_note) = (
+           select d, n from (values (t.follow_up_at, t.follow_up_note), (s.follow_up_at, s.follow_up_note)) v(d, n)
+            order by d nulls last limit 1),
          status          = case
                              when t.status = 'new' and s.status <> 'archived' then s.status
                              else t.status
@@ -352,8 +435,9 @@ begin
          source          = case
                              when t.source = 'manual' or s.source = 'manual' then 'manual'
                              else 'gmail'
-                           end
-   where t.id = p_target;
+                           end,
+         reply_dismissed_at = greatest(t.reply_dismissed_at, s.reply_dismissed_at)
+   where c.id = p_target;
 
   delete from contacts where id = p_source;
 
@@ -372,6 +456,7 @@ alter table contact_projects     enable row level security;
 alter table messages             enable row level security;
 alter table message_participants enable row level security;
 alter table opportunities        enable row level security;
+alter table login_attempts       enable row level security;
 
 revoke execute on function refresh_contact_stats(uuid[]) from public;
 revoke execute on function merge_contacts(uuid, uuid) from public;
@@ -382,5 +467,9 @@ begin
     execute 'revoke all on all tables in schema public from anon, authenticated';
     execute 'revoke all on all sequences in schema public from anon, authenticated';
     execute 'revoke execute on all functions in schema public from anon, authenticated';
+    -- Objects created later in this schema must not be exposed either.
+    execute 'alter default privileges in schema public revoke all on tables from anon, authenticated';
+    execute 'alter default privileges in schema public revoke all on sequences from anon, authenticated';
+    execute 'alter default privileges in schema public revoke execute on functions from anon, authenticated, public';
   end if;
 end $$;

@@ -113,6 +113,16 @@ export function toEmailMessage(row: RawMessageRow): EmailMessage {
   };
 }
 
+/** Full-text match on `messages m` (uses the messages_search_idx expression index). */
+export const messageMatches = (q: string) => sql`
+  message_search_vector(m.subject, m.from_name, m.from_email, coalesce(m.body_text, m.snippet)) @@ message_search_query(${q})
+`;
+
+/** Relevance of `messages m` for q (only compute on a small, already-limited set). */
+export const messageRank = (q: string) => sql`
+  ts_rank(message_search_vector(m.subject, m.from_name, m.from_email, coalesce(m.body_text, m.snippet)), message_search_query(${q}))
+`;
+
 /** Escape LIKE wildcards in user input. */
 export function likePattern(q: string): string {
   return `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
