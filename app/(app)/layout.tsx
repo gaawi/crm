@@ -2,13 +2,16 @@ import Link from "next/link";
 import { connection } from "next/server";
 import { Search } from "lucide-react";
 import { requireSession } from "@/lib/auth";
-import { MobileNav, SideNav } from "@/components/nav";
+import { countPendingDrafts } from "@/lib/queries/drafts";
+import { getOverviewCounts } from "@/lib/queries/stats";
+import { SideNav, TabBar } from "@/components/nav";
 import { logout } from "@/app/(auth)/login/actions";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   // Everything behind the login reads live data: never prerender at build time.
   await connection();
   await requireSession();
+  const [approvals, counts] = await Promise.all([countPendingDrafts(), getOverviewCounts()]);
 
   return (
     <div className="flex min-h-dvh">
@@ -27,7 +30,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             className="h-8 w-full rounded-md border border-border bg-bg pl-8 pr-2 text-sm placeholder:text-subtle focus:border-border-strong focus:outline-none"
           />
         </form>
-        <SideNav />
+        <SideNav approvals={approvals} />
         <form action={logout} className="mt-auto">
           <button type="submit" className="px-2.5 text-xs text-subtle hover:text-muted">
             Sign out
@@ -36,24 +39,21 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-10 border-b border-border bg-surface/95 backdrop-blur md:hidden">
-          <div className="flex items-center gap-3 px-4 py-2.5">
-            <Link href="/" className="text-sm font-semibold">
-              CRM
+        {counts.accountsNeedingReauth > 0 ? (
+          <div className="border-b border-amber-200 bg-amber-50 px-4 pb-2 pt-[calc(env(safe-area-inset-top)+0.5rem)] text-sm text-amber-900 md:pt-2 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+            {counts.accountsNeedingReauth === 1 ? "A Gmail account" : `${counts.accountsNeedingReauth} Gmail accounts`} stopped syncing and
+            must be reconnected.{" "}
+            <Link href="/settings" className="font-medium underline underline-offset-2">
+              Reconnect
             </Link>
-            <form action="/search" className="flex-1">
-              <input
-                name="q"
-                type="search"
-                placeholder="Search"
-                className="h-8 w-full rounded-md border border-border bg-bg px-2.5 text-sm placeholder:text-subtle focus:outline-none"
-              />
-            </form>
           </div>
-          <MobileNav />
-        </header>
-        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 md:px-8 md:py-8">{children}</main>
+        ) : null}
+        <main className="mx-auto w-full max-w-6xl flex-1 px-4 pb-[calc(env(safe-area-inset-bottom)+5.5rem)] pt-[calc(env(safe-area-inset-top)+1rem)] md:px-8 md:py-8">
+          {children}
+        </main>
       </div>
+
+      <TabBar approvals={approvals} />
     </div>
   );
 }

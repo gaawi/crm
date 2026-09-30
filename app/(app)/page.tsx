@@ -22,7 +22,7 @@ function IconAction({ action, label, children }: { action: () => Promise<void>; 
         type="submit"
         title={label}
         aria-label={label}
-        className="inline-flex size-7 items-center justify-center rounded-md text-subtle hover:bg-surface-2 hover:text-fg"
+        className="inline-flex size-10 items-center justify-center rounded-full text-subtle hover:bg-surface-2 hover:text-fg active:bg-surface-2 md:size-7 md:rounded-md"
       >
         {children}
       </button>
@@ -68,7 +68,7 @@ export default async function TodayPage() {
         </div>
       ) : null}
 
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] [&>*]:min-w-0">
         <div className="flex flex-col gap-8">
           {nothingToDo && counts.accounts > 0 ? (
             <EmptyState title="You're all caught up">No follow-ups due and nobody is waiting on you.</EmptyState>
@@ -89,10 +89,10 @@ export default async function TodayPage() {
                     actions={
                       <>
                         <IconAction action={snoozeFollowUp.bind(null, c.id, 7)} label="Snooze one week">
-                          <Clock className="size-3.5" />
+                          <Clock className="size-[18px] md:size-3.5" />
                         </IconAction>
                         <IconAction action={completeFollowUp.bind(null, c.id)} label="Done">
-                          <Check className="size-3.5" />
+                          <Check className="size-[18px] md:size-3.5" />
                         </IconAction>
                       </>
                     }
@@ -120,7 +120,7 @@ export default async function TodayPage() {
                       </span>
                     ) : null}
                     <IconAction action={completeOpportunityFollowUp.bind(null, o.id)} label="Done">
-                      <Check className="size-3.5" />
+                      <Check className="size-[18px] md:size-3.5" />
                     </IconAction>
                   </li>
                 ))}
@@ -141,7 +141,7 @@ export default async function TodayPage() {
                     meta="last_inbound"
                     actions={
                       <IconAction action={markReplyDone.bind(null, c.id)} label="Mark done">
-                        <Check className="size-3.5" />
+                        <Check className="size-[18px] md:size-3.5" />
                       </IconAction>
                     }
                   />
@@ -163,7 +163,7 @@ export default async function TodayPage() {
                     meta="last_outbound"
                     actions={
                       <IconAction action={markReplyDone.bind(null, c.id)} label="Mark done">
-                        <Check className="size-3.5" />
+                        <Check className="size-[18px] md:size-3.5" />
                       </IconAction>
                     }
                   />

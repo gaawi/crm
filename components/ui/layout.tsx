@@ -1,23 +1,40 @@
+import Link from "next/link";
 import type { ReactNode } from "react";
+import { ChevronLeft } from "lucide-react";
 import { cn, initials } from "@/lib/utils";
 
-/** Page title row with optional description and right-aligned actions. */
+/**
+ * Page title row with optional description and right-aligned actions.
+ * On phones: iOS-style large title, and a "‹ Back" link when `back` is given.
+ */
 export function PageHeader({
   title,
   description,
   actions,
+  back,
   children,
 }: {
   title: ReactNode;
   description?: ReactNode;
   actions?: ReactNode;
+  /** Parent screen, e.g. { href: "/contacts", label: "Contacts" }. */
+  back?: { href: string; label: string };
   children?: ReactNode;
 }) {
   return (
     <div className="mb-6 flex flex-col gap-3">
+      {back ? (
+        <Link
+          href={back.href}
+          className="-ml-1.5 flex h-9 w-fit items-center text-[17px] text-fg/80 active:opacity-60 md:h-auto md:text-sm md:text-muted md:hover:text-fg"
+        >
+          <ChevronLeft className="size-6 md:size-4" strokeWidth={2} />
+          {back.label}
+        </Link>
+      ) : null}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-xl font-semibold tracking-tight text-fg">{title}</h1>
+          <h1 className="text-[28px] font-bold leading-tight tracking-tight text-fg md:text-xl md:font-semibold">{title}</h1>
           {description ? <p className="mt-1 text-sm text-muted">{description}</p> : null}
         </div>
         {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
@@ -44,7 +61,7 @@ export function Card({
   children: ReactNode;
 }) {
   return (
-    <section className={cn("rounded-lg border border-border bg-surface", className)}>
+    <section className={cn("rounded-xl border border-border bg-surface md:rounded-lg", className)}>
       {title || actions ? (
         <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-2.5">
           <div className="min-w-0">
@@ -74,7 +91,7 @@ export function SectionTitle({ children, count, actions }: { children: ReactNode
 
 export function EmptyState({ title, children, action }: { title: ReactNode; children?: ReactNode; action?: ReactNode }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border px-6 py-10 text-center">
+    <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border px-6 py-10 text-center md:rounded-lg">
       <p className="text-sm font-medium text-fg">{title}</p>
       {children ? <p className="max-w-sm text-sm text-muted">{children}</p> : null}
       {action ? <div className="mt-2">{action}</div> : null}

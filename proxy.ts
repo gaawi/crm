@@ -9,7 +9,17 @@ import { SESSION_COOKIE, verifySessionToken } from "@/lib/session";
  *   /api/gmail/push (Pub/Sub token), /api/cron/* and /api/sync/* (CRON_SECRET
  *   or session), /api/mcp (MCP_API_KEY).
  */
-const PUBLIC_PREFIXES = ["/login", "/api/gmail/push", "/api/cron/", "/api/sync/", "/api/mcp"];
+const PUBLIC_PREFIXES = [
+  "/login",
+  "/api/gmail/push",
+  "/api/cron/",
+  "/api/sync/",
+  "/api/mcp",
+  // App icons and manifest (Add to Home Screen).
+  "/manifest.webmanifest",
+  "/apple-icon",
+  "/pwa-icon/",
+];
 
 export async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;

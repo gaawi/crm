@@ -6,7 +6,7 @@ export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
 export type ButtonSize = "sm" | "md";
 
 const base =
-  "inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md font-medium transition-colors disabled:pointer-events-none disabled:opacity-50";
+  "inline-flex select-none items-center justify-center gap-1.5 whitespace-nowrap rounded-lg font-medium transition-colors active:opacity-70 disabled:pointer-events-none disabled:opacity-50 md:rounded-md";
 
 const variants: Record<ButtonVariant, string> = {
   primary: "bg-accent text-accent-fg hover:opacity-90",
@@ -15,9 +15,10 @@ const variants: Record<ButtonVariant, string> = {
   danger: "border border-border bg-surface text-danger hover:bg-surface-2",
 };
 
+/** Phones get 44pt-class touch targets; desktop stays compact. */
 const sizes: Record<ButtonSize, string> = {
-  sm: "h-7 px-2.5 text-xs",
-  md: "h-8 px-3 text-sm",
+  sm: "h-9 px-3 text-sm md:h-7 md:px-2.5 md:text-xs",
+  md: "h-11 px-4 text-[15px] md:h-8 md:px-3 md:text-sm",
 };
 
 export function buttonClass(variant: ButtonVariant = "secondary", size: ButtonSize = "md", className?: string) {

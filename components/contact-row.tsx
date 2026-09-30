@@ -45,11 +45,14 @@ export function ContactRow({
   }
 
   return (
-    <li className="group flex items-center gap-3 px-4 py-2.5">
+    <li className="group relative flex min-h-[60px] items-center gap-3 px-4 py-2.5 active:bg-surface-2 md:min-h-0 md:active:bg-transparent">
       <Avatar name={contact.displayName} />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <Link href={`/contacts/${contact.id}`} className="truncate text-sm font-medium text-fg hover:underline">
+          <Link
+            href={`/contacts/${contact.id}`}
+            className="truncate text-[15px] font-medium text-fg after:absolute after:inset-0 hover:underline md:text-sm md:after:hidden"
+          >
             {contact.displayName}
           </Link>
           {showStatus ? <StatusBadge status={contact.status} /> : null}
@@ -64,7 +67,7 @@ export function ContactRow({
         <p className="truncate text-xs text-muted">{note ?? subtitle}</p>
       </div>
       <span className="hidden shrink-0 text-xs text-subtle sm:block">{metaText}</span>
-      {actions ? <div className="flex shrink-0 items-center gap-1">{actions}</div> : null}
+      {actions ? <div className="relative z-10 flex shrink-0 items-center gap-1">{actions}</div> : null}
     </li>
   );
 }
@@ -72,7 +75,7 @@ export function ContactRow({
 /** Bordered list container for ContactRow / other rows. */
 export function RowList({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <ul className={cn("divide-y divide-border overflow-hidden rounded-lg border border-border bg-surface", className)}>
+    <ul className={cn("divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface md:rounded-lg", className)}>
       {children}
     </ul>
   );

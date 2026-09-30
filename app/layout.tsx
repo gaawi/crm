@@ -5,9 +5,16 @@ export const metadata: Metadata = {
   title: { default: "CRM", template: "%s · CRM" },
   description: "Contacts, email history and follow-ups across Gmail accounts.",
   robots: { index: false, follow: false },
+  applicationName: "CRM",
+  // Add to Home Screen on iPhone → full-screen app with its own icon.
+  appleWebApp: { capable: true, title: "CRM", statusBarStyle: "default" },
+  formatDetection: { telephone: false, email: false, address: false },
 };
 
 export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#fafafa" },
     { media: "(prefers-color-scheme: dark)", color: "#0b0b0c" },

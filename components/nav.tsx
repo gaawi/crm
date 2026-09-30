@@ -6,7 +6,10 @@ import {
   Building2,
   CalendarCheck,
   FolderKanban,
+  Inbox,
   LayoutList,
+  Menu,
+  Send,
   Settings,
   Sparkles,
   Users,
@@ -14,8 +17,15 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export const NAV_ITEMS: { href: string; label: string; icon: LucideIcon }[] = [
+interface NavItem {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+}
+
+export const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Today", icon: CalendarCheck },
+  { href: "/approvals", label: "Approvals", icon: Send },
   { href: "/contacts", label: "Contacts", icon: Users },
   { href: "/organizations", label: "Organizations", icon: Building2 },
   { href: "/projects", label: "Projects", icon: FolderKanban },
@@ -24,11 +34,34 @@ export const NAV_ITEMS: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
+/** iPhone tab bar: the four most used sections + More. */
+const TAB_ITEMS: NavItem[] = [
+  { href: "/", label: "Today", icon: CalendarCheck },
+  { href: "/approvals", label: "Approvals", icon: Inbox },
+  { href: "/contacts", label: "Contacts", icon: Users },
+  { href: "/assistant", label: "Claude", icon: Sparkles },
+  { href: "/more", label: "More", icon: Menu },
+];
+
+/** Routes reached through "More" keep the More tab highlighted. */
+const MORE_ROUTES = ["/more", "/organizations", "/projects", "/pipeline", "/settings", "/search"];
+
 function isActive(pathname: string, href: string) {
-  return href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
+  if (href === "/") return pathname === "/";
+  if (href === "/more") return MORE_ROUTES.some((r) => pathname === r || pathname.startsWith(`${r}/`));
+  return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export function SideNav() {
+function Count({ value }: { value?: number }) {
+  if (!value) return null;
+  return (
+    <span className="ml-auto min-w-5 rounded-full bg-accent px-1.5 text-center text-[11px] font-semibold leading-5 text-accent-fg">
+      {value > 99 ? "99+" : value}
+    </span>
+  );
+}
+
+export function SideNav({ approvals = 0 }: { approvals?: number }) {
   const pathname = usePathname();
   return (
     <nav className="flex flex-col gap-0.5">
@@ -46,6 +79,7 @@ export function SideNav() {
           >
             <Icon className="size-4 shrink-0" strokeWidth={1.75} />
             {label}
+            {href === "/approvals" ? <Count value={approvals} /> : null}
           </Link>
         );
       })}
@@ -53,25 +87,39 @@ export function SideNav() {
   );
 }
 
-export function MobileNav() {
+/** Fixed bottom tab bar for phones (safe-area aware, 49pt like iOS). */
+export function TabBar({ approvals = 0 }: { approvals?: number }) {
   const pathname = usePathname();
   return (
-    <nav className="flex gap-1 overflow-x-auto px-3 pb-2">
-      {NAV_ITEMS.map(({ href, label }) => {
-        const active = isActive(pathname, href);
-        return (
-          <Link
-            key={href}
-            href={href}
-            className={cn(
-              "shrink-0 rounded-md px-2.5 py-1 text-sm",
-              active ? "bg-surface-2 font-medium text-fg" : "text-muted",
-            )}
-          >
-            {label}
-          </Link>
-        );
-      })}
+    <nav
+      aria-label="Main"
+      className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-surface/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden"
+    >
+      <ul className="grid h-[52px] grid-cols-5">
+        {TAB_ITEMS.map(({ href, label, icon: Icon }) => {
+          const active = isActive(pathname, href);
+          return (
+            <li key={href}>
+              <Link
+                href={href}
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  "relative flex h-full flex-col items-center justify-center gap-0.5 text-[10px] font-medium",
+                  active ? "text-fg" : "text-subtle",
+                )}
+              >
+                <Icon className="size-6" strokeWidth={active ? 2.1 : 1.6} />
+                {label}
+                {href === "/approvals" && approvals > 0 ? (
+                  <span className="absolute left-1/2 top-1 ml-2 min-w-[18px] rounded-full bg-danger px-1 text-center text-[11px] font-semibold leading-[18px] text-white">
+                    {approvals > 99 ? "99+" : approvals}
+                  </span>
+                ) : null}
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
     </nav>
   );
 }
