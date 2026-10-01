@@ -23,10 +23,10 @@ export default async function ApprovalsPage() {
         title="Approvals"
         description={
           open.length
-            ? `${open.length} email${open.length === 1 ? "" : "s"} prepared by Claude, waiting for you. Nothing is sent until you approve.`
-            : "Emails Claude prepares for you land here. Nothing is sent until you approve."
+            ? `${open.length} email${open.length === 1 ? "" : "s"} prepared for you, waiting for your approval. Nothing is sent until you approve.`
+            : "Emails prepared for you land here. Nothing is sent until you approve."
         }
-        actions={<PrepareDraftsButton />}
+        actions={env.claudeEnabled ? <PrepareDraftsButton /> : null}
       />
 
       <div className="flex flex-col gap-4">
@@ -34,7 +34,9 @@ export default async function ApprovalsPage() {
           open.map((draft) => <DraftCard key={draft.id} draft={draft} timezone={timezone} compact />)
         ) : (
           <EmptyState title="Nothing to approve">
-            {autopilot.enabled
+            {!env.claudeEnabled
+              ? "Nothing is waiting for your approval."
+              : autopilot.enabled
               ? "The autopilot prepares replies and follow-ups every day. Tap “Prepare drafts” to run it now."
               : "Tap “Prepare drafts” and Claude will write replies and follow-ups for the people waiting on you. You can turn on the daily autopilot in Settings."}
           </EmptyState>

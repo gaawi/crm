@@ -16,6 +16,7 @@ import {
   Users,
   type LucideIcon,
 } from "lucide-react";
+import { useClaudeEnabled } from "@/components/features";
 import { cn } from "@/lib/utils";
 
 interface NavItem {
@@ -65,9 +66,10 @@ function Count({ value }: { value?: number }) {
 
 export function SideNav({ approvals = 0, mail = 0 }: { approvals?: number; mail?: number }) {
   const pathname = usePathname();
+  const claude = useClaudeEnabled();
   return (
     <nav className="flex flex-col gap-0.5">
-      {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+      {NAV_ITEMS.filter((item) => claude || item.href !== "/assistant").map(({ href, label, icon: Icon }) => {
         const active = isActive(pathname, href);
         return (
           <Link

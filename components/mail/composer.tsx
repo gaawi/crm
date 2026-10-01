@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useClaudeEnabled } from "@/components/features";
 import { startTransition, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ChevronDown, Loader2, Maximize2, Minimize2, Minus, Send, Sparkles, Trash2, X } from "lucide-react";
 import { sendMailAction, writeWithClaudeAction } from "@/app/(app)/mail/actions";
@@ -64,6 +65,7 @@ export function Composer({
   onClose: () => void;
   onDirtyChange: (dirty: boolean) => void;
 }) {
+  const claude = useClaudeEnabled();
   const router = useRouter();
   const { accounts, toast } = useMail();
   const phone = useIsPhone();
@@ -433,7 +435,7 @@ export function Composer({
             </div>
           ) : null}
 
-          {claudeOpen || writing || claudeError ? (
+          {claude && (claudeOpen || writing || claudeError) ? (
             <div className="mx-4 mb-3 rounded-xl border border-border bg-bg p-3 md:mx-3 md:rounded-lg md:p-2.5">
               <form
                 onSubmit={(e) => {
@@ -480,7 +482,7 @@ export function Composer({
           ) : null}
 
           {/* Phone: Claude entry in the sheet body */}
-          {!claudeOpen && !writing ? (
+          {claude && !claudeOpen && !writing ? (
             <div className="px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] md:hidden">
               <button
                 type="button"
@@ -506,15 +508,17 @@ export function Composer({
             {sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" strokeWidth={2} />}
             {sending ? "Sending…" : "Send"}
           </button>
-          <button
-            type="button"
-            onClick={() => setClaudeOpen((v) => !v)}
-            aria-pressed={claudeOpen}
-            className="inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-sm text-muted hover:bg-surface-2 hover:text-fg"
-          >
-            <Sparkles className="size-4 text-orange-500" strokeWidth={2} />
-            Write with Claude
-          </button>
+          {claude ? (
+            <button
+              type="button"
+              onClick={() => setClaudeOpen((v) => !v)}
+              aria-pressed={claudeOpen}
+              className="inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-sm text-muted hover:bg-surface-2 hover:text-fg"
+            >
+              <Sparkles className="size-4 text-orange-500" strokeWidth={2} />
+              Write with Claude
+            </button>
+          ) : null}
           <span className="flex-1" />
           <button
             type="button"

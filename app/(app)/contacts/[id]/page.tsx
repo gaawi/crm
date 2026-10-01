@@ -282,7 +282,7 @@ function ContactHeader({ contact, accounts }: { contact: Contact; accounts: { id
       </div>
 
       <div className="flex flex-col items-center empty:hidden md:items-start">
-        <DraftFollowUp contactId={contact.id} accounts={accounts} hasEmail={contact.emails.length > 0} />
+        {env.claudeEnabled ? <DraftFollowUp contactId={contact.id} accounts={accounts} hasEmail={contact.emails.length > 0} /> : null}
       </div>
     </header>
   );

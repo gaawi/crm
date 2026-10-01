@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useClaudeEnabled } from "@/components/features";
 import { useRouter } from "next/navigation";
 import { startTransition, useMemo, useState } from "react";
 import {
@@ -63,6 +64,7 @@ export function ThreadView({
   userLabels: ThreadLabelOption[];
   now: number;
 }) {
+  const claude = useClaudeEnabled();
   const router = useRouter();
   const { act, compose, ownAddresses, timezone, toast } = useMail();
   const own = useMemo(() => new Set(ownAddresses), [ownAddresses]);
@@ -330,14 +332,16 @@ export function ThreadView({
           <ReplyButton onClick={() => reply("forward")} icon={Forward}>
             Forward
           </ReplyButton>
-          <button
-            type="button"
-            onClick={() => compose({ ...composeFor("reply", thread, latest, own, timezone), claude: { instructions: "" } })}
-            className="col-span-3 flex h-12 items-center justify-center gap-2 rounded-xl bg-accent text-[17px] font-semibold text-accent-fg active:opacity-80 md:hidden"
-          >
-            <Sparkles className="size-5" strokeWidth={2} />
-            Draft reply with Claude
-          </button>
+          {claude ? (
+            <button
+              type="button"
+              onClick={() => compose({ ...composeFor("reply", thread, latest, own, timezone), claude: { instructions: "" } })}
+              className="col-span-3 flex h-12 items-center justify-center gap-2 rounded-xl bg-accent text-[17px] font-semibold text-accent-fg active:opacity-80 md:hidden"
+            >
+              <Sparkles className="size-5" strokeWidth={2} />
+              Draft reply with Claude
+            </button>
+          ) : null}
         </div>
       ) : null}
     </div>

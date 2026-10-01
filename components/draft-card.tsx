@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useClaudeEnabled } from "@/components/features";
 import { useEffect, useState, useTransition } from "react";
 import { Check, Loader2, Pencil, Sparkles, Trash2 } from "lucide-react";
 import { AccountBadge, Badge } from "@/components/ui/badge";
@@ -40,6 +41,7 @@ export function DraftCard({
   /** List view: body clamped, links to the full review screen. */
   compact?: boolean;
 }) {
+  const claude = useClaudeEnabled();
   const [mode, setMode] = useState<"view" | "edit" | "revise">("view");
   const [armed, setArmed] = useState(false);
   const [note, setNote] = useState("");
@@ -201,9 +203,11 @@ export function DraftCard({
               </>
             )}
           </Button>
-          <Button onClick={() => setMode("revise")} disabled={busy}>
-            <Sparkles className="size-4" /> Change
-          </Button>
+          {claude ? (
+            <Button onClick={() => setMode("revise")} disabled={busy}>
+              <Sparkles className="size-4" /> Change
+            </Button>
+          ) : null}
           <Button onClick={() => setMode("edit")} disabled={busy}>
             <Pencil className="size-4" /> Edit
           </Button>

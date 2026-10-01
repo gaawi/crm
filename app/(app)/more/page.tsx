@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { Building2, ChevronRight, FolderKanban, LayoutList, LogOut, Search, Settings, Sparkles, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/ui/layout";
 import { logout } from "@/app/(auth)/login/actions";
+import { env } from "@/lib/env";
 
 export const metadata: Metadata = { title: "More" };
 
@@ -32,7 +33,7 @@ export default function MorePage() {
     <>
       <PageHeader title="More" />
       <div className="flex flex-col gap-6">
-        {GROUPS.map((group) => (
+        {GROUPS.filter((group) => env.claudeEnabled || !group.items.some((i) => i.href === "/assistant")).map((group) => (
           <section key={group.title}>
             <h2 className="mb-1.5 px-4 text-[13px] uppercase tracking-wide text-subtle">{group.title}</h2>
             <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface">

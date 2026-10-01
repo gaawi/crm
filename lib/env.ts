@@ -84,6 +84,11 @@ export const env = {
     return read("PUBSUB_VERIFICATION_TOKEN");
   },
 
+  /** Claude inside the CRM (assistant, drafting, autopilot) is optional: on only with an API key. */
+  get claudeEnabled(): boolean {
+    return Boolean(read("ANTHROPIC_API_KEY"));
+  },
+
   get anthropicApiKey(): string {
     return required("ANTHROPIC_API_KEY");
   },

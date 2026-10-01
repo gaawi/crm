@@ -66,7 +66,7 @@ export async function CrmPanel({
           <p className="mt-2 px-4 text-[13px] text-subtle md:px-0 md:text-xs">+{participants.length - MAX_PEOPLE} more people in this conversation</p>
         ) : null}
       </section>
-      <ClaudePanel accountId={accountId} threadId={threadId} reply={reply} />
+      {env.claudeEnabled ? <ClaudePanel accountId={accountId} threadId={threadId} reply={reply} /> : null}
     </div>
   );
 }

@@ -222,65 +222,69 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
           )}
         </Card>
 
-        <Card title="How Claude writes" description="Used for every email Claude prepares.">
-          <form action={saveProfile} className="flex flex-col gap-3">
-            <Field label="Your name">
-              <Input name="name" defaultValue={profile.name} placeholder="Ana" />
-            </Field>
-            <Field label="Signature" hint="Added exactly as written at the end of Claude's emails.">
-              <Textarea name="signature" rows={3} defaultValue={profile.signature} placeholder={"Ana García\nCreArtBox"} />
-            </Field>
-            <Field label="Writing preferences" hint="Tone, language, things to always or never say.">
-              <Textarea
-                name="style"
-                rows={3}
-                defaultValue={profile.style}
-                placeholder="Warm but brief. Reply in Spanish to Spanish speakers. Never promise dates without checking."
-              />
-            </Field>
-            <div className="flex md:justify-end">
-              <SubmitButton className="w-full md:w-auto" pendingLabel="Saving…">
-                Save
-              </SubmitButton>
-            </div>
-          </form>
-        </Card>
+        {env.claudeEnabled ? (
+          <>
+            <Card title="How Claude writes" description="Used for every email Claude prepares.">
+              <form action={saveProfile} className="flex flex-col gap-3">
+                <Field label="Your name">
+                  <Input name="name" defaultValue={profile.name} placeholder="Ana" />
+                </Field>
+                <Field label="Signature" hint="Added exactly as written at the end of Claude's emails.">
+                  <Textarea name="signature" rows={3} defaultValue={profile.signature} placeholder={"Ana García\nCreArtBox"} />
+                </Field>
+                <Field label="Writing preferences" hint="Tone, language, things to always or never say.">
+                  <Textarea
+                    name="style"
+                    rows={3}
+                    defaultValue={profile.style}
+                    placeholder="Warm but brief. Reply in Spanish to Spanish speakers. Never promise dates without checking."
+                  />
+                </Field>
+                <div className="flex md:justify-end">
+                  <SubmitButton className="w-full md:w-auto" pendingLabel="Saving…">
+                    Save
+                  </SubmitButton>
+                </div>
+              </form>
+            </Card>
 
-        <Card title="Autopilot" description="Claude prepares replies and follow-ups every day. They wait in Approvals — nothing is sent without you.">
-          <form action={saveAutopilot} className="flex flex-col gap-3">
-            <label className="flex min-h-11 items-center gap-3 text-[15px] md:min-h-0 md:text-sm">
-              <Checkbox name="enabled" defaultChecked={autopilot.enabled} /> Prepare drafts automatically every day
-            </label>
-            <fieldset className="flex flex-col gap-2 rounded-lg bg-surface-2 p-3">
-              <legend className="sr-only">What to prepare</legend>
-              <label className="flex min-h-10 items-center gap-3 text-sm md:min-h-0">
-                <Checkbox name="needsReply" defaultChecked={autopilot.needsReply} /> Replies to people waiting for you
-              </label>
-              <label className="flex min-h-10 items-center gap-3 text-sm md:min-h-0">
-                <Checkbox name="followUpsDue" defaultChecked={autopilot.followUpsDue} /> Follow-ups that are due
-              </label>
-              <label className="flex min-h-10 items-center gap-3 text-sm md:min-h-0">
-                <Checkbox name="awaitingReply" defaultChecked={autopilot.awaitingReply} /> Nudges when nobody answered
-              </label>
-            </fieldset>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Nudge after (days)">
-                <Input name="awaitingDays" type="number" min={2} max={60} defaultValue={autopilot.awaitingDays} />
-              </Field>
-              <Field label="Max drafts per day">
-                <Input name="maxPerRun" type="number" min={1} max={30} defaultValue={autopilot.maxPerRun} />
-              </Field>
-            </div>
-            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-              <p className="text-xs text-subtle">
-                {autopilot.lastRunAt ? `Last run ${formatRelative(new Date(autopilot.lastRunAt), timezone)}` : "Has not run yet"}
-              </p>
-              <SubmitButton className="w-full md:w-auto" pendingLabel="Saving…">
-                Save
-              </SubmitButton>
-            </div>
-          </form>
-        </Card>
+            <Card title="Autopilot" description="Claude prepares replies and follow-ups every day. They wait in Approvals — nothing is sent without you.">
+              <form action={saveAutopilot} className="flex flex-col gap-3">
+                <label className="flex min-h-11 items-center gap-3 text-[15px] md:min-h-0 md:text-sm">
+                  <Checkbox name="enabled" defaultChecked={autopilot.enabled} /> Prepare drafts automatically every day
+                </label>
+                <fieldset className="flex flex-col gap-2 rounded-lg bg-surface-2 p-3">
+                  <legend className="sr-only">What to prepare</legend>
+                  <label className="flex min-h-10 items-center gap-3 text-sm md:min-h-0">
+                    <Checkbox name="needsReply" defaultChecked={autopilot.needsReply} /> Replies to people waiting for you
+                  </label>
+                  <label className="flex min-h-10 items-center gap-3 text-sm md:min-h-0">
+                    <Checkbox name="followUpsDue" defaultChecked={autopilot.followUpsDue} /> Follow-ups that are due
+                  </label>
+                  <label className="flex min-h-10 items-center gap-3 text-sm md:min-h-0">
+                    <Checkbox name="awaitingReply" defaultChecked={autopilot.awaitingReply} /> Nudges when nobody answered
+                  </label>
+                </fieldset>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Nudge after (days)">
+                    <Input name="awaitingDays" type="number" min={2} max={60} defaultValue={autopilot.awaitingDays} />
+                  </Field>
+                  <Field label="Max drafts per day">
+                    <Input name="maxPerRun" type="number" min={1} max={30} defaultValue={autopilot.maxPerRun} />
+                  </Field>
+                </div>
+                <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                  <p className="text-xs text-subtle">
+                    {autopilot.lastRunAt ? `Last run ${formatRelative(new Date(autopilot.lastRunAt), timezone)}` : "Has not run yet"}
+                  </p>
+                  <SubmitButton className="w-full md:w-auto" pendingLabel="Saving…">
+                    Save
+                  </SubmitButton>
+                </div>
+              </form>
+            </Card>
+          </>
+        ) : null}
 
         <Card title="About">
           <dl className="flex flex-col gap-2 text-sm">
@@ -303,10 +307,12 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
               <dt className="text-muted">Timezone</dt>
               <dd>{timezone}</dd>
             </div>
-            <div className="flex justify-between gap-3">
-              <dt className="text-muted">Claude model</dt>
-              <dd>{env.anthropicModel}</dd>
-            </div>
+            {env.claudeEnabled ? (
+              <div className="flex justify-between gap-3">
+                <dt className="text-muted">Claude model</dt>
+                <dd>{env.anthropicModel}</dd>
+              </div>
+            ) : null}
             <div className="flex justify-between gap-3">
               <dt className="text-muted">MCP endpoint</dt>
               <dd className="min-w-0 truncate">{env.mcpApiKey ? `${env.appUrl}/api/mcp` : "Off (set MCP_API_KEY)"}</dd>

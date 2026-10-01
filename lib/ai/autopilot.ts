@@ -26,8 +26,9 @@ export async function runAutopilotIfDue(options: {
   force?: boolean;
   minIntervalHours?: number;
 }): Promise<AutopilotResult> {
-  const settings = await getSettings("autopilot");
   const result: AutopilotResult = { ran: false, proposed: 0, skipped: 0, errors: [] };
+  if (!env.claudeEnabled) return result; // Claude inside the CRM is off (no ANTHROPIC_API_KEY).
+  const settings = await getSettings("autopilot");
   if (!options.force && !settings.enabled) return result;
   const minInterval = (options.minIntervalHours ?? 20) * 3_600_000;
   if (!options.force && settings.lastRunAt && Date.now() - new Date(settings.lastRunAt).getTime() < minInterval) return result;

@@ -1,7 +1,8 @@
 # Setup: Supabase + Google Cloud + Vercel
 
 About 30 minutes, done once. You need: a Supabase project, a Google Cloud
-project (free), a Vercel account, and an Anthropic API key.
+project (free) and a Vercel account. An Anthropic API key is optional (Claude
+inside the CRM).
 
 **Plans.** Supabase Free (500 MB) holds a few years of mail for a couple of
 accounts — bodies are stored as trimmed plain text and the import pauses at
@@ -120,7 +121,7 @@ press **Sync now**, and on every scheduler run (step 6).
    | `CRON_SECRET` | `openssl rand -hex 32` |
    | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | from step 2 |
    | `GMAIL_PUBSUB_TOPIC`, `PUBSUB_VERIFICATION_TOKEN` | from step 3 |
-   | `ANTHROPIC_API_KEY` | from console.anthropic.com |
+   | `ANTHROPIC_API_KEY` | optional — turns on Claude inside the CRM (assistant, drafting, autopilot); leave unset to hide it |
    | `DATABASE_READONLY_URL` | the SELECT-only role from step 1 (optional, enables Claude's SQL tool) |
 
 3. Deploy. `vercel.json` registers a daily cron (`/api/cron/sync`) that renews

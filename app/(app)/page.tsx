@@ -220,13 +220,15 @@ export default async function TodayPage() {
       </div>
 
       {/* Phones: Claude moved from the tab bar into More; this keeps it one tap away. */}
-      <Link
-        href="/assistant"
-        className="fixed bottom-[calc(env(safe-area-inset-bottom)+4.25rem)] right-4 z-20 flex h-12 items-center gap-2 rounded-full bg-accent pl-4 pr-5 text-[15px] font-semibold text-accent-fg shadow-lg shadow-black/15 active:opacity-80 md:hidden"
-      >
-        <Sparkles className="size-5" strokeWidth={2} />
-        Ask Claude
-      </Link>
+      {env.claudeEnabled ? (
+        <Link
+          href="/assistant"
+          className="fixed bottom-[calc(env(safe-area-inset-bottom)+4.25rem)] right-4 z-20 flex h-12 items-center gap-2 rounded-full bg-accent pl-4 pr-5 text-[15px] font-semibold text-accent-fg shadow-lg shadow-black/15 active:opacity-80 md:hidden"
+        >
+          <Sparkles className="size-5" strokeWidth={2} />
+          Ask Claude
+        </Link>
+      ) : null}
     </>
   );
 }
