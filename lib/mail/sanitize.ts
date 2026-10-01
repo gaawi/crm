@@ -122,7 +122,9 @@ export function sanitizeCss(css: string): { css: string; remote: number } {
     .replace(/expression\s*\(/gi, "(")
     .replace(/(-moz-binding|behavior)\s*:/gi, "x-blocked:");
   // A stray "</style" would end the element early in the browser.
-  out = out.replace(/<\/?style/gi, "");
+  // No "<" at all inside CSS (as a CSS escape): a stray "</style" — even one
+  // assembled by the removals above — could otherwise end the element early.
+  out = out.replace(/</g, "\\3c ");
   return { css: out, remote };
 }
 

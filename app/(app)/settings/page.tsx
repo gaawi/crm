@@ -34,6 +34,10 @@ const ERRORS: Record<string, string> = {
   access_denied: "Access was not granted.",
   scopes: "Gmail access is required — please tick every permission on Google's screen.",
   confirm: "Tick the confirmation box to remove the account and its emails.",
+  code: "Google did not return an authorization code. Please try connecting again.",
+  token: "Google did not issue a token. Please try connecting again.",
+  profile: "Could not read the Gmail profile. Please try connecting again.",
+  autopilot: "The autopilot settings could not be saved. Please try again.",
 };
 
 const numberFormat = new Intl.NumberFormat("en-US");
@@ -94,8 +98,12 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
       <ImportPump accountIds={stalled} />
 
       <div className="flex flex-col gap-6">
-        {connected ? <Notice tone="success">Connected {connected}. The email history is being imported in the background.</Notice> : null}
-        {errorCode ? <Notice tone="error">{ERRORS[errorCode] ?? errorCode}</Notice> : null}
+        {connected && accounts.some((a) => a.email === connected) ? (
+          <Notice tone="success">Connected {connected}. The email history is being imported in the background.</Notice>
+        ) : null}
+        {errorCode ? (
+          <Notice tone="error">{Object.hasOwn(ERRORS, errorCode) ? ERRORS[errorCode] : "Something went wrong. Please try again."}</Notice>
+        ) : null}
         {saved ? <Notice tone="success">Saved.</Notice> : null}
 
         <Card

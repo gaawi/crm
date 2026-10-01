@@ -186,8 +186,12 @@ export async function queueReplyAction(accountId: string, threadId: string, inst
   await requireSession();
   if (!threadRef.safeParse({ accountId, threadId }).success) return { ok: false, error: "Invalid request" };
   try {
-    const [latest] = await sql<{ id: string; direction: string; fromEmail: string | null; replyTo: string | null; contactId: string | null }[]>`
+    const [latest] = await sql<
+      { id: string; direction: string; fromEmail: string | null; replyTo: string | null; toEmails: string[] | null; contactId: string | null }[]
+    >`
       select m.id, m.direction, m.from_email,
+             (select array_agg(mp.email order by mp.email) from message_participants mp
+               where mp.message_id = m.id and mp.role = 'to') as to_emails,
              (select mp.email from message_participants mp where mp.message_id = m.id and mp.role = 'reply_to' limit 1) as reply_to,
              (select ce.contact_id from message_participants mp join contact_emails ce on ce.email = mp.email
                where mp.message_id = m.id and mp.role in ('from', 'reply_to', 'to') order by (mp.role = 'from') desc limit 1) as contact_id
@@ -198,7 +202,11 @@ export async function queueReplyAction(accountId: string, threadId: string, inst
        limit 1
     `;
     if (!latest) return { ok: false, error: "This conversation has not been synced yet." };
-    const to = [latest.replyTo ?? latest.fromEmail].filter((e): e is string => Boolean(e));
+    // Reply to the sender; when only the owner wrote in this thread, follow up with the same recipients.
+    const to = (latest.direction === "inbound" ? [latest.replyTo ?? latest.fromEmail] : (latest.toEmails ?? [])).filter(
+      (e): e is string => Boolean(e),
+    );
+    if (!to.length) return { ok: false, error: "This conversation has no one to reply to." };
     const written = await writeEmailWithClaude({ kind: "reply", accountId, threadId, to, subject: "", body: "", instructions });
     const draft = await proposeEmail({
       accountId,

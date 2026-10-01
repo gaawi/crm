@@ -101,7 +101,8 @@ export async function saveAutopilot(formData: FormData): Promise<void> {
       maxPerRun: number("maxPerRun", 8, 1, 30),
     });
   } catch (error) {
-    redirect(`/settings?error=${encodeURIComponent(errorMessage(error))}`);
+    console.error("Saving autopilot settings failed:", errorMessage(error));
+    redirect("/settings?error=autopilot");
   }
   redirect("/settings?saved=autopilot");
 }

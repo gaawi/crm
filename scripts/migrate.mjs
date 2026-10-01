@@ -4,10 +4,12 @@
  * public.schema_migrations. Usage: DATABASE_URL=postgres://... npm run db:migrate
  * (Supabase CLI users can run `supabase db push` instead.)
  */
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import postgres from "postgres";
 
+// Like `next dev`, read .env.local when DATABASE_URL is not in the environment.
+if (!process.env.DATABASE_URL && existsSync(".env.local")) process.loadEnvFile(".env.local");
 const url = process.env.DATABASE_URL;
 if (!url) {
   console.error("DATABASE_URL is not set");

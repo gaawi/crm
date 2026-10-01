@@ -95,6 +95,13 @@ describe("sanitizeCss", () => {
     );
   });
 
+  it("cannot be tricked into closing <style> early (parser differential)", () => {
+    const { html } = sanitizeEmailHtml('<style>x{}</st</styleyle/><a href="https://evil.test/login">Sign in</a></style><p>ok</p>');
+    expect(html.match(/<\/style/gi)).toEqual(["</style"]); // only the real end tag
+    expect(html.match(/<a\b/g)).toBeNull();
+    expect(html).toContain("<p>ok</p>");
+  });
+
   it("cannot close the style element", () => {
     expect(sanitizeCss("a{}</style><script>x</script>").css).not.toMatch(/<\/style/i);
   });

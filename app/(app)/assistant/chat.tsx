@@ -41,7 +41,8 @@ const SUGGESTIONS = [
 const markdownComponents: Components = {
   img: () => null,
   a: ({ href, children }) => {
-    if (href?.startsWith("/")) return <Link href={href}>{children}</Link>;
+    // A single leading slash only: "//host" and "/\host" point to other sites.
+    if (href && /^\/(?![/\\])/.test(href)) return <Link href={href}>{children}</Link>;
     if (href?.startsWith("https://")) {
       return (
         <a href={href} target="_blank" rel="noreferrer noopener">

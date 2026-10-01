@@ -23,6 +23,8 @@ export async function POST(request: Request) {
   const parsed = Body.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: "Invalid request" }, { status: 400 });
   const history = parsed.data.messages.filter((m) => m.content.trim() !== "");
+  // The client sends a sliding window of the chat: it may begin with an answer.
+  while (history.length && history[0].role !== "user") history.shift();
   if (history.at(-1)?.role !== "user") return Response.json({ error: "The last message must be from the user" }, { status: 400 });
 
   const encoder = new TextEncoder();

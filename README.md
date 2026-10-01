@@ -58,6 +58,7 @@ fundraising, partners, press and grants.
   [docs/MAIL_CLIENT_SPEC.md](docs/MAIL_CLIENT_SPEC.md): detailed specs.
 - [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md): run it locally, tests,
   conventions.
+- [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md): what v1 does not handle yet.
 
 ## Quick start (local)
 

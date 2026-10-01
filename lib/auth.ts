@@ -4,10 +4,15 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { env } from "@/lib/env";
 import { safeEqual } from "@/lib/crypto";
+import { randomToken } from "@/lib/crypto";
 import {
+  createDeviceToken,
   createSessionToken,
+  DEVICE_COOKIE,
+  DEVICE_MAX_AGE_SECONDS,
   SESSION_COOKIE,
   SESSION_MAX_AGE_SECONDS,
+  verifyDeviceToken,
   verifySessionToken,
 } from "@/lib/session";
 
@@ -59,6 +64,16 @@ export async function startSession(): Promise<void> {
     path: "/",
     maxAge: SESSION_MAX_AGE_SECONDS,
   });
+  // Remember this browser: it is exempt from the global login lockout.
+  if (!(await verifyDeviceToken(store.get(DEVICE_COOKIE)?.value))) {
+    store.set(DEVICE_COOKIE, await createDeviceToken(randomToken(12)), {
+      httpOnly: true,
+      secure: env.isProduction,
+      sameSite: "lax",
+      path: "/",
+      maxAge: DEVICE_MAX_AGE_SECONDS,
+    });
+  }
 }
 
 export async function endSession(): Promise<void> {

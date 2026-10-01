@@ -26,8 +26,12 @@ Row Level Security is on for every table with no policies, and the `anon` /
 `authenticated` roles have no privileges, so the public Supabase API cannot
 read anything. The app only talks to Postgres directly from the server.
 
-Optional: `supabase/optional/readonly-role.sql` creates a SELECT-only role for
-Claude's SQL tool (`DATABASE_READONLY_URL`).
+Claude's free-form SQL tool needs a SELECT-only role that cannot read the
+Gmail tokens: run `supabase/optional/readonly-role.sql` (set a password
+first) and put its connection string in `DATABASE_READONLY_URL`
+(`postgresql://crm_reader.<project-ref>:<password>@…pooler.supabase.com:6543/postgres`).
+Without it the SQL tool is simply not offered to Claude; every other tool
+works.
 
 ## 2. Google Cloud: OAuth client + Gmail API
 
@@ -110,13 +114,14 @@ press **Sync now**, and on every scheduler run (step 6).
    |---|---|
    | `DATABASE_URL` | Supabase transaction pooler URI |
    | `APP_URL` | `https://YOUR-APP.vercel.app` (your production domain) |
-   | `APP_PASSWORD` | the password you will sign in with |
+   | `APP_PASSWORD` | the password you will sign in with (at least 12 characters; changing it signs out every device) |
    | `SESSION_SECRET` | `openssl rand -base64 48` |
    | `TOKEN_ENCRYPTION_KEY` | `openssl rand -base64 32` — keep it; changing it disconnects all mailboxes |
    | `CRON_SECRET` | `openssl rand -hex 32` |
    | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | from step 2 |
    | `GMAIL_PUBSUB_TOPIC`, `PUBSUB_VERIFICATION_TOKEN` | from step 3 |
    | `ANTHROPIC_API_KEY` | from console.anthropic.com |
+   | `DATABASE_READONLY_URL` | the SELECT-only role from step 1 (optional, enables Claude's SQL tool) |
 
 3. Deploy. `vercel.json` registers a daily cron (`/api/cron/sync`) that renews
    Gmail watches, continues imports, catches up anything missed and runs the
