@@ -11,6 +11,9 @@ import { SESSION_COOKIE, verifySessionToken } from "@/lib/session";
  */
 const PUBLIC_PREFIXES = [
   "/login",
+  // Home page and privacy policy for Google's OAuth consent screen.
+  "/about",
+  "/privacy",
   "/api/gmail/push",
   "/api/cron/",
   "/api/sync/",
