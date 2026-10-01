@@ -12,6 +12,35 @@ const MAX_NAME_CHARS = 200;
  */
 const LIST_REASONS = new Set(["list_id", "precedence", "unsubscribe"]);
 
+/** Sending subdomains of bulk / transactional email services (email.shopify.com, messages.tax.ny.gov…). */
+const BULK_SUBDOMAIN_RE =
+  /^(?:e|em|email|emails|mailer|mailers|messages?|notifications?|notify|news|newsletters?|communications?|welcome|organizer|alerts?|updates?|marketing|mkt|mg|info|txn|transactional)$/;
+
+/** Bulk-mail, opt-out and transactional platforms whose addresses are never people. */
+const MACHINE_DOMAIN_RE =
+  /(?:^|\.)(?:hubspotemail\.net|customer\.io|sendgrid\.net|mcsv\.net|mailchimpapp\.net|mandrillapp\.com|amazonses\.com|sparkpostmail\.com|medallia\.com|paypal\.com|amazon\.com|americanexpress\.com|stripe\.com|shopify\.com|usbank\.com|eventbrite\.com|intuit\.com|squareup\.com|venmo\.com|zelle\.com|surepayroll\.com|docusign\.net|linkedin\.com|facebookmail\.com)$/;
+
+/** Role mailboxes that send receipts, alerts and statements rather than conversations. */
+const MACHINE_LOCAL_RE =
+  /^(?:service|services|billing|account|accounts|account-update|accountupdate|shipment-tracking|tracking|notifications?|notice|alerts?|mailer|flow|payables|payments?|invoices?|receipts?|statements?|orders?|order-update|auto-confirm|confirm|verify|security|digest|newsletters?|updates|marketing|help|support|unsubscribe)$/;
+
+/**
+ * Addresses that belong to machines, not people: bulk-mail sending domains,
+ * transactional senders (receipts, alerts), VERP / opt-out tokens such as the
+ * mailto: targets Gmail writes to when you click "Unsubscribe".
+ */
+export function isMachineAddress(email: string): boolean {
+  const at = email.lastIndexOf("@");
+  if (at <= 0) return false;
+  const local = email.slice(0, at);
+  const domain = email.slice(at + 1);
+  if (MACHINE_DOMAIN_RE.test(domain)) return true;
+  if (/=|unsub|opt-?out/.test(local)) return true;
+  if (MACHINE_LOCAL_RE.test(local.split("+")[0])) return true;
+  const labels = domain.split(".");
+  return labels.length >= 3 && BULK_SUBDOMAIN_RE.test(labels[0]);
+}
+
 /** Same rule as the DB check on contact_emails / message_participants: lower-case, "@" after the first character, no whitespace. */
 export function isStorableEmail(email: string | null | undefined): email is string {
   if (typeof email !== "string" || email === "") return false;
@@ -26,7 +55,7 @@ function normalized(email: string | null | undefined): string | null {
 
 /**
  * Which addresses of a message should become contacts if unknown.
- * - never self addresses, never no-reply style addresses, never invalid ones
+ * - never self addresses, no-reply or machine addresses (isMachineAddress), invalid ones
  * - outbound: to/cc/bcc, unless > MAX_RECIPIENTS_FOR_AUTO_CONTACTS recipients
  * - inbound: the sender, only when the message is not automated
  * - inbound from a no-reply sender with a real Reply-To (contact forms): the
@@ -38,7 +67,7 @@ export function selectContactCandidates(message: ParsedMessage, selfEmails: Read
   const out = new Map<string, Address>();
   const add = (address: Address | null | undefined) => {
     const email = normalized(address?.email);
-    if (!email || selfEmails.has(email) || isNoReplyAddress(email)) return;
+    if (!email || selfEmails.has(email) || isNoReplyAddress(email) || isMachineAddress(email)) return;
     const name = cleanDisplayName(address?.name, email);
     const existing = out.get(email);
     if (!existing) out.set(email, { email, name });
@@ -46,6 +75,8 @@ export function selectContactCandidates(message: ParsedMessage, selfEmails: Read
   };
 
   if (message.direction === "outbound") {
+    // Gmail's own one-click "Unsubscribe" emails are not conversations.
+    if (/^\s*unsubscribe\b/i.test(message.subject ?? "")) return [];
     const recipients = new Set<string>();
     for (const address of [...message.to, ...message.cc, ...message.bcc]) {
       const email = normalized(address?.email);

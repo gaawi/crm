@@ -156,3 +156,27 @@ describe("participantRows / cleanDisplayName", () => {
     expect(cleanDisplayName("Jane (via Forms)", "jane@x.org")).toBe("Jane (via Forms)");
   });
 });
+
+describe("isMachineAddress", () => {
+  it("recognizes bulk, transactional and opt-out addresses", async () => {
+    const { isMachineAddress } = await import("@/lib/sync/rules");
+    for (const email of [
+      "1axc3101eri14jd7ca0p3mg3aoapz6qnltjc72-info=creartbox.nyc@bf53x.hubspotemail.net",
+      "32.mrtvg2jsm5kueqknj43hsulcin2xg22=@unsubscribe2.customer.io",
+      "opt-out-1100.e7kx49c58359n32c7zb9@express.medallia.com",
+      "service@paypal.com",
+      "account-update@amazon.com",
+      "americanexpress@welcome.americanexpress.com",
+      "email@email.shopify.com",
+      "info@messages.tax.ny.gov",
+      "invoice+statements+acct_1cdtvkfbcxij1779@stripe.com",
+      "help@surepayroll.com",
+      "skip@info.helloskip.com",
+    ]) {
+      expect(isMachineAddress(email), email).toBe(true);
+    }
+    for (const email of ["emoe@pitt.edu", "info@creartbox.nyc", "jane.doe@mail.harvard.edu", "booking@lincolncenter.org", "anna@venue.org"]) {
+      expect(isMachineAddress(email), email).toBe(false);
+    }
+  });
+});
