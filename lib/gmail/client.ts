@@ -417,7 +417,9 @@ export class GmailClient {
       }
 
       const rateLimited = status === 429 || (status === 403 && reason !== null && RATE_LIMIT_REASONS.has(reason));
-      const serverError = status >= 500 && status <= 599;
+      // A 5xx may come after Gmail already acted: only repeat requests that are safe to repeat
+      // (never messages.send / drafts.send / drafts.create). Rate limits are rejected before processing.
+      const serverError = idempotent && status >= 500 && status <= 599;
       if (rateLimited || serverError) {
         const attempt = rateLimited ? rateLimitRetries : retries;
         // Rate limits get extra attempts: the quota window is a minute, so the

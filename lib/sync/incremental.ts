@@ -147,28 +147,46 @@ async function applyActions(ctx: ApplyContext, actions: Map<string, HistoryActio
   if (spam.length) deleted += await deleteMessages(accountId, spam);
   if (gone.length) deleted += await markMessagesDeleted(accountId, gone);
 
-  const stored = await existingMessageIds(accountId, [...upserts.map((u) => u.id), ...needLabels]);
-  const toFetch: string[] = [];
+  const stored = await existingMessageIds(accountId, [
+    ...upserts.map((u) => u.id),
+    ...needLabels,
+    ...labelChanges.map((c) => c.gmailMessageId),
+  ]);
+  const toFetch = new Set<string>();
   for (const upsert of upserts) {
-    if (!stored.has(upsert.id)) toFetch.push(upsert.id);
+    if (!stored.has(upsert.id)) toFetch.add(upsert.id);
     else if (upsert.labels) labelChanges.push({ gmailMessageId: upsert.id, labelIds: upsert.labels });
     else needLabels.push(upsert.id);
   }
 
+  // A label change on a message that was never stored is how a draft or a
+  // scheduled email becomes sent mail (DRAFT/SCHEDULED removed, SENT added),
+  // e.g. replies written in Gmail or the Gmail iPhone app: import it now if
+  // it qualifies (excluded labels are re-checked on the fetched message).
+  const storedChanges: { gmailMessageId: string; labelIds: string[] }[] = [];
+  for (const change of labelChanges) {
+    if (stored.has(change.gmailMessageId)) storedChanges.push(change);
+    else if (!shouldSkipLabels(change.labelIds, env.skipCategories)) toFetch.add(change.gmailMessageId);
+  }
+
   // Label changes whose record carried no labelIds: read the current labels.
   for (const id of needLabels) {
-    if (!stored.has(id)) continue;
+    if (!stored.has(id)) {
+      toFetch.add(id);
+      continue;
+    }
     const message = await client.getMessage(id, "minimal");
     if (!message) gone.push(id);
     else if ((message.labelIds ?? []).includes("SPAM")) deleted += await deleteMessages(accountId, [id]);
-    else labelChanges.push({ gmailMessageId: id, labelIds: message.labelIds ?? [] });
+    else storedChanges.push({ gmailMessageId: id, labelIds: message.labelIds ?? [] });
   }
-  if (labelChanges.length) await updateMessageLabels(accountId, labelChanges);
+  if (storedChanges.length) await updateMessageLabels(accountId, storedChanges);
 
-  if (toFetch.length) {
-    const fetched = await client.getMessages(toFetch);
+  if (toFetch.size) {
+    const ids = [...toFetch];
+    const fetched = await client.getMessages(ids);
     const found = new Set(fetched.map((m) => m.id));
-    const missing = toFetch.filter((id) => !found.has(id));
+    const missing = ids.filter((id) => !found.has(id));
     // 404: deleted since the record was written.
     if (missing.length) deleted += await markMessagesDeleted(accountId, missing);
 
@@ -192,7 +210,8 @@ async function applyActions(ctx: ApplyContext, actions: Map<string, HistoryActio
 
 async function listHistoryPage(client: GmailClient, startHistoryId: string, pageToken: string | undefined): Promise<GmailHistoryResponse> {
   try {
-    return await client.listHistory({ startHistoryId, pageToken, historyTypes: [...HISTORY_TYPES] });
+    // Small pages: the deadline is checked between pages, and a page is only checkpointed once applied.
+    return await client.listHistory({ startHistoryId, pageToken, historyTypes: [...HISTORY_TYPES], maxResults: 100 });
   } catch (error) {
     if (error instanceof GmailApiError && error.status === 404) throw new HistoryExpiredError();
     throw error;

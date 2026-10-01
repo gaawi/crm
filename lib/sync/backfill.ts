@@ -152,7 +152,9 @@ export async function runBackfillChunk(
       const next = page.nextPageToken || null;
       const done = next === null;
       const summary = summarizeFailures(failures);
-      await sql`
+      // Compare-and-set on the cursor: if "Restart import" or the history-expiry
+      // recovery rewound it while this page ran, keep their cursor and stop.
+      const saved = await sql`
         update gmail_accounts
            set backfill_page_token = ${next},
                backfill_scanned = backfill_scanned + ${ids.length},
@@ -163,7 +165,13 @@ export async function runBackfillChunk(
                backfill_status = case when ${done}::boolean then 'done' else backfill_status end,
                backfill_completed_at = case when ${done}::boolean then now() else backfill_completed_at end
          where id = ${accountId}
+           and backfill_page_token is not distinct from ${pageToken}
+           and backfill_query is not distinct from ${account.backfillQuery}
       `;
+      if (saved.count === 0) {
+        await savePartial();
+        return { status: "progress", scanned: scanned + ids.length, imported, ...(summary ? { error: summary } : {}) };
+      }
       scanned += ids.length;
       imported += pending;
       pending = 0;

@@ -2,6 +2,11 @@
 const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL ?? "postgres://postgres:postgres@localhost:5432/crm_test";
 
 process.env.DATABASE_URL = TEST_DATABASE_URL;
+// SELECT-only role created by global-setup (see supabase/optional/readonly-role.sql).
+const reader = new URL(TEST_DATABASE_URL);
+reader.username = "crm_reader_test";
+reader.password = "crm-reader-test-password";
+process.env.DATABASE_READONLY_URL = reader.toString();
 process.env.APP_URL = "http://localhost:3000";
 process.env.APP_PASSWORD = "test-password-1234";
 process.env.SESSION_SECRET = "test-session-secret-0123456789abcdef";

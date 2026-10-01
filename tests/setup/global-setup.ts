@@ -7,6 +7,9 @@ import postgres from "postgres";
  * Needs a local Postgres (see docs/DEVELOPMENT.md). Set SKIP_DB_TESTS=1 to
  * run only the pure unit tests without a database.
  */
+export const READER = "crm_reader_test";
+export const READER_PASSWORD = "crm-reader-test-password";
+
 export default async function setup() {
   if (process.env.SKIP_DB_TESTS === "1") return;
   const url = new URL(process.env.TEST_DATABASE_URL ?? "postgres://postgres:postgres@localhost:5432/crm_test");
@@ -28,6 +31,16 @@ export default async function setup() {
     for (const file of readdirSync(dir).filter((f) => f.endsWith(".sql")).sort()) {
       await db.unsafe(readFileSync(`${dir}${file}`, "utf8"));
     }
+    // The SELECT-only role for Claude's query_database tool (roles are cluster-wide).
+    const role = readFileSync(fileURLToPath(new URL("../../supabase/optional/readonly-role.sql", import.meta.url)), "utf8")
+      .replace(/^create role crm_reader .*$/m, "")
+      .replaceAll("crm_reader", READER);
+    await db.unsafe(`do $$ begin
+      if not exists (select 1 from pg_roles where rolname = '${READER}') then
+        create role ${READER} login password '${READER_PASSWORD}' noinherit;
+      end if;
+    end $$;`);
+    await db.unsafe(role);
   } finally {
     await db.end();
   }

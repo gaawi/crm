@@ -5,7 +5,7 @@ import { EmailTimeline } from "@/components/email-timeline";
 import { PageHeader, SectionTitle } from "@/components/ui/layout";
 import { env } from "@/lib/env";
 import { getContactHistory } from "@/lib/queries/contacts";
-import { getDraft } from "@/lib/queries/drafts";
+import { getDraft, recoverStaleDrafts } from "@/lib/queries/drafts";
 import { getOwnAddresses } from "@/lib/queries/stats";
 
 export const metadata: Metadata = { title: "Review email" };
@@ -13,6 +13,7 @@ export const metadata: Metadata = { title: "Review email" };
 /** Full review of one proposed email, with the recent conversation for context. */
 export default async function DraftReviewPage({ params }: PageProps<"/approvals/[id]">) {
   const { id } = await params;
+  await recoverStaleDrafts();
   const draft = await getDraft(id);
   if (!draft) notFound();
   const timezone = env.timezone;

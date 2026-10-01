@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { DraftCard } from "@/components/draft-card";
 import { EmptyState, PageHeader, SectionTitle } from "@/components/ui/layout";
 import { env } from "@/lib/env";
-import { listDrafts } from "@/lib/queries/drafts";
+import { listDrafts, recoverStaleDrafts } from "@/lib/queries/drafts";
 import { getSettings } from "@/lib/queries/settings";
 import { PrepareDraftsButton } from "./prepare-button";
 
@@ -10,6 +10,7 @@ export const metadata: Metadata = { title: "Approvals" };
 
 export default async function ApprovalsPage() {
   const timezone = env.timezone;
+  await recoverStaleDrafts();
   const [open, recent, autopilot] = await Promise.all([
     listDrafts(),
     listDrafts({ statuses: ["sent"], limit: 10 }),

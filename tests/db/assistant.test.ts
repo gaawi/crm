@@ -39,6 +39,7 @@ vi.mock("@/lib/ai/client", () => ({
 const gmailDrafts: { accountId: string; to: string[]; subject: string }[] = [];
 const sent: string[] = [];
 vi.mock("@/lib/sync/drafts", () => ({
+  DraftError: class DraftError extends Error {},
   saveGmailDraft: vi.fn(async (p: { accountId: string; to: string[]; subject: string }) => {
     gmailDrafts.push(p);
     return { draftId: `d${gmailDrafts.length}`, gmailUrl: "https://mail.google.com/" };

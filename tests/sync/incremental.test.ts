@@ -46,6 +46,15 @@ describe.skipIf(process.env.SKIP_DB_TESTS === "1")("runIncrementalSync", () => {
     vi.restoreAllMocks();
   });
 
+  it.each([["DRAFT"], ["SCHEDULED"]])("imports a %s that is sent later (labels change on the same message)", async (label) => {
+    const { fake, accountId } = await importedMailbox();
+    const draft = fake.addMessage({ from: "Me <me@example.com>", to: "booker@hall.org", labels: [label] });
+    expect((await sync(accountId, fake)).added).toBe(0);
+    fake.modifyLabels(draft, ["SENT"], [label]);
+    expect((await sync(accountId, fake)).added).toBe(1);
+    expect(await labels(accountId, draft)).toContain("SENT");
+  });
+
   it("stores new mail and moves the cursor to the mailbox history id", async () => {
     const { fake, accountId } = await importedMailbox();
     const fresh = fake.addMessage({ from: "New Person <new@x.org>" });

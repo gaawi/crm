@@ -3,7 +3,11 @@ import { sql } from "@/lib/db";
 import { draftFollowUp, reviseEmail } from "@/lib/ai/draft";
 import { getContact } from "@/lib/queries/contacts";
 import { getDraft, insertDraft, pushRevision, transitionDraft, updateDraft } from "@/lib/queries/drafts";
-import { deleteGmailDraft, saveGmailDraft, sendGmailDraft, updateGmailDraft } from "@/lib/sync/drafts";
+import { todayIn } from "@/lib/dates";
+import { env } from "@/lib/env";
+import { GmailApiError } from "@/lib/gmail/client";
+import { gmailClientFor } from "@/lib/sync/accounts";
+import { deleteGmailDraft, DraftError as GmailDraftError, saveGmailDraft, sendGmailDraft, updateGmailDraft } from "@/lib/sync/drafts";
 import type { DraftOrigin, DraftPurpose, EmailDraft } from "@/lib/types";
 import { errorMessage, isValidEmail, normalizeEmail } from "@/lib/utils";
 
@@ -196,41 +200,103 @@ export async function reviseDraft(id: string, note: string): Promise<EmailDraft>
   return (await getDraft(id))!;
 }
 
-/** Create or update the Gmail draft so it matches the row. Records (does not throw) Gmail errors. */
-async function syncGmailDraft(id: string): Promise<void> {
+/** The Gmail draft is gone: deleted, or sent from Gmail itself. */
+function isGone(e: unknown): boolean {
+  return (e instanceof GmailApiError && e.status === 404) || (e instanceof GmailDraftError && /no longer exists/i.test(e.message));
+}
+
+/** Gmail may have sent the message even though the request failed (timeout, network, 5xx, consumed draft). */
+function isAmbiguousSendError(e: unknown): boolean {
+  return e instanceof GmailApiError && (e.status === 0 || e.status >= 500 || e.status === 404);
+}
+
+function draftParams(draft: EmailDraft) {
+  return {
+    accountId: draft.accountId,
+    to: draft.to,
+    cc: draft.cc,
+    subject: draft.subject,
+    body: draft.body,
+    replyToMessageId: draft.replyToMessageId,
+  };
+}
+
+/**
+ * Make the Gmail draft match the row (after an edit or a revision). Errors
+ * are recorded on the row, not thrown: the CRM copy is the source of truth
+ * and Approve re-checks before sending. A draft that disappeared from Gmail
+ * is re-created; any other error never creates a second draft.
+ */
+async function syncGmailDraft(id: string): Promise<boolean> {
   const draft = await getDraft(id);
-  if (!draft) return;
+  if (!draft) return false;
   try {
-    const params = {
-      accountId: draft.accountId,
-      to: draft.to,
-      cc: draft.cc,
-      subject: draft.subject,
-      body: draft.body,
-      replyToMessageId: draft.replyToMessageId,
-    };
+    const params = draftParams(draft);
     const saved = draft.gmailDraftId
-      ? await updateGmailDraft({ ...params, draftId: draft.gmailDraftId }).catch(() => saveGmailDraft(params))
+      ? await updateGmailDraft({ ...params, draftId: draft.gmailDraftId }).catch((e) => {
+          if (isGone(e)) return saveGmailDraft(params);
+          throw e;
+        })
       : await saveGmailDraft(params);
     await updateDraft(id, { gmailDraftId: saved.draftId, error: null });
+    return true;
   } catch (e) {
     await updateDraft(id, { error: `Not saved to Gmail yet: ${errorMessage(e)}` });
+    return false;
   }
 }
 
-/** Approve → send through Gmail. Safe against double taps (status transition). */
+/** Does the Gmail draft still exist? null when Gmail cannot be asked. */
+async function gmailDraftExists(accountId: string, draftId: string): Promise<boolean | null> {
+  try {
+    return (await gmailClientFor(accountId).getDraft(draftId, "minimal")) !== null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Approve → send through Gmail. Safe against double taps (status transition).
+ *
+ * Right before sending, the Gmail draft is overwritten with exactly the
+ * version the owner approved; if that fails nothing is sent. A Gmail draft
+ * that vanished (sent or deleted in Gmail) is never silently re-created and
+ * sent: the row fails with an explanation, and only a second Approve sends a
+ * fresh copy. When Gmail errors after possibly sending, the row is marked
+ * sent with a warning instead of inviting a duplicate.
+ */
 export async function approveAndSend(id: string): Promise<EmailDraft> {
   if (!(await transitionDraft(id, ["proposed", "failed"], "sending"))) {
     throw new DraftError("This email was already sent or is being sent.");
   }
+  const draft = (await getDraft(id))!;
+
+  let gmailDraftId: string;
   try {
-    let draft = (await getDraft(id))!;
-    if (!draft.gmailDraftId || draft.error) {
-      await syncGmailDraft(id);
-      draft = (await getDraft(id))!;
-      if (!draft.gmailDraftId) throw new DraftError(draft.error ?? "Could not create the Gmail draft.");
+    if (draft.gmailDraftId) {
+      try {
+        gmailDraftId = (await updateGmailDraft({ ...draftParams(draft), draftId: draft.gmailDraftId })).draftId;
+      } catch (e) {
+        if (!isGone(e)) throw e;
+        await updateDraft(id, {
+          status: "failed",
+          gmailDraftId: null,
+          error: "The Gmail draft was sent or deleted in Gmail. Check your Sent folder; approve again to send a new copy.",
+        });
+        throw new DraftError("The Gmail draft was sent or deleted in Gmail. Check your Sent folder before sending again.");
+      }
+    } else {
+      gmailDraftId = (await saveGmailDraft(draftParams(draft))).draftId;
     }
-    const sent = await sendGmailDraft(draft.accountId, draft.gmailDraftId);
+    await updateDraft(id, { gmailDraftId, error: null });
+  } catch (e) {
+    if (e instanceof DraftError) throw e;
+    await updateDraft(id, { status: "failed", error: `Not sent: Gmail could not be updated with your latest version (${errorMessage(e)}). Try again.` });
+    throw new DraftError(`Not sent: Gmail could not be updated with your latest version. Try again.`);
+  }
+
+  try {
+    const sent = await sendGmailDraft(draft.accountId, gmailDraftId);
     await updateDraft(id, {
       status: "sent",
       sentAt: new Date(),
@@ -238,15 +304,30 @@ export async function approveAndSend(id: string): Promise<EmailDraft> {
       gmailThreadId: sent.gmailThreadId,
       error: null,
     });
-    // Sending answers the conversation: clear a follow-up that is due today or earlier.
-    if (draft.contact) {
-      await sql`
-        update contacts set follow_up_at = null, follow_up_note = null
-         where id = ${draft.contact.id} and follow_up_at <= current_date`;
-    }
   } catch (e) {
+    if (isAmbiguousSendError(e) && (await gmailDraftExists(draft.accountId, gmailDraftId)) === false) {
+      // The draft was consumed: Gmail sent it even though the request failed.
+      await updateDraft(id, {
+        status: "sent",
+        sentAt: new Date(),
+        error: "Gmail reported an error, but the email appears to have been sent. Check your Sent folder.",
+      });
+      return (await getDraft(id))!;
+    }
     await updateDraft(id, { status: "failed", error: `Not sent: ${errorMessage(e)}` });
     throw e;
+  }
+
+  // Sending answers the conversation: clear a follow-up due today or earlier
+  // (in the owner's timezone). Best effort: the email is already sent.
+  if (draft.contact) {
+    try {
+      await sql`
+        update contacts set follow_up_at = null, follow_up_note = null
+         where id = ${draft.contact.id} and follow_up_at <= ${todayIn(env.timezone)}::date`;
+    } catch (e) {
+      console.warn("Could not clear the follow-up after sending:", e);
+    }
   }
   return (await getDraft(id))!;
 }

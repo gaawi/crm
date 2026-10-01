@@ -18,7 +18,8 @@ const MAX_SNIPPET_CHARS = 500;
 const MAX_EMAIL_CHARS = 320;
 /** Work limits before quote stripping (the stored body is capped far lower anyway). */
 const MAX_TEXT_INPUT_CHARS = 500_000;
-const MAX_HTML_INPUT_CHARS = 2_000_000;
+/** Bodies are stored as ≤ 20,000 chars of text: more HTML than this only costs time (and invites slow inputs). */
+const MAX_HTML_INPUT_CHARS = 300_000;
 const MAX_MIME_DEPTH = 40;
 
 const EMAIL_RE = /^[^\s@<>(),;:"[\]]+@[^\s@<>(),;:"[\]]+\.[^\s@<>(),;:"[\]]+$/;
@@ -750,7 +751,48 @@ const SOFT_BREAK = "";
 const PARAGRAPH_BREAK = "";
 
 function stripTags(html: string): string {
-  return html.replace(/<[^>]*>/g, "");
+  return html.replace(/<[^<>]*>/g, "");
+}
+
+/**
+ * Linear-time replacement of paired elements <tag …>inner</tag> (non-nested).
+ * fn returns the replacement, or null to keep the element unchanged. An
+ * unclosed element ends the scan: with dropUnclosed it is removed to the end,
+ * otherwise the rest is kept as is. (Lazy [\s\S]*? regexes are quadratic on
+ * many unclosed tags; this never rescans.)
+ */
+function replacePaired(
+  html: string,
+  tags: string,
+  fn: (attrs: string, inner: string, tag: string) => string | null,
+  dropUnclosed = false,
+): string {
+  const open = new RegExp(`<(${tags})\\b([^<>]*)>`, "gi");
+  const out: string[] = [];
+  let pos = 0;
+  for (let match = open.exec(html); match; match = open.exec(html)) {
+    const tag = match[1];
+    const openEnd = match.index + match[0].length;
+    const close = new RegExp(`</${tag}\\s*>`, "gi");
+    close.lastIndex = openEnd;
+    const end = close.exec(html);
+    if (!end) {
+      out.push(html.slice(pos, dropUnclosed ? match.index : html.length));
+      return out.join("");
+    }
+    const replacement = fn(match[2], html.slice(openEnd, end.index), tag);
+    out.push(html.slice(pos, match.index), replacement ?? html.slice(match.index, end.index + end[0].length));
+    pos = end.index + end[0].length;
+    open.lastIndex = pos;
+  }
+  out.push(html.slice(pos));
+  return out.join("");
+}
+
+/** Value of an attribute in a tag's attribute string (one linear pass). */
+function attributeValue(attrs: string, name: string): string | null {
+  const m = new RegExp(`\\b${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s"'<>]+))`, "i").exec(attrs);
+  return m ? (m[1] ?? m[2] ?? m[3] ?? "") : null;
 }
 
 const FORWARD_HINT_RE =
@@ -762,7 +804,7 @@ function looksForwarded(htmlFragment: string): boolean {
 
 /** Index just past the element that starts at openEnd (nested same-name tags counted). */
 function findElementEnd(html: string, openEnd: number, tag: string): number {
-  const re = new RegExp(`<(/?)${tag}\\b[^>]*>`, "gi");
+  const re = new RegExp(`<(/?)${tag}\\b[^<>]*>`, "gi");
   re.lastIndex = openEnd;
   let depth = 1;
   for (let match = re.exec(html); match; match = re.exec(html)) {
@@ -779,15 +821,28 @@ function findElementEnd(html: string, openEnd: number, tag: string): number {
 /** Remove Gmail / Yahoo quote containers and Outlook's quoted thread (forwards are kept). */
 function removeQuotedHtml(html: string): string {
   let s = html;
-  const outlook = /<div\b[^>]*\bid\s*=\s*["']?(?:appendonsend|divRplyFwdMsg)\b[^>]*>/i.exec(s);
-  if (outlook && !looksForwarded(s.slice(outlook.index, outlook.index + 4000))) s = s.slice(0, outlook.index);
+  // Tags are matched first and their attributes inspected separately: nested
+  // unbounded quantifiers here were cubic on crafted input.
+  const divs = /<div\b([^<>]*)>/gi;
+  for (let tag = divs.exec(s); tag; tag = divs.exec(s)) {
+    const id = attributeValue(tag[1], "id");
+    if (id && /^(?:appendonsend|divRplyFwdMsg)\b/.test(id)) {
+      if (!looksForwarded(s.slice(tag.index, tag.index + 4000))) s = s.slice(0, tag.index);
+      break;
+    }
+  }
 
-  const quoteRe = /<(div|blockquote)\b[^>]*\bclass\s*=\s*["']?[^"'>]*\b(?:gmail_quote|yahoo_quoted)\b[^>]*>/gi;
+  const quoteRe = /<(div|blockquote)\b([^<>]*)>/gi;
   let from = 0;
   for (;;) {
     quoteRe.lastIndex = from;
     const match = quoteRe.exec(s);
     if (!match) break;
+    const className = attributeValue(match[2], "class");
+    if (!className || !/\b(?:gmail_quote|yahoo_quoted)\b/.test(className)) {
+      from = match.index + match[0].length;
+      continue;
+    }
     const openEnd = match.index + match[0].length;
     const end = findElementEnd(s, openEnd, match[1]);
     if (looksForwarded(s.slice(match.index, Math.min(end, match.index + 3000)))) {
@@ -813,36 +868,33 @@ function sameUrl(text: string, url: string): boolean {
 function convertHtml(html: string): string {
   let s = html;
   s = s.replace(/<!--[\s\S]*?(?:-->|$)/g, "");
-  s = s.replace(/<(head|script|style|title|noscript|template|xml)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, "");
-  s = s.replace(/<(?:script|style)\b[^>]*\/>/gi, "");
+  s = s.replace(/<(?:script|style)\b[^<>]*\/>/gi, "");
+  s = replacePaired(s, "head|script|style|title|noscript|template|xml", () => "", true);
   // Preformatted text keeps its line breaks.
-  s = s.replace(/<pre\b[^>]*>([\s\S]*?)<\/pre\s*>/gi, (_m, inner: string) => {
-    return `${SOFT_BREAK}${inner.replace(/\r?\n/g, "<br>")}${SOFT_BREAK}`;
-  });
+  s = replacePaired(s, "pre", (_attrs, inner) => `${SOFT_BREAK}${inner.replace(/\r?\n/g, "<br>")}${SOFT_BREAK}`);
   // Source whitespace is not significant in HTML.
   s = s.replace(/\s+/g, " ");
 
-  s = s.replace(/<a\b([^>]*)>([\s\S]*?)<\/a\s*>/gi, (_m, attrs: string, inner: string) => {
-    const href = /\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(attrs);
-    const rawUrl = href ? (href[1] ?? href[2] ?? href[3] ?? "").trim() : "";
+  s = replacePaired(s, "a", (attrs, inner) => {
+    const rawUrl = (attributeValue(attrs, "href") ?? "").trim();
     const url = decodeEntities(rawUrl);
     const label = decodeEntities(stripTags(inner)).replace(/\s+/g, " ").trim();
     if (!label || !/^https?:\/\//i.test(url) || sameUrl(label, url)) return inner;
     return `${inner} (${rawUrl.replace(/</g, "&lt;").replace(/>/g, "&gt;")})`;
   });
 
-  s = s.replace(/<br\b[^>]*>/gi, "\n");
+  s = s.replace(/<br\b[^<>]*>/gi, "\n");
   // Outlook writes every line as <p class=MsoNormal>: single line breaks.
-  s = s.replace(/<p\b[^>]*\bMsoNormal\b[^>]*>([\s\S]*?)<\/p\s*>/gi, `${SOFT_BREAK}$1${SOFT_BREAK}`);
-  s = s.replace(/<\/?(?:p|h[1-6])\b[^>]*>/gi, PARAGRAPH_BREAK);
-  s = s.replace(/<li\b[^>]*>/gi, `${SOFT_BREAK}- `);
+  s = replacePaired(s, "p", (attrs, inner) => (/\bMsoNormal\b/.test(attrs) ? `${SOFT_BREAK}${inner}${SOFT_BREAK}` : null));
+  s = s.replace(/<\/?(?:p|h[1-6])\b[^<>]*>/gi, PARAGRAPH_BREAK);
+  s = s.replace(/<li\b[^<>]*>/gi, `${SOFT_BREAK}- `);
   s = s.replace(
-    /<\/?(?:div|li|tr|table|tbody|thead|tfoot|caption|blockquote|ul|ol|dl|dt|dd|section|article|header|footer|nav|aside|main|address|center|figure|figcaption|form|fieldset|hr|pre|details|summary)\b[^>]*>/gi,
+    /<\/?(?:div|li|tr|table|tbody|thead|tfoot|caption|blockquote|ul|ol|dl|dt|dd|section|article|header|footer|nav|aside|main|address|center|figure|figcaption|form|fieldset|hr|pre|details|summary)\b[^<>]*>/gi,
     SOFT_BREAK,
   );
-  s = s.replace(/<\/?(?:td|th)\b[^>]*>/gi, " ");
-  s = s.replace(/<\/?[A-Za-z][^>]*>/g, "");
-  s = s.replace(/<![^>]*>|<\?[^>]*>/g, "");
+  s = s.replace(/<\/?(?:td|th)\b[^<>]*>/gi, " ");
+  s = s.replace(/<\/?[A-Za-z][^<>]*>/g, "");
+  s = s.replace(/<![^<>]*>|<\?[^<>]*>/g, "");
   s = decodeEntities(s);
 
   // Resolve break markers: soft = "end the current line", paragraph = "leave a blank line".

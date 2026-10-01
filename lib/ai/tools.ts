@@ -21,7 +21,7 @@ import {
 } from "@/lib/queries/organizations";
 import { getProjectByName, listProjects } from "@/lib/queries/projects";
 import { DraftError, proposeEmail } from "@/lib/ai/approvals";
-import { runReadonlyQuery } from "@/lib/ai/readonly-sql";
+import { readonlyQueriesEnabled, runReadonlyQuery } from "@/lib/ai/readonly-sql";
 import type { Contact, ContactStatus, ContactSummary, EmailMessage, Opportunity, OpportunityStage } from "@/lib/types";
 import { errorMessage, normalizeTag, truncate } from "@/lib/utils";
 
@@ -636,7 +636,8 @@ const TOOLS: CrmTool[] = [
 
 /** All tools, in a stable order (the order is part of the prompt-cache prefix). */
 export function getCrmTools(): CrmTool[] {
-  return TOOLS;
+  // Free-form SQL needs the SELECT-only database role (fails closed without it).
+  return readonlyQueriesEnabled() ? TOOLS : TOOLS.filter((t) => t.name !== "query_database");
 }
 
 /** JSON Schema (draft 2020-12, additionalProperties: false) for a tool's input. */

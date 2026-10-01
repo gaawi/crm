@@ -18,6 +18,26 @@ describe.skipIf(process.env.SKIP_DB_TESTS === "1")("runBackfillChunk", () => {
     delete process.env.SYNC_SKIP_CATEGORIES;
   });
 
+  it("keeps a restart that happens while a chunk is running", async () => {
+    const fake = new FakeGmail();
+    fake.listPageSize = 10;
+    fake.addMany(25);
+    const accountId = await insertConnectedAccount(fake.email);
+    let restarted = false;
+    fake.onRequest = async ({ path }) => {
+      // "Restart import" lands while the first page is being fetched.
+      if (!restarted && /^messages\//.test(path)) {
+        restarted = true;
+        await resetBackfill(accountId);
+      }
+    };
+    const result = await runBackfillChunk(accountId, { deadline: far(), fetchImpl: fake.fetch });
+    expect(result.status).toBe("progress");
+    const row = await accountRow(accountId);
+    expect(row.backfillPageToken).toBeNull(); // the restart's cursor survived
+    expect(row.backfillStatus).toBe("pending");
+  });
+
   it("imports page by page, resumes from the saved page token and marks the import done", async () => {
     const fake = new FakeGmail();
     fake.listPageSize = 10;

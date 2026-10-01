@@ -201,6 +201,25 @@ describe("parse", () => {
     expect(text).not.toMatch(/color:red|x\(\)/);
   });
 
+  it("removes Gmail quote blocks and keeps link targets", () => {
+    const text = htmlToText(
+      '<div>Yes, Friday works. See <a href="https://venue.test/map">the map</a>.</div><div class="gmail_quote"><div>On Tue, Anna wrote:</div><blockquote>Can we meet?</blockquote></div>',
+    );
+    expect(text).toBe("Yes, Friday works. See the map (https://venue.test/map).");
+  });
+
+  it.each([
+    ["unclosed quote-class tags", "<p>hi</p>" + "<div class=".repeat(6000)],
+    ["many unclosed divs", "<div ".repeat(80_000)],
+    ["many unclosed links", "<a href=x>".repeat(40_000)],
+    ["many unclosed styles", "<style>".repeat(40_000)],
+    ["a single huge tag", "<div class=" + "class=".repeat(50_000)],
+  ])("parses crafted HTML (%s) in linear time", (_name, html) => {
+    const start = performance.now();
+    htmlToText(html);
+    expect(performance.now() - start).toBeLessThan(1000);
+  });
+
   it("strips quoted replies but keeps the new text", () => {
     const text = "Sounds good, see you Friday.\n\nOn Tue, Sep 29, 2026 at 10:00 AM Anna <anna@venue.test> wrote:\n> Can we meet?\n> Thanks";
     expect(stripQuotedText(text).trim()).toBe("Sounds good, see you Friday.");

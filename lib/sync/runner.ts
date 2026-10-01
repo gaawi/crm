@@ -1,6 +1,7 @@
 import "server-only";
 import { sql } from "@/lib/db";
 import { runAutopilotIfDue } from "@/lib/ai/autopilot";
+import { recoverStaleDrafts } from "@/lib/queries/drafts";
 import { getAccountByEmail, listAccounts, reconcileSelfContacts, refreshAliases } from "@/lib/sync/accounts";
 import { runBackfillChunk, type BackfillResult } from "@/lib/sync/backfill";
 import { describeSyncError } from "@/lib/sync/errors";
@@ -128,6 +129,7 @@ export async function runCron(options: { deadline: number; fetchImpl?: typeof fe
   }
 
   try {
+    await recoverStaleDrafts();
     summary.autopilot = await runAutopilotIfDue({ deadline: options.deadline });
   } catch (error) {
     summary.errors.push(`autopilot: ${describeSyncError(error)}`);

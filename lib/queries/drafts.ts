@@ -146,3 +146,21 @@ export async function transitionDraft(id: string, from: DraftStatus[], to: Draft
   const result = await sql`update email_drafts set status = ${to} where id = ${id} and status = any(${from}::text[])`;
   return result.count === 1;
 }
+
+/**
+ * Rows left in 'revising' or 'sending' by an interrupted request (the
+ * function was killed) are released after 10 minutes — well above the 300 s
+ * function limit, so a live operation is never touched. An interrupted send
+ * is never retried automatically: Approve re-checks the Gmail draft first.
+ */
+export async function recoverStaleDrafts(): Promise<void> {
+  await sql`
+    update email_drafts
+       set status = case status when 'revising' then 'proposed' else 'failed' end,
+           error = case status
+                     when 'revising' then 'The revision was interrupted. Try again.'
+                     else 'Sending was interrupted. Check your Sent folder before approving again.'
+                   end
+     where status in ('revising', 'sending') and updated_at < now() - interval '10 minutes'
+  `;
+}
