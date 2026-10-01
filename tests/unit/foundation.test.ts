@@ -53,3 +53,14 @@ describe("utils", () => {
     expect(domainOf("Jane@MoMA.org")).toBe("moma.org");
   });
 });
+
+describe("sessionPoolerUrl", () => {
+  it("moves Supabase's transaction pooler to the session pooler", async () => {
+    const { sessionPoolerUrl } = await import("@/lib/db-url");
+    expect(sessionPoolerUrl("postgresql://postgres.ref:pw@aws-0-us-east-1.pooler.supabase.com:6543/postgres")).toBe(
+      "postgresql://postgres.ref:pw@aws-0-us-east-1.pooler.supabase.com:5432/postgres",
+    );
+    expect(sessionPoolerUrl("postgres://postgres:postgres@localhost:5432/crm")).toBe("postgres://postgres:postgres@localhost:5432/crm");
+    expect(sessionPoolerUrl("postgres://u:p@db.example.com:6543/x")).toBe("postgres://u:p@db.example.com:6543/x");
+  });
+});

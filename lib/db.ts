@@ -1,5 +1,6 @@
 import "server-only";
 import postgres from "postgres";
+import { sessionPoolerUrl } from "@/lib/db-url";
 import { env } from "@/lib/env";
 
 /**
@@ -9,12 +10,13 @@ import { env } from "@/lib/env";
  *   `lastContactedAt`) and back to snake_case in `sql(object)` helpers.
  * - `date` columns stay 'YYYY-MM-DD' strings; `timestamptz` become Date.
  * - int8 / numeric come back as strings — cast counts with `::int` in SQL.
- * - `prepare: false` is required by Supabase's transaction pooler (port 6543).
+ * - Supabase: connects through the session pooler (see lib/db-url.ts); a
+ *   small pool per server instance keeps within its connection limit.
  */
 function createClient() {
-  return postgres(env.databaseUrl, {
+  return postgres(sessionPoolerUrl(env.databaseUrl), {
     prepare: false,
-    max: Number(process.env.DATABASE_POOL_MAX ?? 5),
+    max: Number(process.env.DATABASE_POOL_MAX ?? 3),
     idle_timeout: 20,
     connect_timeout: 15,
     onnotice: () => {},
