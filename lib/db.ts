@@ -16,8 +16,11 @@ import { env } from "@/lib/env";
 function createClient() {
   return postgres(sessionPoolerUrl(env.databaseUrl), {
     prepare: false,
-    max: Number(process.env.DATABASE_POOL_MAX ?? 3),
-    idle_timeout: 20,
+    // Supabase's session pooler admits ~15 client connections in total, shared by
+    // every server instance: keep each instance's share small and release idle
+    // ones quickly (queries pipeline over the open connections).
+    max: Number(process.env.DATABASE_POOL_MAX ?? 2),
+    idle_timeout: 5,
     connect_timeout: 15,
     onnotice: () => {},
     types: {

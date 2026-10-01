@@ -115,8 +115,8 @@ export default async function ContactsPage({ searchParams }: PageProps<"/contact
       />
 
       {/* Desktop: one compact row. */}
-      <FilterForm action="/contacts" className="mb-4 hidden items-center gap-2 md:flex" role="search" aria-label="Filter contacts">
-        <SearchInput name="q" defaultValue={q} placeholder="Search name, email, organization or tag" aria-label="Search contacts" className="flex-1" />
+      <FilterForm action="/contacts" className="mb-4 hidden flex-wrap items-center gap-2 md:flex" role="search" aria-label="Filter contacts">
+        <SearchInput name="q" defaultValue={q} placeholder="Search name, email, organization or tag" aria-label="Search contacts" className="min-w-64 flex-1" />
         {selects}
         {filtered || sort ? (
           <Link href="/contacts" className="shrink-0 px-1 text-sm text-muted hover:text-fg">
@@ -295,7 +295,7 @@ function FilterSelects({
         name={c.name}
         defaultValue={current[c.name]}
         aria-label={c.label}
-        className={cn("w-auto shrink-0", (c.name === "project" || c.name === "tag") && "max-w-44")}
+        className="w-auto max-w-48 shrink-0"
       >
         {c.options.map((o) => (
           <option key={o.value} value={o.value}>
