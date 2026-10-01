@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { Building2, ChevronRight, FolderKanban, LayoutList, LogOut, Search, Settings, Sparkles, type LucideIcon } from "lucide-react";
+import { Building2, ChevronRight, FolderKanban, LayoutList, LogOut, Search, Settings, Sparkles, Ticket, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/ui/layout";
 import { logout } from "@/app/(auth)/login/actions";
 import { env } from "@/lib/env";
@@ -17,6 +17,7 @@ const GROUPS: { title: string; items: { href: string; label: string; icon: Lucid
     items: [
       { href: "/organizations", label: "Organizations", icon: Building2, tint: "bg-blue-500" },
       { href: "/projects", label: "Projects", icon: FolderKanban, tint: "bg-violet-500" },
+      { href: "/booking", label: "Booking sheets", icon: Ticket, tint: "bg-rose-500" },
       { href: "/pipeline", label: "Pipeline", icon: LayoutList, tint: "bg-amber-500" },
       { href: "/search", label: "Search", icon: Search, tint: "bg-zinc-500" },
     ],
