@@ -1,6 +1,5 @@
 import "server-only";
 import postgres from "postgres";
-import { sessionPoolerUrl } from "@/lib/db-url";
 import { env } from "@/lib/env";
 
 /**
@@ -46,7 +45,7 @@ function client(): postgres.Sql {
   const url = env.databaseReadonlyUrl;
   if (!url) throw new Error("Free-form SQL is disabled until DATABASE_READONLY_URL is set (docs/SETUP.md). Use the other tools.");
   // No camelCase transform here: Claude sees the real column names.
-  readonlyClient ??= postgres(sessionPoolerUrl(url), { prepare: false, max: 1, idle_timeout: 5, onnotice: () => {} });
+  readonlyClient ??= postgres(url, { prepare: false, max: 2, idle_timeout: 20, onnotice: () => {} });
   return readonlyClient;
 }
 

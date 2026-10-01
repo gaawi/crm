@@ -1,6 +1,5 @@
 import "server-only";
 import postgres from "postgres";
-import { sessionPoolerUrl } from "@/lib/db-url";
 import { env } from "@/lib/env";
 
 /**
@@ -10,17 +9,19 @@ import { env } from "@/lib/env";
  *   `lastContactedAt`) and back to snake_case in `sql(object)` helpers.
  * - `date` columns stay 'YYYY-MM-DD' strings; `timestamptz` become Date.
  * - int8 / numeric come back as strings — cast counts with `::int` in SQL.
- * - Supabase: connects through the session pooler (see lib/db-url.ts); a
- *   small pool per server instance keeps within its connection limit.
+ * - Supabase's transaction pooler (port 6543): `prepare: false`. postgres.js
+ *   pipelines queries onto busy connections once all `max` are in use, and
+ *   the pooler can route parts of pipelined queries to different server
+ *   connections, which then hang forever (waiting in "ClientRead"). So each
+ *   instance may open enough client connections (cheap: the pooler admits
+ *   200 and multiplexes them) that a page's parallel queries never pipeline.
+ *   (The session pooler would allow pipelining but admits only ~15 clients.)
  */
 function createClient() {
-  return postgres(sessionPoolerUrl(env.databaseUrl), {
+  return postgres(env.databaseUrl, {
     prepare: false,
-    // Supabase's session pooler admits ~15 client connections in total, shared by
-    // every server instance: keep each instance's share small and release idle
-    // ones quickly (queries pipeline over the open connections).
-    max: Number(process.env.DATABASE_POOL_MAX ?? 2),
-    idle_timeout: 5,
+    max: Number(process.env.DATABASE_POOL_MAX ?? 20),
+    idle_timeout: 20,
     connect_timeout: 15,
     onnotice: () => {},
     types: {
