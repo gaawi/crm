@@ -142,7 +142,7 @@ export async function addSheetRow(input: NewSheetRow): Promise<string> {
     update organizations
        set city = coalesce(city, ${input.city?.trim() || null}),
            website = coalesce(website, ${input.website?.trim() || null}),
-           kind = case when kind = 'other' then 'venue' else kind end
+           kind = case when kind is null or kind = 'other' then 'venue' else kind end
      where id = ${organizationId}
   `;
 

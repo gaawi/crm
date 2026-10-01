@@ -33,6 +33,8 @@ describe.skipIf(process.env.SKIP_DB_TESTS === "1")("booking sheets", () => {
     });
     const contact = await getContactByEmail("ana@campoamor.es");
     expect(contact?.organization?.name).toBe("Teatro Campoamor");
+    const [{ kind }] = await sql<{ kind: string | null }[]>`select kind from organizations where name = 'Teatro Campoamor'`;
+    expect(kind).toBe("venue");
     expect(contact?.projects.map((p) => p.name)).toEqual(["Gira España 2027"]);
 
     const [listed] = await listSheets("2026-10-01");
@@ -41,11 +43,14 @@ describe.skipIf(process.env.SKIP_DB_TESTS === "1")("booking sheets", () => {
 
   it("reuses an existing contact and organization", async () => {
     const sheet = await createSheet({ name: "Booking USA" });
+    await sql`insert into organizations (name, kind) values ('Fontana Chamber Arts', 'partner')`;
     await addSheetRow({ projectId: sheet, organization: "Fontana Chamber Arts", email: "svdw@fontanamusic.org", contactName: "Sophié" });
     await addSheetRow({ projectId: sheet, organization: "fontana chamber arts", email: "SVDW@fontanamusic.org" });
     const [{ orgs }] = await sql<{ orgs: number }[]>`select count(*)::int as orgs from organizations`;
     const [{ contacts }] = await sql<{ contacts: number }[]>`select count(*)::int as contacts from contacts`;
     expect({ orgs, contacts }).toEqual({ orgs: 1, contacts: 1 });
+    const [{ kind }] = await sql<{ kind: string }[]>`select kind from organizations`;
+    expect(kind).toBe("partner"); // an existing kind is kept
     expect(await getSheetRows(sheet)).toHaveLength(2);
   });
 
