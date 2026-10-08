@@ -9,6 +9,9 @@ import { cn } from "@/lib/utils";
 export const menuItemClass =
   "flex h-11 w-full items-center gap-2.5 rounded-lg px-3 text-left text-[15px] text-fg active:bg-surface-2 md:h-8 md:rounded-md md:px-2.5 md:text-sm md:hover:bg-surface-2";
 
+/** A destructive menu item ("Delete…"): `cn(menuItemClass, "text-danger")` would stay text-fg. */
+export const menuItemDangerClass = menuItemClass.replace("text-fg", "text-danger");
+
 /** Round icon-only button (44pt on phones, compact on desktop). */
 export const iconButtonClass =
   "inline-flex size-10 shrink-0 items-center justify-center rounded-full text-subtle transition-colors active:bg-surface-2 md:size-7 md:rounded-md md:hover:bg-surface-2 md:hover:text-fg";

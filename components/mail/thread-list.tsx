@@ -10,6 +10,7 @@ import {
   ChevronRight,
   Inbox,
   Info,
+  Loader2,
   Mail,
   MailOpen,
   MessagesSquare,
@@ -27,6 +28,7 @@ import { threadHref, type InboxTab, type MailListState } from "@/lib/mail/params
 import type { ThreadAction } from "@/lib/mail/gmail";
 import type { ThreadSummary } from "@/lib/mail/queries";
 import { cn } from "@/lib/utils";
+import { useArchiveAll, type ArchiveAllScope } from "./archive-all";
 import { useMail, type ThreadTarget } from "./mail-provider";
 import { SwipeRow } from "./swipe-row";
 import { useShortcuts } from "./use-shortcuts";
@@ -70,6 +72,7 @@ export function ThreadList({
   labels,
   emptyTitle,
   emptyText,
+  archiveAll = null,
 }: {
   threads: ThreadSummary[];
   state: MailListState;
@@ -81,8 +84,11 @@ export function ThreadList({
   labels: Record<string, LabelInfo>;
   emptyTitle: string;
   emptyText: string;
+  /** The Inbox (not search, not other views): offers "Archive all". */
+  archiveAll?: ArchiveAllScope | null;
 }) {
   const router = useRouter();
+  const archiver = useArchiveAll(archiveAll);
   const { overrides, act, settle, compose, timezone } = useMail();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [cursor, setCursor] = useState(-1);
@@ -237,9 +243,23 @@ export function ThreadList({
             <span className="ml-2 text-xs text-muted">{selectedRows.length} selected</span>
           </>
         ) : (
-          <ToolButton label="Refresh" onClick={refresh}>
-            <RotateCw className={cn("size-4", refreshing && "animate-spin")} />
-          </ToolButton>
+          <>
+            <ToolButton label="Refresh" onClick={refresh}>
+              <RotateCw className={cn("size-4", refreshing && "animate-spin")} />
+            </ToolButton>
+            {archiveAll || archiver.running ? (
+              <button
+                type="button"
+                onClick={archiver.start}
+                aria-haspopup="dialog"
+                title={archiver.running ? "Archiving every conversation…" : "Archive every conversation in this inbox, without selecting"}
+                className="ml-1 inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-sm text-muted hover:bg-surface-2 hover:text-fg"
+              >
+                {archiver.running ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Archive className="size-4" aria-hidden />}
+                {archiver.running ? "Archiving…" : "Archive all"}
+              </button>
+            ) : null}
+          </>
         )}
         <span className="flex-1" />
         {rows.length ? (
@@ -482,6 +502,7 @@ export function ThreadList({
           </div>
         ) : null}
       </div>
+      {archiver.dialog}
     </div>
   );
 }

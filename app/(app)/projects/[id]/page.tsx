@@ -17,11 +17,11 @@ import { getProject } from "@/lib/queries/projects";
 import type { ContactRef, ContactSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { ActionForm, FormSubmit } from "../../_components/action-form";
-import { DealRow } from "../../_components/deal-row";
+import { GoalRow } from "../../_components/goal-row";
 import { Dropdown } from "../../_components/dropdown";
 import { FilterForm } from "../../_components/filter-form";
 import { Segmented } from "../../_components/segmented";
-import { BackLink, FormActions, GroupAction, GroupTitle, SearchInput, iconButtonClass, menuItemClass } from "../../_components/ui";
+import { BackLink, FormActions, GroupAction, GroupTitle, SearchInput, iconButtonClass, menuItemClass, menuItemDangerClass } from "../../_components/ui";
 import { hrefWith, oneOf, param } from "../../_lib/url";
 import {
   addProjectMember,
@@ -32,7 +32,7 @@ import {
 } from "../actions";
 import { ProjectFields } from "../project-fields";
 
-const TABS = ["people", "add", "deals"] as const;
+const TABS = ["people", "add", "goals", "deals"] as const;
 type Tab = (typeof TABS)[number];
 
 const loadProject = cache(getProject);
@@ -57,7 +57,9 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
   const timezone = env.timezone;
   const today = todayIn(timezone);
   const base = `/projects/${project.id}`;
-  const tab: Tab = oneOf(sp, "tab", TABS) || "people";
+  // "deals" = old links to the Goals tab.
+  const tabParam = oneOf(sp, "tab", TABS);
+  const tab: Tab = tabParam === "deals" ? "goals" : tabParam || "people";
   const add = param(sp, "add");
   const editing = param(sp, "edit") === "1";
 
@@ -72,7 +74,7 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
           <div className="rounded-xl border border-border bg-surface p-4 md:rounded-lg">
             <p className="text-[15px] font-medium text-fg md:text-sm">Delete {project.name}?</p>
             <p className="mt-2 text-[15px] text-muted md:text-sm">
-              People and deals are kept; they just stop belonging to this project. To keep it for the record, archive it
+              People and goals are kept; they just stop belonging to this project. To keep it for the record, archive it
               instead.
             </p>
           </div>
@@ -116,7 +118,7 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
   }
   const openDeals = deals.filter((d) => d.stage !== "won" && d.stage !== "lost");
   const show = (t: Tab) => (tab === t ? "flex" : "hidden md:flex");
-  const addDealHref = hrefWith("/pipeline", { new: 1, project: project.id, return: `${base}?tab=deals` });
+  const addDealHref = hrefWith("/pipeline", { new: 1, project: project.id, return: `${base}?tab=goals` });
 
   return (
     <>
@@ -138,7 +140,7 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
                 {project.archived ? "Unarchive" : "Archive"}
               </button>
             </form>
-            <Link href={`${base}?delete=1`} className={cn(menuItemClass, "text-danger")}>
+            <Link href={`${base}?delete=1`} className={menuItemDangerClass}>
               <Trash2 className="size-4" strokeWidth={1.75} />
               Delete…
             </Link>
@@ -155,7 +157,7 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
             {project.description ? <span className="text-subtle"> · </span> : null}
             <span className="text-subtle">
               {project.contactCount} {project.contactCount === 1 ? "person" : "people"}
-              {project.openOpportunityCount ? ` · ${project.openOpportunityCount} open ${project.openOpportunityCount === 1 ? "deal" : "deals"}` : ""}
+              {project.openOpportunityCount ? ` · ${project.openOpportunityCount} open ${project.openOpportunityCount === 1 ? "goal" : "goals"}` : ""}
             </span>
           </p>
         </div>
@@ -185,7 +187,7 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
         segments={[
           { href: base, label: "People", active: tab === "people", count: members.length },
           { href: `${base}?tab=add`, label: "Add people", active: tab === "add", count: mentions.length },
-          { href: `${base}?tab=deals`, label: "Deals", active: tab === "deals", count: openDeals.length },
+          { href: `${base}?tab=goals`, label: "Goals", active: tab === "goals", count: openDeals.length },
         ]}
       />
 
@@ -271,26 +273,26 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
             )}
           </section>
 
-          <section className={cn("flex-col", show("deals"))} aria-label="Deals">
+          <section className={cn("flex-col", show("goals"))} aria-label="Goals">
             <GroupTitle
               actions={
                 <GroupAction href={addDealHref}>
                   <Plus className="size-4 md:size-3.5" strokeWidth={1.75} />
-                  Add
+                  Add goal
                 </GroupAction>
               }
             >
-              Deals
+              Goals
             </GroupTitle>
             {deals.length ? (
               <RowList>
                 {deals.map((d) => (
-                  <DealRow key={d.id} deal={d} today={today} showContact />
+                  <GoalRow key={d.id} deal={d} today={today} showContact />
                 ))}
               </RowList>
             ) : (
               <Empty>
-                No deals in this project.{" "}
+                No goals in this project.{" "}
                 <Link href={addDealHref} className="text-fg underline-offset-2 hover:underline">
                   Add one
                 </Link>

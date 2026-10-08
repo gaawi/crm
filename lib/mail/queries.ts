@@ -354,6 +354,23 @@ export async function getMailCounts(accountId?: string | null): Promise<MailCoun
 }
 
 /**
+ * Conversations in the inbox of active accounts — one tab, or every tab when
+ * `category` is null; one account or all — for "Archive all N conversations…"
+ * (stored copies: as current as the last sync).
+ */
+export async function countInboxThreads(params: { accountId?: string | null; category?: InboxCategory | null } = {}): Promise<number> {
+  const [row] = await sql<{ count: number }[]>`
+    select count(distinct (m.account_id, m.gmail_thread_id))::int as count
+      from messages m
+      join gmail_accounts a on a.id = m.account_id and a.status = 'active'
+     where m.label_ids @> '{INBOX}' and not (m.label_ids && '{TRASH,SPAM,DELETED}')
+       ${params.category ? sql`and ${categoryCondition(params.category)}` : sql``}
+       ${params.accountId ? sql`and m.account_id = ${params.accountId}` : sql``}
+  `;
+  return row.count;
+}
+
+/**
  * Apply a label change to the stored copies right away (Gmail has already
  * been updated; live sync will confirm). Scope: whole thread, or given messages.
  */

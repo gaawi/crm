@@ -1,6 +1,21 @@
 import { assertSession, UnauthorizedError } from "@/lib/auth";
-import { stageLabel } from "@/lib/constants";
+import { ACTIVITY_KINDS, CALL_OUTCOMES, goalLabel, nextActionLabel, stageLabel } from "@/lib/constants";
+import type { ActivityView, SheetRowActivity } from "@/lib/booking/types";
+import { toISODate } from "@/lib/dates";
+import { env } from "@/lib/env";
+import { sheetActivities } from "@/lib/queries/activities";
 import { getSheet, getSheetRows } from "@/lib/queries/booking";
+
+const kindLabel = (kind: string) => ACTIVITY_KINDS.find((k) => k.value === kind)?.label ?? kind;
+const outcomeLabel = (outcome: string | null) => (outcome ? (CALL_OUTCOMES.find((o) => o.value === outcome)?.label ?? outcome) : null);
+
+/** "2026-09-28 Call (Talked): Interested, send the dossier" */
+function describe(a: ActivityView | SheetRowActivity, withBody: boolean): string {
+  const outcome = outcomeLabel(a.outcome);
+  const head = `${toISODate(new Date(a.occurredAt), env.timezone)} ${kindLabel(a.kind)}${outcome ? ` (${outcome})` : ""}`;
+  const body = a.body?.replace(/\s+/g, " ").trim();
+  return withBody && body ? `${head}: ${body}` : head;
+}
 
 /** GET /booking/[id]/export → the sheet as CSV (opens in Excel, Numbers or Google Sheets). */
 export async function GET(_request: Request, { params }: RouteContext<"/booking/[id]/export">) {
@@ -13,7 +28,7 @@ export async function GET(_request: Request, { params }: RouteContext<"/booking/
   const { id } = await params;
   const sheet = await getSheet(id);
   if (!sheet) return new Response("Not found", { status: 404 });
-  const rows = await getSheetRows(sheet.id);
+  const [rows, history] = await Promise.all([getSheetRows(sheet.id), sheetActivities(sheet.id)]);
 
   // Quote every cell; a leading = + - @ is neutralised so spreadsheets never run it as a formula.
   const cell = (value: unknown) => {
@@ -21,21 +36,52 @@ export async function GET(_request: Request, { params }: RouteContext<"/booking/
     if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
     return `"${text.replace(/"/g, '""')}"`;
   };
-  const header = ["Venue / presenter", "City", "Contact", "Role", "Email", "Status", "Last contact", "Follow up", "Next step", "Dates", `Fee (${sheet.currency})`, "Notes"];
+  const header = [
+    "Venue / presenter",
+    "Section",
+    "City",
+    "Spaces",
+    "Returning",
+    "Contact",
+    "Role",
+    "Email",
+    "Phone",
+    "WhatsApp",
+    "Goal",
+    "Status",
+    "Last contact",
+    "Last activity",
+    "Follow up",
+    "Next action",
+    "Next step",
+    "Dates",
+    `Fee (${sheet.currency})`,
+    "Notes",
+    "History",
+  ];
   const lines = rows.map((r) =>
     [
       r.organization?.name ?? r.title,
+      r.section,
       r.organization?.city,
+      r.spaces,
+      r.returning ? "Yes" : "",
       r.contact?.displayName,
       r.contact?.role,
       r.contact?.email,
-      stageLabel(r.stage, "booking"),
-      r.contact?.lastContactedAt ? new Date(r.contact.lastContactedAt).toISOString().slice(0, 10) : "",
+      r.contact?.phone,
+      r.contact?.whatsapp,
+      goalLabel(r.kind),
+      stageLabel(r.stage, r.kind),
+      r.contact?.lastContactedAt ? toISODate(new Date(r.contact.lastContactedAt), env.timezone) : "",
+      r.lastActivity ? describe(r.lastActivity, false) : "",
       r.followUpAt,
+      nextActionLabel(r.nextAction),
       r.nextStep,
       r.eventDates,
       r.value,
       r.notes,
+      (history.get(r.id) ?? []).map((a) => describe(a, true)).join(" | "),
     ]
       .map(cell)
       .join(","),

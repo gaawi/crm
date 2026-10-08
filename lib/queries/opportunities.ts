@@ -1,7 +1,7 @@
 import "server-only";
 import { sql } from "@/lib/db";
-import { OPEN_STAGES } from "@/lib/constants";
-import type { Opportunity, OpportunityKind, OpportunityStage } from "@/lib/types";
+import { GOAL_KINDS, goalLabel, NEXT_ACTIONS, OPEN_STAGES } from "@/lib/constants";
+import type { NextAction, Opportunity, OpportunityKind, OpportunityStage } from "@/lib/types";
 
 export interface OpportunityFilters {
   stage?: OpportunityStage;
@@ -14,17 +14,19 @@ export interface OpportunityFilters {
 }
 
 export const opportunityColumns = () => sql`
-  op.id, op.title, op.kind, op.stage, op.value, op.currency, op.follow_up_at, op.next_step, op.notes,
+  op.id, op.title, op.kind, op.stage, op.value, op.currency, op.follow_up_at, op.next_action, op.next_step, op.notes,
   op.closed_at, op.created_at, op.updated_at,
   case when c.id is null then null else json_build_object(
     'id', c.id,
     'displayName', coalesce(
       nullif(btrim(c.name), ''),
       (select ce.email from contact_emails ce where ce.contact_id = c.id order by ce.is_primary desc, ce.created_at limit 1),
-      'Unknown')
+      'Unknown'),
+    'phone', c.phone,
+    'whatsapp', c.whatsapp
   ) end as contact,
   case when o.id is null then null else json_build_object('id', o.id, 'name', o.name) end as organization,
-  case when p.id is null then null else json_build_object('id', p.id, 'name', p.name, 'color', p.color) end as project
+  case when p.id is null then null else json_build_object('id', p.id, 'name', p.name, 'color', p.color, 'sheet', p.sheet) end as project
 `;
 
 export const opportunityJoins = () => sql`
@@ -68,8 +70,21 @@ export interface OpportunityInput {
   value?: string | number | null;
   currency?: string;
   followUpAt?: string | null;
+  /** Structured next step; null clears. */
+  nextAction?: NextAction | null;
+  /** Free-text detail of the next step. */
   nextStep?: string | null;
   notes?: string | null;
+}
+
+/** Throws on an unknown goal kind / next action (the database would reject it less clearly). */
+export function checkGoalValues(input: { kind?: string | null; nextAction?: string | null }): void {
+  if (input.kind !== undefined && input.kind !== null && !GOAL_KINDS.some((k) => k.value === input.kind)) {
+    throw new Error(`Unknown goal type: ${input.kind}`);
+  }
+  if (input.nextAction !== undefined && input.nextAction !== null && !NEXT_ACTIONS.some((a) => a.value === input.nextAction)) {
+    throw new Error(`Unknown next step: ${input.nextAction}`);
+  }
 }
 
 /**
@@ -79,6 +94,7 @@ export interface OpportunityInput {
 export async function createOpportunity(input: OpportunityInput & { title: string }): Promise<string> {
   const title = input.title.replace(/\s+/g, " ").trim();
   if (!title) throw new Error("Title is required");
+  checkGoalValues(input);
   const stage = input.stage ?? "lead";
   let organizationId = input.organizationId ?? null;
   if (!organizationId && input.contactId) {
@@ -98,6 +114,7 @@ export async function createOpportunity(input: OpportunityInput & { title: strin
       value: parseMoney(input.value),
       currency: normalizeCurrency(input.currency),
       followUpAt: input.followUpAt || null,
+      nextAction: input.nextAction || null,
       nextStep: input.nextStep?.trim() || null,
       notes: input.notes?.trim() || null,
     })}
@@ -109,6 +126,7 @@ export async function createOpportunity(input: OpportunityInput & { title: strin
 
 /** Patch semantics. Moving to won/lost sets closed_at; moving back to an open stage clears it. */
 export async function updateOpportunity(id: string, patch: OpportunityInput): Promise<void> {
+  checkGoalValues(patch);
   const values: Record<string, unknown> = {};
   if (patch.title !== undefined) {
     const title = patch.title.replace(/\s+/g, " ").trim();
@@ -123,13 +141,14 @@ export async function updateOpportunity(id: string, patch: OpportunityInput): Pr
   if ("value" in patch) values.value = parseMoney(patch.value);
   if (patch.currency !== undefined) values.currency = normalizeCurrency(patch.currency);
   if ("followUpAt" in patch) values.followUpAt = patch.followUpAt || null;
+  if ("nextAction" in patch) values.nextAction = patch.nextAction || null;
   if ("nextStep" in patch) values.nextStep = patch.nextStep?.trim() || null;
   if ("notes" in patch) values.notes = patch.notes?.trim() || null;
   if (!Object.keys(values).length) return;
 
   await sql.begin(async (tx) => {
     const result = await tx`update opportunities set ${tx(values as never)} where id = ${id}`;
-    if (result.count === 0) throw new Error("Opportunity not found");
+    if (result.count === 0) throw new Error("Goal not found");
     if (patch.stage !== undefined) {
       await tx`
         update opportunities
@@ -138,6 +157,25 @@ export async function updateOpportunity(id: string, patch: OpportunityInput): Pr
       `;
     }
   });
+}
+
+/** "Get booked · Teatro Campoamor": a title for a goal created without one (null when it is with nobody). */
+export async function defaultGoalTitle(input: { kind?: OpportunityKind | null; contactId?: string | null; organizationId?: string | null }): Promise<string | null> {
+  let who: string | null = null;
+  if (input.organizationId) {
+    const [org] = await sql<{ name: string }[]>`select name from organizations where id = ${input.organizationId}`;
+    who = org?.name ?? null;
+  }
+  if (!who && input.contactId) {
+    const [contact] = await sql<{ name: string | null }[]>`
+      select coalesce(o.name, nullif(btrim(c.name), ''),
+                      (select ce.email from contact_emails ce where ce.contact_id = c.id order by ce.is_primary desc, ce.created_at limit 1)) as name
+        from contacts c
+        left join organizations o on o.id = c.organization_id
+       where c.id = ${input.contactId}`;
+    who = contact?.name ?? null;
+  }
+  return who ? `${goalLabel(input.kind ?? "other")} · ${who}` : null;
 }
 
 export async function deleteOpportunity(id: string): Promise<void> {

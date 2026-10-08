@@ -44,7 +44,7 @@ export default async function ProjectsPage({ searchParams }: PageProps<"/project
         <ProjectList projects={active} />
       ) : (
         <EmptyState title="No projects" action={<ButtonLink href="/projects?new=1" variant="primary">New project</ButtonLink>}>
-          Projects group the people and deals of one production, season or cause.
+          Projects group the people and goals of one production, season or cause.
         </EmptyState>
       )}
 
@@ -67,7 +67,7 @@ function ProjectList({ projects }: { projects: Project[] }) {
       {projects.map((p) => {
         const counts = [
           `${p.contactCount} ${p.contactCount === 1 ? "person" : "people"}`,
-          p.openOpportunityCount ? `${p.openOpportunityCount} open ${p.openOpportunityCount === 1 ? "deal" : "deals"}` : null,
+          p.openOpportunityCount ? `${p.openOpportunityCount} open ${p.openOpportunityCount === 1 ? "goal" : "goals"}` : null,
         ].filter(Boolean);
         return (
           <li key={p.id} className="relative flex min-h-[60px] items-center gap-3 px-4 py-2.5 active:bg-surface-2 md:min-h-0 md:hover:bg-surface-2/40">
@@ -88,7 +88,7 @@ function ProjectList({ projects }: { projects: Project[] }) {
               {p.contactCount} {p.contactCount === 1 ? "person" : "people"}
             </span>
             <span className="hidden w-28 shrink-0 text-right text-xs tabular-nums text-muted md:block">
-              {p.openOpportunityCount ? `${p.openOpportunityCount} open ${p.openOpportunityCount === 1 ? "deal" : "deals"}` : "—"}
+              {p.openOpportunityCount ? `${p.openOpportunityCount} open ${p.openOpportunityCount === 1 ? "goal" : "goals"}` : "—"}
             </span>
             <ChevronRight className="size-5 shrink-0 text-subtle md:hidden" strokeWidth={1.75} />
           </li>

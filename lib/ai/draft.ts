@@ -3,6 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 import { anthropic, FALLBACK_BETA, model } from "@/lib/ai/client";
+import { goalLabel, nextStepParts, stageLabel } from "@/lib/constants";
 import { sql } from "@/lib/db";
 import { formatDateTime, todayIn } from "@/lib/dates";
 import { env } from "@/lib/env";
@@ -114,7 +115,7 @@ export async function draftFollowUp(
     contact.followUpAt ? `Follow-up planned for ${contact.followUpAt}${contact.followUpNote ? `: ${contact.followUpNote}` : ""}` : null,
     contact.notes ? `Owner's notes:\n${truncate(contact.notes, 2000)}` : null,
     opportunities.length
-      ? `Open opportunities:\n${opportunities.map((o) => `- ${o.title} (${o.stage}${o.nextStep ? `; next step: ${o.nextStep}` : ""})`).join("\n")}`
+      ? `Open opportunities:\n${opportunities.map((o) => `- ${o.title} (${goalLabel(o.kind)}, ${stageLabel(o.stage, o.kind)}${nextStepParts(o).text ? `; next step: ${nextStepParts(o).text}` : ""})`).join("\n")}`
       : null,
   ]
     .filter(Boolean)

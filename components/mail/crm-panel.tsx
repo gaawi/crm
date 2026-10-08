@@ -18,7 +18,7 @@ const MAX_PEOPLE = 6;
 /**
  * CRM context for a conversation: the other participants as contact cards
  * (status, organization, projects, follow-up with quick presets, last
- * contact, open deals), "Add as contact" for unknown people, and Claude.
+ * contact, open goals), "Add as contact" for unknown people, and Claude.
  */
 export async function CrmPanel({
   participants,
@@ -165,7 +165,7 @@ function ContactCard({ contact, deals, today, returnPath }: { contact: Contact; 
 
       <div className="flex border-t border-border text-[15px] md:text-xs">
         <Link href={newDeal} className="flex h-11 flex-1 items-center justify-center gap-1.5 text-fg/80 hover:bg-surface-2 md:h-8">
-          <Plus className="size-4 md:size-3.5" /> New deal
+          <Plus className="size-4 md:size-3.5" /> New goal
         </Link>
         <Link href={`/contacts/${contact.id}`} className="flex h-11 flex-1 items-center justify-center border-l border-border text-fg/80 hover:bg-surface-2 md:h-8">
           Open contact

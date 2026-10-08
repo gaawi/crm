@@ -58,8 +58,11 @@ Detailed specs: `docs/SYNC_SPEC.md` (sync engine), `docs/MAIL_CLIENT_SPEC.md`
 - **organizations** — name, kind (`venue | funder | partner | press | agency |
   institution | other`), city, domains, website, notes, tags.
 - **projects** — CreArtBox, ADAR, Personal, Booking, Press, Grants,
-  Fundraising, Partners (editable).
-- **contacts** — name, organization, role, notes, tags, status (`new | lead |
+  Fundraising, Partners (editable). A project flagged `sheet` is a booking
+  sheet (one row per booking deal), with its currency, phone prefix and
+  send-from Gmail account.
+- **contacts** — name, organization, role, phone + WhatsApp (normalized
+  `+34612345678`), notes, tags, status (`new | lead |
   active | inactive | archived`), follow-up date + note, source, denormalized
   history stats (`last_contacted_at`, `last_inbound_at`, `last_outbound_at`,
   `awaiting_reply_since`, `message_count`), `reply_dismissed_at`.
@@ -68,12 +71,43 @@ Detailed specs: `docs/SYNC_SPEC.md` (sync engine), `docs/MAIL_CLIENT_SPEC.md`
   ids, direction, sender, subject, snippet, stripped body, labels, automated
   flag + reason, attachments metadata); **message_participants** (from, to,
   cc, bcc, reply_to).
-- **opportunities** — kind (`booking | fundraising | partnership | grant |
-  press | sale | other`), stage (`lead → contacted → proposal → negotiation →
-  won | lost`, labelled per kind, e.g. booking: Offer sent / Confirmed),
-  contact, organization, project, value, follow-up, next step, notes.
+- **opportunities** — shown as **goals**: what we want from a contact /
+  organization. kind (`booking | perform_with | residency | education |
+  broadcast | venue | exchange | fundraising | sponsorship | grant |
+  partnership | coproduction | network | introduction | press | sale |
+  other`, labels and groups in `GOAL_KINDS`), stage (`lead → contacted →
+  proposal → negotiation → won | lost`, labelled per kind, e.g. booking:
+  Offer sent / Confirmed, venue: Request sent / Granted; generic labels for
+  mixed lists), contact, organization, project, value, the next step
+  (`next_action`: call, send full proposal, sign the contract… —
+  `NEXT_ACTIONS`; `next_step` = its free-text detail; `follow_up_at` = its
+  date), notes; for booking sheet rows also event dates, section, spaces and
+  "returning". Every opportunity of a sheet project is a row of the sheet
+  (any kind; new rows default to booking).
+- **activities** — calls (with outcome), WhatsApp, meetings, emails logged by
+  hand, notes, and automatic status entries of booking rows. Linked to a
+  contact, organization and/or opportunity. Calls that reached someone,
+  WhatsApp, meetings and logged emails count in `last_contacted_at`.
+- **email_templates** — per booking sheet or global, with the situation they
+  are suggested for (first contact, follow-up, after a call, …). "Prepare
+  email" renders one into the approval queue; nothing is sent from a sheet.
 - **email_drafts** — the approval queue (status, recipients, subject, body,
-  rationale, revisions, Gmail draft id, errors).
+  rationale, revisions, Gmail draft id, errors, campaign).
+- **email_campaigns** — emails prepared together (more than one "Prepare
+  email" from a sheet). Status `draft` until the owner approves it ("Approve
+  N and start sending" = `startCampaign`, and "Queue again" on one
+  held-back email = `requeueHeldDraft`, the only places drafts become
+  `queued`); then the cron (`runCampaigns`, after the sync fan-out and the
+  autopilot) sends queued emails a few at a time: inside the sending window
+  in the campaign's timezone (weekdays only by default), 3600/per_hour s
+  apart ±20 %, under the daily cap and 150 / account / 24 h, with a lease so
+  overlapping runs never double-send. Right before each send it re-checks
+  the email is still queued in a running campaign and that nobody wrote or
+  talked to the contact since it was prepared, or since the owner queued it
+  again (`hold_cleared_at`) — else it goes back to the owner, "Held back: …",
+  and is left out of the campaign's next approval; three failures in a row or an account to reconnect
+  pause the campaign. Approvals counts a campaign that needs the owner as
+  one item.
 - **app_settings** — writing profile (name, signature, style) and autopilot.
 - **login_attempts**; view **self_addresses**.
 - Functions: `refresh_contact_stats`, `merge_contacts`,

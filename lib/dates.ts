@@ -86,3 +86,46 @@ function isoDateToUtc(iso: string): Date {
   const [y, m, d] = iso.split("-").map(Number);
   return new Date(Date.UTC(y, m - 1, d, 12));
 }
+
+/** "YYYY-MM-DDTHH:mm" wall-clock time in `timeZone` (for <input type="datetime-local">). */
+export function toDateTimeLocal(date: Date, timeZone: string): string {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    })
+      .formatToParts(date)
+      .map((p) => [p.type, p.value]),
+  );
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+}
+
+/**
+ * Wall-clock "YYYY-MM-DDTHH:mm[:ss]" in `timeZone` → the instant. A value
+ * with an offset or "Z" is parsed as is. Null when invalid.
+ */
+export function zonedDateTimeToUtc(value: string, timeZone: string): Date | null {
+  const s = value.trim();
+  if (/(?:Z|[+-]\d{2}:?\d{2})$/i.test(s)) {
+    const d = new Date(s);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  const m = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2}))?)?$/.exec(s);
+  if (!m) return null;
+  const [y, mo, d, h, mi, se] = [m[1], m[2], m[3], m[4] ?? "12", m[5] ?? "00", m[6] ?? "00"].map(Number);
+  const guess = Date.UTC(y, mo - 1, d, h, mi, se);
+  if (new Date(guess).getUTCDate() !== d || h > 23 || mi > 59 || se > 59) return null;
+  // Shift by the zone's offset at that moment (twice, for DST edges).
+  let utc = guess;
+  for (let i = 0; i < 2; i++) {
+    const local = toDateTimeLocal(new Date(utc), timeZone);
+    const [ly, lmo, ld, lh, lmi] = local.split(/[-T:]/).map(Number);
+    utc += guess - Date.UTC(ly, lmo - 1, ld, lh, lmi, se);
+  }
+  return new Date(utc);
+}

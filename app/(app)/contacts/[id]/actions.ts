@@ -18,8 +18,11 @@ import {
   setPrimaryEmail,
   updateContact,
 } from "@/lib/queries/contacts";
+import type { ActionOutcome } from "@/lib/booking/types";
+import type { GoalInput, Opportunity } from "@/lib/types";
 import { errorMessage } from "@/lib/utils";
 import type { ActionResult } from "../../_components/action-form";
+import { createGoalAction } from "../../pipeline/actions";
 import { addMonths } from "../../_lib/format";
 import {
   field,
@@ -58,6 +61,9 @@ export async function updateProfile(contactId: string, _prev: ActionResult, form
   });
   if (!parsed.success) return { error: "Some fields are invalid or too long." };
   const input = parsed.data;
+  // Phone fields are only changed when the form has them.
+  const phones = phoneFields(formData);
+  if ("error" in phones) return { error: phones.error };
   try {
     await updateContact(id, {
       name: input.name || null,
@@ -66,11 +72,53 @@ export async function updateProfile(contactId: string, _prev: ActionResult, form
       status: input.status,
       tags: parseTags(input.tags),
       notes: input.notes || null,
+      ...phones.values,
     });
   } catch (error) {
     return { error: errorMessage(error) };
   }
   redirect(contactPath(id, "details"));
+}
+
+/* Phone / WhatsApp --------------------------------------------------------- */
+
+const phoneSchema = z.string().trim().max(60);
+
+function phoneFields(formData: FormData): { values: { phone?: string | null; whatsapp?: string | null } } | { error: string } {
+  const values: { phone?: string | null; whatsapp?: string | null } = {};
+  for (const name of ["phone", "whatsapp"] as const) {
+    if (!formData.has(name)) continue;
+    const parsed = phoneSchema.safeParse(field(formData, name));
+    if (!parsed.success) return { error: "The phone number is too long." };
+    values[name] = parsed.data || null;
+  }
+  return { values };
+}
+
+/**
+ * Set or clear the contact's phone and WhatsApp ("" clears; a key left out
+ * is kept). Typed any way; stored normalized, without adding a country code.
+ */
+export async function updatePhonesAction(
+  contactId: string,
+  input: { phone?: string; whatsapp?: string },
+): Promise<{ ok: boolean; error?: string }> {
+  await requireSession();
+  const id = parseId(contactId);
+  const values: { phone?: string | null; whatsapp?: string | null } = {};
+  for (const name of ["phone", "whatsapp"] as const) {
+    if (input[name] === undefined) continue;
+    const parsed = phoneSchema.safeParse(input[name]);
+    if (!parsed.success) return { ok: false, error: "The phone number is too long." };
+    values[name] = parsed.data || null;
+  }
+  try {
+    await updateContact(id, values);
+  } catch (error) {
+    return { ok: false, error: errorMessage(error) };
+  }
+  refresh();
+  return { ok: true };
 }
 
 /* Follow-up ---------------------------------------------------------------- */
@@ -104,6 +152,19 @@ export async function saveFollowUp(contactId: string, _prev: ActionResult, formD
   await updateContact(id, { followUpAt: date.data, followUpNote: date.data ? note.data || null : null });
   refresh();
   return { message: date.data ? "Follow-up saved." : "Follow-up cleared." };
+}
+
+/* Goals -------------------------------------------------------------------- */
+
+/**
+ * Contact page → Goals → "New goal": what we want from this contact (kind),
+ * with an optional next step. The contact's organization is linked; without a
+ * title it is named "<goal label> · <organization or contact>".
+ */
+export async function addContactGoalAction(contactId: string, input: Omit<GoalInput, "contactId">): Promise<ActionOutcome<{ goal: Opportunity }>> {
+  await requireSession();
+  const id = parseId(contactId);
+  return createGoalAction({ ...input, contactId: id });
 }
 
 /* Email addresses ---------------------------------------------------------- */

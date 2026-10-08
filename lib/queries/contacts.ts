@@ -1,6 +1,7 @@
 import "server-only";
 import { sql, type Tx } from "@/lib/db";
 import type { Contact, ContactStatus, ContactSummary, EmailMessage } from "@/lib/types";
+import { normalizePhone, phoneDigits } from "@/lib/booking/phone";
 import { isValidEmail, normalizeEmail, normalizeTag } from "@/lib/utils";
 import { findOrCreateOrganization } from "@/lib/queries/organizations";
 import {
@@ -35,6 +36,8 @@ export interface ContactFilters {
 export async function listContacts(filters: ContactFilters = {}): Promise<{ contacts: ContactSummary[]; total: number }> {
   const q = filters.q?.trim();
   const pattern = q ? likePattern(q) : null;
+  // "612 34 56" / "+34 612…" also matches phone numbers by their digits.
+  const digits = q && /^[\d\s+().\-/]+$/.test(q) && phoneDigits(q).length >= 4 ? likePattern(phoneDigits(q)) : null;
   const limit = clampLimit(filters.limit, 100);
   const offset = Math.max(0, Math.floor(filters.offset ?? 0));
   const status = filters.status;
@@ -66,6 +69,7 @@ export async function listContacts(filters: ContactFilters = {}): Promise<{ cont
                or o.name ilike ${pattern}
                or exists (select 1 from contact_emails ce2 where ce2.contact_id = c.id and ce2.email ilike ${pattern})
                or exists (select 1 from unnest(c.tags) t where t ilike ${pattern})
+               ${digits ? sql`or replace(c.phone, '+', '') like ${digits} or replace(c.whatsapp, '+', '') like ${digits}` : sql``}
              )`
            : sql``
        }
@@ -114,6 +118,11 @@ export interface ContactInput {
   organizationId?: string | null;
   organizationName?: string | null;
   role?: string | null;
+  /** Typed any way ("612 34 56 78", "+34 612…"); stored normalized. Invalid → throws. */
+  phone?: string | null;
+  whatsapp?: string | null;
+  /** Country code for a phone / WhatsApp typed without one (e.g. "+34"). */
+  phonePrefix?: string | null;
   notes?: string | null;
   tags?: string[];
   status?: ContactStatus;
@@ -156,6 +165,8 @@ export async function createContact(input: ContactInput & { emails: string[] }):
         name: cleanText(input.name),
         organizationId: organizationId ?? null,
         role: cleanText(input.role),
+        phone: cleanPhone(input.phone, input.phonePrefix),
+        whatsapp: cleanPhone(input.whatsapp, input.phonePrefix),
         notes: cleanText(input.notes, false),
         tags: normalizeTags(input.tags ?? []),
         status: input.status ?? "active",
@@ -183,6 +194,8 @@ export async function updateContact(id: string, patch: ContactInput): Promise<vo
     values.organizationId = (await resolveOrganizationId(patch)) ?? null;
   }
   if ("role" in patch) values.role = cleanText(patch.role);
+  if ("phone" in patch) values.phone = cleanPhone(patch.phone, patch.phonePrefix);
+  if ("whatsapp" in patch) values.whatsapp = cleanPhone(patch.whatsapp, patch.phonePrefix);
   if ("notes" in patch) values.notes = cleanText(patch.notes, false);
   if (patch.tags !== undefined) values.tags = normalizeTags(patch.tags);
   if (patch.status !== undefined) values.status = patch.status;
@@ -396,6 +409,14 @@ function uniqueEmails(emails: string[]): string[] {
 
 function normalizeTags(tags: string[]): string[] {
   return [...new Set(tags.map(normalizeTag).filter(Boolean))].sort();
+}
+
+/** Empty → null; otherwise normalized, or an error for something that is not a phone number. */
+export function cleanPhone(value: string | null | undefined, prefix?: string | null): string | null {
+  if (value === null || value === undefined || value.trim() === "") return null;
+  const phone = normalizePhone(value, prefix);
+  if (!phone) throw new Error(`Invalid phone number: ${value.trim()}`);
+  return phone;
 }
 
 /** Trim; empty → null. `singleLine` collapses whitespace. */

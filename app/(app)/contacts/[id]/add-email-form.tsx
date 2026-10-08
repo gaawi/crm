@@ -62,7 +62,7 @@ export function AddEmailForm({
               {state.taken.displayName}
             </Link>
             . If it is the same person, merge {state.taken.displayName} into {contactName}: their addresses, email history,
-            projects and deals move here.
+            projects and goals move here.
           </p>
           <ActionForm action={mergeAction.bind(null, state.taken.contactId)} className="flex flex-col gap-2" messageClassName="text-xs">
             <FormSubmit variant="primary" size="sm" pendingLabel="Merging…" className="w-full md:w-fit">

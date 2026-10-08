@@ -3,12 +3,14 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { cache, type ReactNode } from "react";
 import { Ellipsis, ExternalLink, Pencil, Plus, Trash2, UserPlus } from "lucide-react";
+import { PhoneActions } from "@/components/booking/phone-actions";
 import { ContactRow, RowList } from "@/components/contact-row";
 import { EmailTimeline } from "@/components/email-timeline";
 import { TagBadge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { SubmitButton } from "@/components/ui/submit-button";
+import { formatPhone } from "@/lib/booking/phone";
 import { ORGANIZATION_KINDS } from "@/lib/constants";
 import { formatDate, formatRelative, todayIn } from "@/lib/dates";
 import { env } from "@/lib/env";
@@ -18,17 +20,18 @@ import { getOwnAddresses } from "@/lib/queries/stats";
 import type { Organization } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { ActionForm, FormSubmit } from "../../_components/action-form";
-import { DealRow } from "../../_components/deal-row";
+import { AddGoalButton } from "../../_components/add-goal";
+import { GoalRow } from "../../_components/goal-row";
 import { Dropdown } from "../../_components/dropdown";
 import { FilterForm } from "../../_components/filter-form";
 import { OrganizationKindBadge, organizationKindLabel } from "../../_components/org-kind";
 import { Segmented } from "../../_components/segmented";
-import { BackLink, FormActions, GroupAction, GroupTitle, SearchInput, menuItemClass } from "../../_components/ui";
+import { BackLink, FormActions, GroupAction, GroupTitle, SearchInput, menuItemClass, menuItemDangerClass } from "../../_components/ui";
 import { hrefWith, oneOf, param } from "../../_lib/url";
 import { deleteOrganizationAction, updateOrganizationAction } from "../actions";
 
 const HISTORY_PAGE = 30;
-const TABS = ["people", "email", "deals", "info"] as const;
+const TABS = ["people", "email", "goals", "deals", "info"] as const;
 type Tab = (typeof TABS)[number];
 
 const loadOrganization = cache(getOrganization);
@@ -51,7 +54,9 @@ export default async function OrganizationPage({ params, searchParams }: PagePro
   const timezone = env.timezone;
   const today = todayIn(timezone);
   const base = `/organizations/${organization.id}`;
-  const tab: Tab = oneOf(sp, "tab", TABS) || "people";
+  // "deals" = old links to the Goals tab.
+  const tabParam = oneOf(sp, "tab", TABS);
+  const tab: Tab = tabParam === "deals" ? "goals" : tabParam || "people";
   const q = param(sp, "q");
   const beforeRaw = param(sp, "before", 40);
   const before = beforeRaw && !Number.isNaN(Date.parse(beforeRaw)) ? new Date(beforeRaw) : undefined;
@@ -71,7 +76,7 @@ export default async function OrganizationPage({ params, searchParams }: PagePro
               {organization.contactCount
                 ? `Its ${organization.contactCount} ${organization.contactCount === 1 ? "contact is" : "contacts are"} kept, without an organization. `
                 : null}
-              Deals keep existing without it, and no email is deleted.
+              Its goals keep existing without it, and no email is deleted.
             </p>
           </div>
           <FormActions>
@@ -102,7 +107,9 @@ export default async function OrganizationPage({ params, searchParams }: PagePro
       : null;
   const show = (t: Tab) => (tab === t ? "flex" : "hidden md:flex");
   const addPersonHref = hrefWith("/contacts/new", { org: organization.name });
-  const addDealHref = hrefWith("/pipeline", { new: 1, organization: organization.id, return: `${base}?tab=deals` });
+  const addGoalHref = hrefWith("/pipeline", { new: 1, organization: organization.id, return: `${base}?tab=goals` });
+  // Open goals first, then the closed ones.
+  const sortedGoals = [...deals].sort((a, b) => Number(a.stage === "won" || a.stage === "lost") - Number(b.stage === "won" || b.stage === "lost"));
 
   return (
     <>
@@ -118,7 +125,7 @@ export default async function OrganizationPage({ params, searchParams }: PagePro
               <UserPlus className="size-4 text-muted" strokeWidth={1.75} />
               Add a person
             </Link>
-            <Link href={`${base}?delete=1`} className={cn(menuItemClass, "text-danger")}>
+            <Link href={`${base}?delete=1`} className={menuItemDangerClass}>
               <Trash2 className="size-4" strokeWidth={1.75} />
               Delete…
             </Link>
@@ -166,7 +173,7 @@ export default async function OrganizationPage({ params, searchParams }: PagePro
         segments={[
           { href: base, label: "People", active: tab === "people", count: people.length },
           { href: `${base}?tab=email`, label: "Email", active: tab === "email" },
-          { href: `${base}?tab=deals`, label: "Deals", active: tab === "deals", count: openDeals.length },
+          { href: `${base}?tab=goals`, label: "Goals", active: tab === "goals", count: openDeals.length },
           { href: `${base}?tab=info`, label: "Info", active: tab === "info" },
         ]}
       />
@@ -211,7 +218,22 @@ export default async function OrganizationPage({ params, searchParams }: PagePro
             {people.length ? (
               <RowList>
                 {people.map((c) => (
-                  <ContactRow key={c.id} contact={c} timezone={timezone} today={today} note={c.role ?? c.primaryEmail ?? undefined} />
+                  <ContactRow
+                    key={c.id}
+                    contact={c}
+                    timezone={timezone}
+                    today={today}
+                    note={[c.role ?? (c.phone ? null : c.primaryEmail), c.phone ? formatPhone(c.phone) : null].filter(Boolean).join(" · ") || undefined}
+                    actions={
+                      <PhoneActions
+                        phone={c.phone}
+                        whatsapp={c.whatsapp}
+                        target={{ contactId: c.id }}
+                        timezone={timezone}
+                        subject={[c.displayName, organization.name].join(" · ")}
+                      />
+                    }
+                  />
                 ))}
               </RowList>
             ) : (
@@ -225,27 +247,20 @@ export default async function OrganizationPage({ params, searchParams }: PagePro
             )}
           </section>
 
-          <section className={cn("flex-col", show("deals"))} aria-label="Deals">
-            <GroupTitle
-              actions={
-                <GroupAction href={addDealHref}>
-                  <Plus className="size-4 md:size-3.5" strokeWidth={1.75} />
-                  Add
-                </GroupAction>
-              }
-            >
-              Deals
+          <section className={cn("flex-col", show("goals"))} aria-label="Goals">
+            <GroupTitle actions={<AddGoalButton target={{ organizationId: organization.id }} name={organization.name} moreHref={addGoalHref} />}>
+              Goals
             </GroupTitle>
             {deals.length ? (
               <RowList>
-                {deals.map((d) => (
-                  <DealRow key={d.id} deal={d} today={today} showContact />
+                {sortedGoals.map((d) => (
+                  <GoalRow key={d.id} deal={d} today={today} showContact />
                 ))}
               </RowList>
             ) : (
               <Empty>
-                No deals yet.{" "}
-                <Link href={addDealHref} className="text-fg underline-offset-2 hover:underline">
+                No goals yet: a booking, the use of their space, an exchange, a sponsorship…{" "}
+                <Link href={addGoalHref} className="text-fg underline-offset-2 hover:underline">
                   Add one
                 </Link>
               </Empty>

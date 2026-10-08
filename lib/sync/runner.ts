@@ -1,6 +1,7 @@
 import "server-only";
 import { sql } from "@/lib/db";
 import { runAutopilotIfDue } from "@/lib/ai/autopilot";
+import { runCampaigns, type RunCampaignsSummary } from "@/lib/campaigns/scheduler";
 import { recoverStaleDrafts } from "@/lib/queries/drafts";
 import { getAccountByEmail, listAccounts, reconcileSelfContacts, refreshAliases } from "@/lib/sync/accounts";
 import { runBackfillChunk, type BackfillResult } from "@/lib/sync/backfill";
@@ -75,6 +76,8 @@ export interface CronSummary {
   }[];
   selfAddressesRemoved: number;
   autopilot: unknown;
+  /** The gradual sender's run (approved campaigns only). */
+  campaigns: RunCampaignsSummary | null;
   errors: string[];
 }
 
@@ -83,10 +86,11 @@ export interface CronSummary {
  * watch (idempotent; Google recommends daily), refresh aliases, reconcile self
  * contacts, then fan out one job per account (sync when last_synced_at is older
  * than 5 minutes; backfill when the import is unfinished and not locked), then
- * runAutopilotIfDue (lib/ai/autopilot).
+ * runAutopilotIfDue (lib/ai/autopilot), then the gradual sender of approved
+ * campaigns (lib/campaigns/scheduler.ts) with the time left.
  */
 export async function runCron(options: { deadline: number; fetchImpl?: typeof fetch }): Promise<CronSummary> {
-  const summary: CronSummary = { accounts: [], selfAddressesRemoved: 0, autopilot: null, errors: [] };
+  const summary: CronSummary = { accounts: [], selfAddressesRemoved: 0, autopilot: null, campaigns: null, errors: [] };
   const { fetchImpl } = options;
 
   const watches = new Map<string, boolean>();
@@ -133,6 +137,13 @@ export async function runCron(options: { deadline: number; fetchImpl?: typeof fe
     summary.autopilot = await runAutopilotIfDue({ deadline: options.deadline });
   } catch (error) {
     summary.errors.push(`autopilot: ${describeSyncError(error)}`);
+  }
+
+  try {
+    summary.campaigns = await runCampaigns({ deadline: options.deadline });
+    summary.errors.push(...summary.campaigns.errors.map((e) => `campaign ${e}`));
+  } catch (error) {
+    summary.errors.push(`campaigns: ${describeSyncError(error)}`);
   }
   return summary;
 }

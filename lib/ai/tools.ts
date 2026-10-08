@@ -1,6 +1,7 @@
 import "server-only";
 import { z } from "zod";
 import { sql } from "@/lib/db";
+import { goalLabel, nextActionLabel, stageLabel } from "@/lib/constants";
 import { toISODate } from "@/lib/dates";
 import {
   getContact,
@@ -116,13 +117,16 @@ function opportunityOut(o: Opportunity) {
   return {
     id: o.id,
     title: o.title,
+    goal: goalLabel(o.kind),
     stage: o.stage,
+    stage_label: stageLabel(o.stage, o.kind),
     contact: o.contact?.displayName ?? null,
     contact_id: o.contact?.id ?? null,
     organization: o.organization?.name ?? null,
     project: o.project?.name ?? null,
     value: o.value ? `${o.value} ${o.currency}` : null,
     follow_up_date: o.followUpAt,
+    next_action: nextActionLabel(o.nextAction),
     next_step: o.nextStep,
     notes: o.notes ? truncate(o.notes, 500) : null,
     closed_at: o.closedAt ? o.closedAt.toISOString().slice(0, 10) : null,
@@ -489,13 +493,17 @@ const findPeopleForProject = tool({
 const SCHEMA_SUMMARY = `Tables (Postgres):
 gmail_accounts(id, email, display_name, status, backfill_status, last_synced_at, created_at)
 organizations(id, name, domains text[], website, notes, tags text[], created_at)
-projects(id, name, color, description, archived)
-contacts(id, name, organization_id, role, notes, tags text[], status ['new','lead','active','inactive','archived'], follow_up_at date, follow_up_note, source ['manual','gmail'], last_contacted_at, last_inbound_at, last_outbound_at, message_count, created_at)
+projects(id, name, color, description, archived, sheet bool (a booking sheet), currency, phone_prefix)
+contacts(id, name, organization_id, role, phone, whatsapp, notes, tags text[], status ['new','lead','active','inactive','archived'], follow_up_at date, follow_up_note, source ['manual','gmail'], last_contacted_at, last_inbound_at, last_outbound_at, message_count, created_at)
 contact_emails(email PK lower-case, contact_id, is_primary)
 contact_projects(contact_id, project_id)
 messages(id, account_id, gmail_message_id, gmail_thread_id, rfc822_message_id, direction ['inbound','outbound'], from_email, from_name, subject, snippet, body_text, sent_at timestamptz, label_ids text[], is_automated, has_attachments, search tsvector)
 message_participants(message_id, role ['from','to','cc','bcc','reply_to'], email, name)
-opportunities(id, title, stage ['lead','contacted','proposal','negotiation','won','lost'], contact_id, organization_id, project_id, value numeric, currency, follow_up_at date, next_step, notes, closed_at, created_at)
+opportunities(id, title, kind (the goal) ['booking','perform_with','residency','education','broadcast','venue','exchange','fundraising','sponsorship','grant','partnership','coproduction','network','introduction','press','sale','other'], stage ['lead','contacted','proposal','negotiation','won','lost'], contact_id, organization_id, project_id, value numeric, currency, follow_up_at date, next_action ['first_contact','call','send_proposal','send_materials','follow_up','meeting','agree_terms','send_contract','close_contract','logistics','invoice','thank_report','keep_informed','wait_reply'], next_step (detail), notes, event_dates, sheet_section, spaces, is_returning bool, closed_at, created_at)
+activities(id, kind ['call','whatsapp','meeting','email','note','status'], outcome ['reached','no_answer','voicemail','call_back','wrong_number'] (calls), body, occurred_at, contact_id, organization_id, opportunity_id) — calls, WhatsApp, meetings, hand-logged emails, notes, booking status changes
+email_templates(id, project_id (null = all sheets), name, trigger, subject, body)
+email_drafts(id, account_id, contact_id, opportunity_id, campaign_id, status ['proposed','queued','revising','sending','sent','discarded','failed'], to_emails text[], subject, sent_at, created_at) — emails prepared for approval; queued = approved in a running campaign
+email_campaigns(id, name, project_id, account_id, status ['draft','running','paused','done','cancelled'], per_hour, daily_cap, window_start, window_end, weekdays_only, timezone, last_sent_at, started_at, finished_at) — emails sent gradually after the owner approved them
 A contact's emails: join contact_emails ce → message_participants mp on mp.email = ce.email → messages m on m.id = mp.message_id. The same email seen by two accounts has two rows with the same rfc822_message_id — use count(distinct coalesce(m.rfc822_message_id, m.id::text)).`;
 
 const queryDatabase = tool({

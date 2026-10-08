@@ -1,4 +1,5 @@
 import { ExternalLink } from "lucide-react";
+import type { ArchiveAllScope } from "@/components/mail/archive-all";
 import { ComposeFab } from "@/components/mail/compose-button";
 import { DesktopSearch, PhoneMailHeader } from "@/components/mail/mail-header";
 import { MailSidebar } from "@/components/mail/mail-sidebar";
@@ -74,13 +75,30 @@ export default async function MailPage({ searchParams }: PageProps<"/mail">) {
       : null;
   const labels: Record<string, LabelInfo> = Object.fromEntries(chrome.labels.map((l) => [`${l.accountId}:${l.id}`, { name: l.name, color: l.color }]));
   const accountDots = Object.fromEntries(chrome.accounts.map((a) => [a.id, a.dot]));
+  // "Archive all": the Inbox only (not search results, not other views or labels).
+  const archiveAll: ArchiveAllScope | null =
+    state.view === "inbox" && !state.q && chrome.accounts.length
+      ? {
+          accountId: state.account,
+          tab: state.tab,
+          accountLabel: chrome.account ? chrome.account.email : chrome.accounts.length > 1 ? "all accounts" : chrome.accounts[0].email,
+        }
+      : null;
   const [emptyTitle, emptyText] = state.q ? ["No results", `Nothing matches “${state.q}”.`] : (EMPTY[state.view] ?? EMPTY.all);
 
   return (
     <div className="md:flex md:h-dvh">
       <MailSidebar groups={groups} variant="list" account={state.account} />
       <section className="flex min-w-0 flex-1 flex-col pb-[calc(env(safe-area-inset-bottom)+6rem)] md:pb-0" aria-label={title}>
-        <PhoneMailHeader title={title} subtitle={subtitle} groups={groups} q={state.q} account={state.account} clearHref={clearHref} />
+        <PhoneMailHeader
+          title={title}
+          subtitle={subtitle}
+          groups={groups}
+          q={state.q}
+          account={state.account}
+          clearHref={clearHref}
+          archiveAll={archiveAll}
+        />
         <div className="hidden h-16 shrink-0 items-center gap-4 border-b border-border bg-surface px-4 md:flex">
           <DesktopSearch q={state.q} account={state.account} clearHref={clearHref} />
           {chrome.account ? <span className="ml-auto hidden truncate text-xs text-muted xl:inline">{chrome.account.email}</span> : null}
@@ -111,6 +129,7 @@ export default async function MailPage({ searchParams }: PageProps<"/mail">) {
             labels={labels}
             emptyTitle={emptyTitle}
             emptyText={emptyText}
+            archiveAll={archiveAll}
           />
         ) : null}
       </section>

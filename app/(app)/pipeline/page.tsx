@@ -1,18 +1,19 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { ArrowRight, ChevronRight, X } from "lucide-react";
+import { NextActionOptions, NextStepLine } from "@/components/goals";
 import { ProjectDot, StageBadge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { EmptyState, PageHeader } from "@/components/ui/layout";
-import { OPEN_STAGES, OPPORTUNITY_KINDS, OPPORTUNITY_STAGES, stageLabel } from "@/lib/constants";
+import { GOAL_GROUPS, GOAL_KINDS, goalLabel, labelKindFor, OPEN_STAGES, stageLabel } from "@/lib/constants";
 import { formatDate, formatDue, todayIn } from "@/lib/dates";
 import { env } from "@/lib/env";
 import { getContact, listContacts } from "@/lib/queries/contacts";
 import { getOpportunity, listOpportunities } from "@/lib/queries/opportunities";
 import { listOrganizations } from "@/lib/queries/organizations";
 import { listProjects } from "@/lib/queries/projects";
-import type { Opportunity, OpportunityKind, OpportunityStage, Project } from "@/lib/types";
+import type { GoalGroup, Opportunity, OpportunityKind, OpportunityStage, Project } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { ActionForm, FormSubmit } from "../_components/action-form";
 import { ConfirmAction } from "../_components/confirm-action";
@@ -23,34 +24,41 @@ import { formatMoney, totalMoney } from "../_lib/format";
 import { hrefWith, oneOf, param } from "../_lib/url";
 import { isId, safeReturnPath } from "../_lib/validation";
 import { advanceDeal, deleteDeal, saveDeal } from "./actions";
+import { GoalKindStageFields } from "./goal-fields";
 
 export const metadata: Metadata = { title: "Pipeline" };
 
-/** The kind filter. "other" groups sales and other deals. */
-const KIND_FILTERS = [
-  { value: "", label: "All" },
-  { value: "booking", label: "Booking" },
-  { value: "fundraising", label: "Fundraising" },
-  { value: "partnership", label: "Partnerships" },
-  { value: "grant", label: "Grants" },
-  { value: "press", label: "Press" },
-  { value: "other", label: "Other" },
-] as const;
-type KindFilter = (typeof KIND_FILTERS)[number]["value"];
+/**
+ * The goal filter (?kind=): a group of goal kinds ("support" = space,
+ * exchange, donation, sponsorship, grant) or one kind ("venue"). "other" is
+ * the group (sales and other goals), as the old "Other" filter was.
+ */
+type GoalFilter = "" | GoalGroup | OpportunityKind;
+const GROUP_VALUES = GOAL_GROUPS.map((g) => g.value);
+const FILTER_VALUES: GoalFilter[] = ["", ...GROUP_VALUES, ...GOAL_KINDS.map((k) => k.value).filter((k) => k !== "other")];
+
+function isGroup(filter: GoalFilter): filter is GoalGroup {
+  return (GROUP_VALUES as string[]).includes(filter);
+}
+
+/** The kinds a filter keeps (null = all). */
+function filterKinds(filter: GoalFilter): OpportunityKind[] | null {
+  if (!filter) return null;
+  if (isGroup(filter)) return GOAL_KINDS.filter((k) => k.group === filter).map((k) => k.value);
+  return [filter];
+}
+
+/** The group a filter belongs to ("" for All). */
+function filterGroup(filter: GoalFilter): GoalGroup | "" {
+  if (!filter) return "";
+  if (isGroup(filter)) return filter;
+  return GOAL_KINDS.find((k) => k.value === filter)?.group ?? "";
+}
+
+const groupKinds = (group: GoalGroup) => GOAL_KINDS.filter((k) => k.group === group);
 
 const CURRENCIES = ["USD", "EUR", "GBP", "CAD", "MXN", "CHF", "AUD", "JPY"];
 const CLOSED_LIMIT = 10;
-
-function matchesKind(kind: OpportunityKind, filter: KindFilter): boolean {
-  if (!filter) return true;
-  if (filter === "other") return kind === "other" || kind === "sale";
-  return kind === filter;
-}
-
-/** Column/segment names: kind-specific when one kind is selected, generic for "All". */
-function columnLabel(stage: OpportunityStage, filter: KindFilter): string {
-  return filter && filter !== "other" ? stageLabel(stage, filter) : OPPORTUNITY_STAGES.find((s) => s.value === stage)!.label;
-}
 
 function nextStage(stage: OpportunityStage): OpportunityStage | null {
   const index = OPEN_STAGES.indexOf(stage);
@@ -60,7 +68,9 @@ function nextStage(stage: OpportunityStage): OpportunityStage | null {
 
 export default async function PipelinePage({ searchParams }: PageProps<"/pipeline">) {
   const sp = await searchParams;
-  const kind = oneOf(sp, "kind", KIND_FILTERS.map((k) => k.value)) as KindFilter;
+  const kind = oneOf(sp, "kind", FILTER_VALUES) as GoalFilter;
+  const kinds = filterKinds(kind);
+  const group = filterGroup(kind);
   const projectId = isId(param(sp, "project")) ? param(sp, "project") : "";
   const openId = isId(param(sp, "open")) ? param(sp, "open") : "";
   const creating = param(sp, "new") === "1";
@@ -71,7 +81,10 @@ export default async function PipelinePage({ searchParams }: PageProps<"/pipelin
     listOpportunities({ includeClosed: true, projectId: projectId || undefined }),
     listProjects({ includeArchived: true }),
   ]);
-  const deals = all.filter((d) => matchesKind(d.kind, kind));
+  const deals = kinds ? all.filter((d) => kinds.includes(d.kind)) : all;
+  // Stage names: one goal's own ("Offer sent", "Granted"…) when the filter or the goals shown share one; generic for a mix.
+  const labelKind = kinds?.length === 1 ? kinds[0] : labelKindFor(deals.map((d) => d.kind), null);
+  const columnLabel = (stage: OpportunityStage) => stageLabel(stage, labelKind);
   const byStage = new Map<OpportunityStage, Opportunity[]>(OPEN_STAGES.map((s) => [s, deals.filter((d) => d.stage === s)]));
   const closedSorted = (stage: OpportunityStage) =>
     deals
@@ -80,6 +93,8 @@ export default async function PipelinePage({ searchParams }: PageProps<"/pipelin
       .slice(0, CLOSED_LIMIT);
   const won = closedSorted("won");
   const lost = closedSorted("lost");
+  const openCount = (keep: OpportunityKind[] | null) =>
+    all.filter((d) => OPEN_STAGES.includes(d.stage) && (!keep || keep.includes(d.kind))).length;
 
   const firstWithDeals = OPEN_STAGES.find((s) => byStage.get(s)!.length) ?? "lead";
   const stage = (oneOf(sp, "stage", OPEN_STAGES) || firstWithDeals) as OpportunityStage;
@@ -88,6 +103,7 @@ export default async function PipelinePage({ searchParams }: PageProps<"/pipelin
   const openHref = (id: string) => hrefWith("/pipeline", { ...filters, open: id });
   const newHref = hrefWith("/pipeline", { ...filters, new: 1 });
   const activeProjects = projects.filter((p) => !p.archived || p.id === projectId);
+  const showKind = !kinds || kinds.length > 1;
 
   const sheet = openId || creating ? await loadSheet() : null;
 
@@ -111,39 +127,70 @@ export default async function PipelinePage({ searchParams }: PageProps<"/pipelin
       <PageHeader
         title="Pipeline"
         description={<span className="hidden md:inline">{summary(OPEN_STAGES.flatMap((s) => byStage.get(s)!), "open")}</span>}
-        actions={<HeaderAddButton href={newHref} label="New deal" />}
+        actions={<HeaderAddButton href={newHref} label="New goal" />}
       />
 
-      {/* Filters. Desktop: kind segments + project select; phone: two selects. */}
+      {/* Filters. Desktop: goal groups as segments (+ the group's goal types) and the project; phone: two selects. */}
       <div className="mb-5 hidden items-center gap-3 md:flex">
         <Segmented
-          label="Kind"
+          label="Goal"
           fill={false}
-          segments={KIND_FILTERS.map((k) => ({
-            href: hrefWith("/pipeline", { kind: k.value, project: projectId }),
-            label: k.label,
-            active: kind === k.value,
-          }))}
+          segments={[
+            { href: hrefWith("/pipeline", { project: projectId }), label: "All", active: !kind, count: openCount(null) },
+            ...GOAL_GROUPS.map((g) => ({
+              href: hrefWith("/pipeline", { kind: g.value, project: projectId }),
+              label: g.label,
+              active: group === g.value,
+              count: openCount(groupKinds(g.value).map((k) => k.value)),
+            })),
+          ]}
         />
+        {group && groupKinds(group).length > 1 ? (
+          <FilterForm action="/pipeline" aria-label="Filter by goal type">
+            {projectId ? <input type="hidden" name="project" value={projectId} /> : null}
+            <Select name="kind" defaultValue={kind} aria-label="Goal type" className="w-52">
+              <option value={group}>All {GOAL_GROUPS.find((g) => g.value === group)!.label.toLowerCase()}</option>
+              {groupKinds(group)
+                .filter((k) => k.value !== "other")
+                .map((k) => (
+                  <option key={k.value} value={k.value}>
+                    {k.label}
+                  </option>
+                ))}
+            </Select>
+          </FilterForm>
+        ) : null}
         <FilterForm action="/pipeline" aria-label="Filter by project" className="ml-auto">
           {kind ? <input type="hidden" name="kind" value={kind} /> : null}
           <ProjectSelect projects={activeProjects} value={projectId} className="w-48" />
         </FilterForm>
       </div>
-      <FilterForm action="/pipeline" aria-label="Filter deals" className="mb-3 grid grid-cols-2 gap-2 md:hidden">
-        <Select name="kind" defaultValue={kind} aria-label="Kind">
-          {KIND_FILTERS.map((k) => (
-            <option key={k.value} value={k.value}>
-              {k.value ? k.label : "All kinds"}
-            </option>
-          ))}
+      <FilterForm action="/pipeline" aria-label="Filter goals" className="mb-3 grid grid-cols-2 gap-2 md:hidden">
+        <Select name="kind" defaultValue={kind} aria-label="Goal">
+          <option value="">All goals</option>
+          {GOAL_GROUPS.map((g) => {
+            const items = groupKinds(g.value);
+            return (
+              <optgroup key={g.value} label={g.label}>
+                {items.length > 1 ? <option value={g.value}>All {g.label.toLowerCase()}</option> : null}
+                {items
+                  .filter((k) => k.value !== "other")
+                  .map((k) => (
+                    <option key={k.value} value={k.value}>
+                      {k.label}
+                    </option>
+                  ))}
+              </optgroup>
+            );
+          })}
         </Select>
         <ProjectSelect projects={activeProjects} value={projectId} />
       </FilterForm>
 
       {deals.length === 0 && !kind && !projectId ? (
-        <EmptyState title="No deals yet" action={<ButtonLink href={newHref} variant="primary">New deal</ButtonLink>}>
-          Track bookings, fundraising asks, grants and press from first contact to confirmed.
+        <EmptyState title="No goals yet" action={<ButtonLink href={newHref} variant="primary">New goal</ButtonLink>}>
+          A goal is what you want from someone: a booking, the use of a space, a donation, press coverage… Track each one from
+          first contact to done, with its next step.
         </EmptyState>
       ) : (
         <>
@@ -156,7 +203,7 @@ export default async function PipelinePage({ searchParams }: PageProps<"/pipelin
               className="mb-2"
               segments={OPEN_STAGES.map((s) => ({
                 href: hrefWith("/pipeline", { kind, project: projectId, stage: s }),
-                label: columnLabel(s, kind),
+                label: columnLabel(s),
                 active: stage === s,
               }))}
             />
@@ -166,12 +213,12 @@ export default async function PipelinePage({ searchParams }: PageProps<"/pipelin
             {byStage.get(stage)!.length ? (
               <div className="flex flex-col gap-2.5">
                 {byStage.get(stage)!.map((d) => (
-                  <DealCard key={d.id} deal={d} today={today} href={openHref(d.id)} showKind={!kind} />
+                  <DealCard key={d.id} deal={d} today={today} href={openHref(d.id)} showKind={showKind} />
                 ))}
               </div>
             ) : (
               <p className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-[15px] text-muted">
-                Nothing in {columnLabel(stage, kind)}.
+                Nothing in {columnLabel(stage)}.
               </p>
             )}
           </div>
@@ -181,18 +228,18 @@ export default async function PipelinePage({ searchParams }: PageProps<"/pipelin
             {OPEN_STAGES.map((s) => {
               const items = byStage.get(s)!;
               return (
-                <section key={s} aria-label={columnLabel(s, kind)} className="flex flex-col rounded-lg bg-surface-2/60 p-2">
+                <section key={s} aria-label={columnLabel(s)} className="flex flex-col rounded-lg bg-surface-2/60 p-2">
                   <header className="flex items-baseline justify-between gap-2 px-1.5 pb-2 pt-1">
                     <h2 className="truncate text-xs font-medium text-fg">
-                      {columnLabel(s, kind)} <span className="ml-1 tabular-nums text-subtle">{items.length}</span>
+                      {columnLabel(s)} <span className="ml-1 tabular-nums text-subtle">{items.length}</span>
                     </h2>
                     <span className="shrink-0 text-xs tabular-nums text-subtle">{totalMoney(items)}</span>
                   </header>
                   <div className="flex flex-col gap-2">
                     {items.map((d) => (
-                      <DealCard key={d.id} deal={d} today={today} href={openHref(d.id)} showKind={!kind} />
+                      <DealCard key={d.id} deal={d} today={today} href={openHref(d.id)} showKind={showKind} />
                     ))}
-                    {items.length === 0 ? <p className="px-1.5 py-4 text-center text-xs text-subtle">No deals</p> : null}
+                    {items.length === 0 ? <p className="px-1.5 py-4 text-center text-xs text-subtle">No goals</p> : null}
                   </div>
                 </section>
               );
@@ -203,17 +250,17 @@ export default async function PipelinePage({ searchParams }: PageProps<"/pipelin
           {won.length || lost.length ? (
             <>
               <section className="mt-10 hidden md:block" aria-label="Closed">
-                <ClosedLists kind={kind} won={won} lost={lost} openHref={openHref} timezone={timezone} />
+                <ClosedLists labelKind={labelKind} won={won} lost={lost} openHref={openHref} timezone={timezone} />
               </section>
               <details className="group mt-8 md:hidden">
                 <summary className="mb-2 flex min-h-11 cursor-pointer list-none items-center gap-1 px-4 text-[13px] uppercase tracking-wide text-subtle [&::-webkit-details-marker]:hidden">
                   <ChevronRight className="size-4 transition-transform group-open:rotate-90" strokeWidth={1.75} />
                   Closed
                   <span className="ml-1 normal-case tracking-normal">
-                    {won.length} won · {lost.length} lost
+                    {won.length} {columnLabel("won").toLowerCase()} · {lost.length} {columnLabel("lost").toLowerCase()}
                   </span>
                 </summary>
-                <ClosedLists kind={kind} won={won} lost={lost} openHref={openHref} timezone={timezone} />
+                <ClosedLists labelKind={labelKind} won={won} lost={lost} openHref={openHref} timezone={timezone} />
               </details>
             </>
           ) : null}
@@ -232,7 +279,7 @@ export default async function PipelinePage({ searchParams }: PageProps<"/pipelin
               sheet.prefillContact?.organization?.id ??
               (isId(param(sp, "organization")) ? param(sp, "organization") : ""),
             projectId: isId(param(sp, "project")) ? param(sp, "project") : "",
-            kind: kind && kind !== "other" ? kind : "booking",
+            kind: kinds?.[0] ?? "booking",
             stage: oneOf(sp, "stage", OPEN_STAGES) || "lead",
           }}
           prefillContactName={sheet.prefillContact?.displayName}
@@ -241,7 +288,7 @@ export default async function PipelinePage({ searchParams }: PageProps<"/pipelin
       ) : openId ? (
         <div className="fixed inset-x-4 bottom-24 z-40 md:inset-x-auto md:bottom-6 md:right-6">
           <div className="rounded-lg border border-border bg-surface px-4 py-3 text-sm text-muted shadow-lg">
-            That deal no longer exists.{" "}
+            That goal no longer exists.{" "}
             <Link href={boardHref} className="text-fg underline underline-offset-2">
               Close
             </Link>
@@ -254,7 +301,7 @@ export default async function PipelinePage({ searchParams }: PageProps<"/pipelin
 
 function summary(items: Opportunity[], adjective = ""): string {
   const total = totalMoney(items);
-  const noun = items.length === 1 ? "deal" : "deals";
+  const noun = items.length === 1 ? "goal" : "goals";
   return `${items.length} ${adjective ? `${adjective} ` : ""}${noun}${total ? ` · ${total}` : ""}`;
 }
 
@@ -276,7 +323,7 @@ function DealCard({ deal: d, today, href, showKind }: { deal: Opportunity; today
   const who = [d.contact?.displayName, d.organization?.name].filter(Boolean).join(" · ");
   const next = nextStage(d.stage);
   const overdue = d.followUpAt !== null && d.followUpAt < today;
-  const kindLabel = OPPORTUNITY_KINDS.find((k) => k.value === d.kind)?.label;
+  const kindLabel = goalLabel(d.kind);
 
   return (
     <article className="relative rounded-xl border border-border bg-surface p-3.5 shadow-sm active:bg-surface-2 md:rounded-lg md:p-3 md:shadow-none md:hover:border-border-strong">
@@ -297,7 +344,7 @@ function DealCard({ deal: d, today, href, showKind }: { deal: Opportunity; today
         {value ? <span className="shrink-0 text-[15px] font-medium tabular-nums text-fg md:text-sm">{value}</span> : null}
       </div>
 
-      {d.nextStep ? <p className="mt-2 line-clamp-2 text-[13px] text-muted md:text-xs">{d.nextStep}</p> : null}
+      <NextStepLine goal={d} wrap className="mt-2" />
 
       <div className="mt-2.5 flex min-w-0 items-center gap-2 text-[13px] md:text-xs">
         {d.project ? (
@@ -328,23 +375,23 @@ function DealCard({ deal: d, today, href, showKind }: { deal: Opportunity; today
 }
 
 function ClosedLists({
-  kind,
+  labelKind,
   won,
   lost,
   openHref,
   timezone,
 }: {
-  kind: KindFilter;
+  /** Whose stage names to use (null = generic: Achieved / Declined). */
+  labelKind: OpportunityKind | null;
   won: Opportunity[];
   lost: Opportunity[];
   openHref: (id: string) => string;
   timezone: string;
 }) {
-  const named = kind && kind !== "other";
   return (
     <div className="grid gap-6 md:grid-cols-2 md:gap-4 [&>*]:min-w-0">
-      <ClosedList title={named ? stageLabel("won", kind) : "Won"} deals={won} openHref={openHref} timezone={timezone} />
-      <ClosedList title={named ? stageLabel("lost", kind) : "Lost"} deals={lost} openHref={openHref} timezone={timezone} />
+      <ClosedList title={stageLabel("won", labelKind)} deals={won} openHref={openHref} timezone={timezone} />
+      <ClosedList title={stageLabel("lost", labelKind)} deals={lost} openHref={openHref} timezone={timezone} />
     </div>
   );
 }
@@ -381,7 +428,7 @@ function ClosedList({
                   {d.title}
                 </Link>
                 <p className="truncate text-[13px] text-subtle md:text-xs">
-                  {[d.contact?.displayName ?? d.organization?.name, d.closedAt ? formatDate(d.closedAt, timezone) : null]
+                  {[goalLabel(d.kind), d.contact?.displayName ?? d.organization?.name, d.closedAt ? formatDate(d.closedAt, timezone) : null]
                     .filter(Boolean)
                     .join(" · ")}
                 </p>
@@ -427,7 +474,7 @@ function DealSheet({
       ? [{ id: deal.organization.id, name: deal.organization.name }, ...organizations]
       : organizations;
   const currency = deal?.currency ?? "USD";
-  const title = deal ? "Edit deal" : "New deal";
+  const title = deal ? "Edit goal" : "New goal";
 
   return (
     <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label={title}>
@@ -461,7 +508,7 @@ function DealSheet({
               <StageBadge stage={deal.stage} label={stageLabel(deal.stage, deal.kind)} />
               <span>Updated {formatDate(deal.updatedAt, env.timezone)}</span>
               {deal.contact ? (
-                <Link href={`/contacts/${deal.contact.id}?tab=deals`} className="text-fg/80 underline-offset-2 hover:underline">
+                <Link href={`/contacts/${deal.contact.id}?tab=goals`} className="text-fg/80 underline-offset-2 hover:underline">
                   {deal.contact.displayName}
                 </Link>
               ) : null}
@@ -470,37 +517,21 @@ function DealSheet({
 
           <ActionForm id="deal-form" action={saveDeal.bind(null, deal?.id ?? null)} className="flex flex-col gap-4">
             <input type="hidden" name="return" value={closeHref} />
-            <Field label="Title" htmlFor="deal-title">
+            <GoalKindStageFields kind={kind} stage={deal?.stage ?? prefill.stage} idPrefix="deal" />
+            <Field
+              label={deal ? "Title" : "Title (optional)"}
+              htmlFor="deal-title"
+              hint={deal ? undefined : "Left empty, it is named after the goal and the organization or contact: “Get booked · Teatro Campoamor”."}
+            >
               <Input
                 id="deal-title"
                 name="title"
-                required
+                required={Boolean(deal)}
                 defaultValue={deal?.title ?? ""}
-                autoFocus={!deal}
                 autoComplete="off"
-                placeholder="Spring recital at Merkin Hall"
+                placeholder={deal ? undefined : "Get booked · Teatro Campoamor"}
               />
             </Field>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Kind" htmlFor="deal-kind">
-                <Select id="deal-kind" name="kind" defaultValue={kind}>
-                  {OPPORTUNITY_KINDS.map((k) => (
-                    <option key={k.value} value={k.value}>
-                      {k.label}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <Field label="Stage" htmlFor="deal-stage">
-                <Select id="deal-stage" name="stage" defaultValue={deal?.stage ?? prefill.stage}>
-                  {OPPORTUNITY_STAGES.map((s) => (
-                    <option key={s.value} value={s.value}>
-                      {stageLabel(s.value, kind)}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-            </div>
             <Field label="Contact" htmlFor="deal-contact">
               <Select id="deal-contact" name="contactId" defaultValue={contactId}>
                 <option value="">No contact</option>
@@ -552,17 +583,28 @@ function DealSheet({
                 </Select>
               </Field>
             </div>
-            <Field label="Follow-up" htmlFor="deal-follow-up">
-              <Input id="deal-follow-up" name="followUpAt" type="date" defaultValue={deal?.followUpAt ?? ""} />
-            </Field>
-            <Field label="Next step" htmlFor="deal-next">
-              <Input id="deal-next" name="nextStep" defaultValue={deal?.nextStep ?? ""} autoComplete="off" placeholder="Send tech rider" />
-            </Field>
+            <fieldset className="flex flex-col gap-3 rounded-xl border border-border p-3 md:rounded-lg">
+              <legend className="px-1 text-xs font-medium text-muted">Next step</legend>
+              <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,10rem)] gap-3">
+                <Field label="What" htmlFor="deal-action">
+                  <Select id="deal-action" name="nextAction" defaultValue={deal?.nextAction ?? ""}>
+                    <option value="">No next step</option>
+                    <NextActionOptions />
+                  </Select>
+                </Field>
+                <Field label="Due" htmlFor="deal-follow-up">
+                  <Input id="deal-follow-up" name="followUpAt" type="date" defaultValue={deal?.followUpAt ?? ""} />
+                </Field>
+              </div>
+              <Field label="Detail" htmlFor="deal-next">
+                <Input id="deal-next" name="nextStep" defaultValue={deal?.nextStep ?? ""} autoComplete="off" placeholder="Send the tech rider to Ana" />
+              </Field>
+            </fieldset>
             <Field label="Notes" htmlFor="deal-notes">
               <Textarea id="deal-notes" name="notes" rows={4} defaultValue={deal?.notes ?? ""} />
             </Field>
             <FormActions className="mt-1">
-              <FormSubmit pendingLabel="Saving…">{deal ? "Save" : "Create deal"}</FormSubmit>
+              <FormSubmit pendingLabel="Saving…">{deal ? "Save" : "Create goal"}</FormSubmit>
               <span className="hidden md:contents">
                 <ButtonLink href={closeHref} variant="ghost" scroll={false}>
                   Cancel
@@ -575,7 +617,7 @@ function DealSheet({
             <div className="border-t border-border pt-4">
               <ConfirmAction
                 action={deleteDeal.bind(null, deal.id, closeHref)}
-                label="Delete deal"
+                label="Delete goal"
                 confirmLabel="Delete"
                 pendingLabel="Deleting…"
               >

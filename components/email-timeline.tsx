@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Fragment, type ReactNode } from "react";
 import { ArrowDownLeft, ArrowUpRight, ExternalLink, Paperclip } from "lucide-react";
 import { AccountBadge, Badge } from "@/components/ui/badge";
 import { formatDateTime, formatRelative } from "@/lib/dates";
@@ -11,16 +12,25 @@ function who(address: Address | null | undefined, selfEmails: ReadonlySet<string
   return address.name || address.email;
 }
 
+/** A non-email entry interleaved by date (a logged call or note). `node` must render an <li>. */
+export interface TimelineExtra {
+  key: string;
+  at: Date;
+  node: ReactNode;
+}
+
 /**
  * Chronological email list (newest first). Each item expands (native
  * <details>, no JS) to show the full stripped body, attachments and a link to
  * the thread in Gmail. Shows every connected account that holds the message.
+ * `extra` entries (calls, notes…) are slotted in by date.
  */
 export function EmailTimeline({
   messages,
   timezone,
   selfEmails,
   olderHref,
+  extra = [],
   emptyText = "No emails yet.",
 }: {
   messages: EmailMessage[];
@@ -29,14 +39,25 @@ export function EmailTimeline({
   selfEmails: ReadonlySet<string>;
   /** Link for the next (older) page; omitted when there is none. */
   olderHref?: string | null;
+  /** Other entries to interleave by date (newest first or in any order). */
+  extra?: TimelineExtra[];
   emptyText?: string;
 }) {
-  if (!messages.length) return <p className="py-6 text-center text-sm text-muted">{emptyText}</p>;
+  if (!messages.length && !extra.length) return <p className="py-6 text-center text-sm text-muted">{emptyText}</p>;
+
+  const entries: ({ type: "email"; at: Date; message: EmailMessage } | ({ type: "extra" } & TimelineExtra))[] = [
+    ...messages.map((m) => ({ type: "email" as const, at: m.sentAt, message: m })),
+    ...extra.map((e) => ({ type: "extra" as const, ...e })),
+  ];
+  // Stable: emails keep their order; at the same instant an extra entry sits above.
+  if (extra.length) entries.sort((x, y) => y.at.getTime() - x.at.getTime() || (x.type === y.type ? 0 : x.type === "extra" ? -1 : 1));
 
   return (
     <div>
       <ol className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface md:rounded-lg">
-        {messages.map((m) => {
+        {entries.map((entry) => {
+          if (entry.type === "extra") return <Fragment key={`x:${entry.key}`}>{entry.node}</Fragment>;
+          const m = entry.message;
           const outbound = m.direction === "outbound";
           const Icon = outbound ? ArrowUpRight : ArrowDownLeft;
           const recipients = [...m.to, ...m.cc];

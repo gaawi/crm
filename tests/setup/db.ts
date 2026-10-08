@@ -19,7 +19,7 @@ export function useTestDatabase() {
 
 export async function resetDatabase() {
   await sql.unsafe(`
-    truncate table email_drafts, app_settings, login_attempts, message_participants, messages, opportunities,
+    truncate table activities, email_templates, email_drafts, email_campaigns, app_settings, login_attempts, message_participants, messages, opportunities,
       contact_projects, contact_emails, contacts, organizations, projects, gmail_accounts restart identity cascade;
     insert into projects (name, color, sort_order) values
       ('CreArtBox','violet',1),('ADAR','blue',2),('Personal','green',3),

@@ -28,8 +28,9 @@ export async function markReplyDone(contactId: string): Promise<void> {
   refresh();
 }
 
+/** Today's "Done" on a goal: its next step is done (date, next action and detail cleared). */
 export async function completeOpportunityFollowUp(opportunityId: string): Promise<void> {
   await requireSession();
-  await updateOpportunity(opportunityId, { followUpAt: null });
+  await updateOpportunity(opportunityId, { followUpAt: null, nextAction: null, nextStep: null });
   refresh();
 }

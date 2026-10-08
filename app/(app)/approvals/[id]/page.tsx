@@ -25,7 +25,7 @@ export default async function DraftReviewPage({ params }: PageProps<"/approvals/
   return (
     <>
       <PageHeader
-        back={{ href: "/approvals", label: "Approvals" }}
+        back={draft.campaignId ? { href: `/approvals/campaigns/${draft.campaignId}`, label: "Campaign" } : { href: "/approvals", label: "Approvals" }}
         title={draft.contact ? `Email to ${draft.contact.displayName}` : "Review email"}
       />
       <div className="grid gap-8 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] [&>*]:min-w-0">

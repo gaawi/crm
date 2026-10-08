@@ -58,7 +58,7 @@ export async function runAutopilotIfDue(options: {
       await sql<{ contactId: string }[]>`
         select distinct contact_id from email_drafts
          where contact_id is not null
-           and (status in ('proposed', 'revising', 'sending', 'failed') or updated_at > now() - interval '7 days')`
+           and (status in ('proposed', 'queued', 'revising', 'sending', 'failed') or updated_at > now() - interval '7 days')`
     ).map((r) => r.contactId),
   );
 

@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { cache, type ReactNode } from "react";
 import { Archive, CalendarClock, Check, Ellipsis, GitMerge, Plus, Trash2, X } from "lucide-react";
 import { DraftFollowUp } from "@/components/draft-follow-up";
+import { PhoneLink } from "@/components/booking/phone-actions";
 import { EmailTimeline } from "@/components/email-timeline";
 import { RowList } from "@/components/contact-row";
 import { Badge, ProjectDot, StatusBadge, TagBadge } from "@/components/ui/badge";
@@ -11,6 +12,7 @@ import { ButtonLink } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { Avatar, Notice } from "@/components/ui/layout";
 import { SubmitButton } from "@/components/ui/submit-button";
+import { formatPhone, telHref, whatsappNumber } from "@/lib/booking/phone";
 import { CONTACT_STATUSES, PROJECT_COLORS } from "@/lib/constants";
 import { sql } from "@/lib/db";
 import { formatDate, formatDateTime, formatDue, formatRelative, todayIn } from "@/lib/dates";
@@ -21,6 +23,7 @@ import {
   getContactHistory,
   listContacts,
 } from "@/lib/queries/contacts";
+import { listActivities } from "@/lib/queries/activities";
 import { listOpportunities } from "@/lib/queries/opportunities";
 import { listOrganizations } from "@/lib/queries/organizations";
 import { listProjects } from "@/lib/queries/projects";
@@ -31,7 +34,7 @@ import { ActionForm, FormSubmit } from "../../_components/action-form";
 import { Dropdown } from "../../_components/dropdown";
 import { FilterForm } from "../../_components/filter-form";
 import { Segmented } from "../../_components/segmented";
-import { BackLink, FormActions, GroupAction, GroupTitle, SearchInput, iconButtonClass, menuItemClass } from "../../_components/ui";
+import { BackLink, FormActions, GroupAction, GroupTitle, SearchInput, iconButtonClass, menuItemClass, menuItemDangerClass } from "../../_components/ui";
 import { hrefWith, oneOf, param } from "../../_lib/url";
 import { isId } from "../../_lib/validation";
 import {
@@ -49,10 +52,15 @@ import {
   updateProfile,
 } from "./actions";
 import { AddEmailForm } from "./add-email-form";
-import { DealRow } from "../../_components/deal-row";
+import { ContactActions } from "./contact-actions";
+import { activityExtra, activityMatches } from "./history-activity";
+import { AddGoalButton } from "../../_components/add-goal";
+import { GoalRow } from "../../_components/goal-row";
 
 const HISTORY_PAGE = 30;
-const TABS = ["history", "details", "deals"] as const;
+/** Calls / notes loaded per history page (only those within the page's emails are shown). */
+const ACTIVITY_PAGE = 300;
+const TABS = ["history", "details", "goals", "deals"] as const;
 type Tab = (typeof TABS)[number];
 
 const loadContact = cache(getContact);
@@ -70,7 +78,9 @@ export default async function ContactPage({ params, searchParams }: PageProps<"/
 
   const timezone = env.timezone;
   const today = todayIn(timezone);
-  const tab: Tab = oneOf(sp, "tab", TABS) || "history";
+  // "deals" = old links to the Goals tab.
+  const tabParam = oneOf(sp, "tab", TABS);
+  const tab: Tab = tabParam === "deals" ? "goals" : tabParam || "history";
   const q = param(sp, "q");
   const beforeRaw = param(sp, "before", 40);
   const before = beforeRaw && !Number.isNaN(Date.parse(beforeRaw)) ? new Date(beforeRaw) : undefined;
@@ -116,8 +126,9 @@ export default async function ContactPage({ params, searchParams }: PageProps<"/
     );
   }
 
-  const [history, selfEmails, deals, duplicates, projects, accounts, organizations] = await Promise.all([
+  const [history, activities, selfEmails, deals, duplicates, projects, accounts, organizations] = await Promise.all([
     getContactHistory(contact.id, { limit: HISTORY_PAGE, before, q: q || undefined }),
+    listActivities({ contactId: contact.id, before, limit: ACTIVITY_PAGE }),
     getOwnAddresses(),
     listOpportunities({ contactId: contact.id, includeClosed: true }),
     findDuplicateCandidates(contact.id),
@@ -131,15 +142,22 @@ export default async function ContactPage({ params, searchParams }: PageProps<"/
     history.length === HISTORY_PAGE
       ? hrefWith(base, { q, before: history[history.length - 1].sentAt.toISOString() })
       : null;
+  // Calls and notes go between the emails of this page; older ones wait for "Older emails".
+  const oldestEmail = olderHref ? history[history.length - 1].sentAt : null;
+  const dealTitles = new Map(deals.map((d) => [d.id, d.title]));
+  const extras = activities
+    .map((a) => ({ activity: a, context: a.opportunityId ? (dealTitles.get(a.opportunityId) ?? null) : null }))
+    .filter(({ activity, context }) => (!oldestEmail || new Date(activity.occurredAt) >= oldestEmail) && (!q || activityMatches(activity, q, context)))
+    .map(({ activity, context }) => activityExtra(activity, timezone, context));
   const show = (t: Tab) => (tab === t ? "" : "hidden md:flex");
 
   return (
     <>
-      <ContactHeader contact={contact} accounts={accounts} />
+      <ContactHeader contact={contact} accounts={accounts} timezone={timezone} />
 
       {notice === "merged" ? (
         <div className="mb-5">
-          <Notice tone="success">Contacts merged. Addresses, email history, projects and deals are all here now.</Notice>
+          <Notice tone="success">Contacts merged. Addresses, email history, projects and goals are all here now.</Notice>
         </div>
       ) : null}
 
@@ -149,27 +167,31 @@ export default async function ContactPage({ params, searchParams }: PageProps<"/
         segments={[
           { href: base, label: "History", active: tab === "history" },
           { href: `${base}?tab=details`, label: "Details", active: tab === "details" },
-          { href: `${base}?tab=deals`, label: "Deals", active: tab === "deals", count: openDeals.length },
+          { href: `${base}?tab=goals`, label: "Goals", active: tab === "goals", count: openDeals.length },
         ]}
       />
 
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_21rem] xl:grid-cols-[minmax(0,1fr)_23rem] [&>*]:min-w-0">
-        <section className={cn("flex-col", show("history"), tab === "history" && "flex")} aria-label="Email history">
+        <section className={cn("flex-col", show("history"), tab === "history" && "flex")} aria-label="History">
           <GroupTitle className="hidden md:flex">
-            Email history
-            {contact.messageCount ? <span className="ml-1.5 normal-case tracking-normal">{contact.messageCount}</span> : null}
+            History
+            {contact.messageCount ? (
+              <span className="ml-1.5 normal-case tracking-normal">
+                {contact.messageCount} {contact.messageCount === 1 ? "email" : "emails"}
+              </span>
+            ) : null}
           </GroupTitle>
           <FilterForm action={base} scroll={false} role="search" aria-label="Search this history" className="mb-3">
             <SearchInput
               name="q"
               defaultValue={q}
-              placeholder={`Search emails with ${contact.name?.split(" ")[0] || "this contact"}`}
-              aria-label="Search emails"
+              placeholder={`Search emails and notes with ${contact.name?.split(" ")[0] || "this contact"}`}
+              aria-label="Search emails, calls and notes"
             />
           </FilterForm>
           {q || before ? (
             <p className="mb-2 px-4 text-[13px] text-subtle md:px-0 md:text-xs">
-              {q ? <>Emails matching “{q}”</> : "Older emails"}
+              {q ? <>Matching “{q}”</> : "Older history"}
               {before ? <> before {formatDate(before, timezone)}</> : null} ·{" "}
               <Link href={base} scroll={false} className="text-muted underline-offset-2 hover:underline">
                 {q ? "Clear search" : "Back to newest"}
@@ -181,12 +203,13 @@ export default async function ContactPage({ params, searchParams }: PageProps<"/
             timezone={timezone}
             selfEmails={selfEmails}
             olderHref={olderHref}
+            extra={extras}
             emptyText={
               q
-                ? `No emails match “${q}”.`
+                ? `Nothing matches “${q}”.`
                 : contact.emails.length
-                  ? "No emails with this contact yet."
-                  : "Add an email address to see the history with this contact."
+                  ? "No emails, calls or notes with this contact yet."
+                  : "No calls or notes yet. Add an email address to see the email history too."
             }
           />
         </section>
@@ -195,8 +218,8 @@ export default async function ContactPage({ params, searchParams }: PageProps<"/
           <div className={cn("flex-col gap-8", show("details"), tab === "details" && "flex")}>
             <FollowUpSection contact={contact} today={today} />
           </div>
-          <div className={cn("flex-col", show("deals"), tab === "deals" && "flex")}>
-            <DealsSection contact={contact} deals={deals} today={today} />
+          <div className={cn("flex-col", show("goals"), tab === "goals" && "flex")}>
+            <GoalsSection contact={contact} goals={deals} today={today} />
           </div>
           <div className={cn("flex-col gap-8 md:gap-7", show("details"), tab === "details" && "flex")}>
             {editing ? (
@@ -217,7 +240,15 @@ export default async function ContactPage({ params, searchParams }: PageProps<"/
 
 /* Header ------------------------------------------------------------------- */
 
-function ContactHeader({ contact, accounts }: { contact: Contact; accounts: { id: string; email: string }[] }) {
+function ContactHeader({
+  contact,
+  accounts,
+  timezone,
+}: {
+  contact: Contact;
+  accounts: { id: string; email: string }[];
+  timezone: string;
+}) {
   const base = `/contacts/${contact.id}`;
   return (
     <header className="mb-6 flex flex-col gap-3">
@@ -236,7 +267,7 @@ function ContactHeader({ contact, accounts }: { contact: Contact; accounts: { id
               </button>
             </form>
           ) : null}
-          <Link href={`${base}?delete=1`} className={cn(menuItemClass, "text-danger")}>
+          <Link href={`${base}?delete=1`} className={menuItemDangerClass}>
             <Trash2 className="size-4" strokeWidth={1.75} />
             Delete…
           </Link>
@@ -281,7 +312,16 @@ function ContactHeader({ contact, accounts }: { contact: Contact; accounts: { id
         </div>
       </div>
 
-      <div className="flex flex-col items-center empty:hidden md:items-start">
+      <div className="flex flex-col items-center gap-3 md:flex-row md:flex-wrap md:items-start md:gap-2">
+        <ContactActions
+          contactId={contact.id}
+          phone={contact.phone}
+          whatsapp={contact.whatsapp}
+          email={contact.primaryEmail}
+          subject={[contact.displayName, contact.organization?.name].filter(Boolean).join(" · ")}
+          timezone={timezone}
+          addPhoneHref={`${base}?tab=details&edit=profile#phone`}
+        />
         {env.claudeEnabled ? <DraftFollowUp contactId={contact.id} accounts={accounts} hasEmail={contact.emails.length > 0} /> : null}
       </div>
     </header>
@@ -368,38 +408,35 @@ function FollowUpSection({ contact, today }: { contact: Contact; today: string }
   );
 }
 
-/* Deals -------------------------------------------------------------------- */
+/* Goals -------------------------------------------------------------------- */
 
-function DealsSection({ contact, deals, today }: { contact: Contact; deals: Opportunity[]; today: string }) {
-  const addHref = hrefWith("/pipeline", { new: 1, contact: contact.id, return: `/contacts/${contact.id}?tab=deals` });
+/** What we want from this contact (get booked, a space, a donation…), each with its status and next step. */
+function GoalsSection({ contact, goals, today }: { contact: Contact; goals: Opportunity[]; today: string }) {
+  const moreHref = hrefWith("/pipeline", { new: 1, contact: contact.id, return: `/contacts/${contact.id}?tab=goals` });
+  const name = contact.organization?.name ?? contact.displayName;
+  // Open goals first (soonest next step first), then the closed ones.
+  const sorted = [...goals].sort((a, b) => Number(isClosed(a)) - Number(isClosed(b)));
   return (
-    <section aria-label="Deals">
-      <GroupTitle
-        actions={
-          <GroupAction href={addHref}>
-            <Plus className="size-4 md:size-3.5" strokeWidth={1.75} />
-            Add
-          </GroupAction>
-        }
-      >
-        Deals
-      </GroupTitle>
-      {deals.length ? (
+    <section aria-label="Goals">
+      <GroupTitle actions={<AddGoalButton target={{ contactId: contact.id }} name={name} moreHref={moreHref} />}>Goals</GroupTitle>
+      {goals.length ? (
         <RowList>
-          {deals.map((d) => (
-            <DealRow key={d.id} deal={d} today={today} />
+          {sorted.map((d) => (
+            <GoalRow key={d.id} deal={d} today={today} />
           ))}
         </RowList>
       ) : (
-        <div className="rounded-xl border border-dashed border-border px-4 py-5 text-center text-[15px] text-muted md:rounded-lg md:text-sm">
-          No deals yet.{" "}
-          <Link href={addHref} className="text-fg underline-offset-2 hover:underline">
-            Add one
-          </Link>
+        <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border px-4 py-5 text-center text-[15px] text-muted md:rounded-lg md:text-sm">
+          <p>No goals yet. What do you want from {contact.name?.split(" ")[0] || "them"}: a booking, a space, a donation, press coverage…?</p>
+          <AddGoalButton target={{ contactId: contact.id }} name={name} moreHref={moreHref} variant="button" />
         </div>
       )}
     </section>
   );
+}
+
+function isClosed(goal: Opportunity): boolean {
+  return goal.stage === "won" || goal.stage === "lost";
 }
 
 /* Profile ------------------------------------------------------------------ */
@@ -430,6 +467,18 @@ function ProfileSection({ contact, editHref }: { contact: Contact; editHref: str
           )}
         </InfoRow>
         <InfoRow label="Role">{contact.role || <span className="text-subtle">—</span>}</InfoRow>
+        <InfoRow label="Phone">
+          <PhoneNumber phone={contact.phone} />
+        </InfoRow>
+        <InfoRow label="WhatsApp">
+          {contact.whatsapp ? (
+            <PhoneNumber phone={contact.whatsapp} />
+          ) : whatsappNumber(contact) ? (
+            <span className="text-muted">Same as phone</span>
+          ) : (
+            <span className="text-subtle">—</span>
+          )}
+        </InfoRow>
         <InfoRow label="Status">
           <span className="flex flex-wrap items-center gap-2">
             <StatusBadge status={contact.status} />
@@ -452,6 +501,17 @@ function ProfileSection({ contact, editHref }: { contact: Contact; editHref: str
         </InfoRow>
       </dl>
     </section>
+  );
+}
+
+/** A stored number as a tel: link; a hint when it lacks the country code (WhatsApp needs it). */
+function PhoneNumber({ phone }: { phone: string | null }) {
+  if (!phone) return <span className="text-subtle">—</span>;
+  return (
+    <span className="flex flex-wrap items-baseline gap-x-2">
+      {telHref(phone) ? <PhoneLink phone={phone} /> : <span className="tabular-nums">{formatPhone(phone)}</span>}
+      {phone.startsWith("+") ? null : <span className="text-[13px] text-subtle md:text-xs">No country code</span>}
+    </span>
   );
 }
 
@@ -483,6 +543,32 @@ function ProfileForm({ contact, organizations, cancelHref }: { contact: Contact;
         <Field label="Role" htmlFor="role">
           <Input id="role" name="role" defaultValue={contact.role ?? ""} autoComplete="off" />
         </Field>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
+          <Field label="Phone" htmlFor="phone" hint="Include the country code (+34, +1…) so WhatsApp works.">
+            <Input
+              id="phone"
+              name="phone"
+              type="tel"
+              inputMode="tel"
+              defaultValue={formatPhone(contact.phone)}
+              placeholder="+34 612 345 678"
+              autoComplete="off"
+              maxLength={60}
+            />
+          </Field>
+          <Field label="WhatsApp" htmlFor="whatsapp" hint="Only if it is not the phone number.">
+            <Input
+              id="whatsapp"
+              name="whatsapp"
+              type="tel"
+              inputMode="tel"
+              defaultValue={formatPhone(contact.whatsapp)}
+              placeholder="Same as phone"
+              autoComplete="off"
+              maxLength={60}
+            />
+          </Field>
+        </div>
         <Field label="Status" htmlFor="status">
           <Select id="status" name="status" defaultValue={contact.status}>
             {CONTACT_STATUSES.map((s) => (
@@ -676,7 +762,7 @@ function MergeScreen({
             <span className="font-medium">{contact.displayName}</span>?
           </p>
           <p className="mt-2 text-[15px] text-muted md:text-sm">
-            {source.displayName}&rsquo;s addresses, email history, projects, tags, notes and deals move to {contact.displayName}.
+            {source.displayName}&rsquo;s addresses, email history, projects, tags, notes and goals move to {contact.displayName}.
             Empty fields are filled from {source.displayName}. Then {source.displayName} is deleted. This can&rsquo;t be undone.
           </p>
           <dl className="mt-3 grid grid-cols-[6rem_minmax(0,1fr)] gap-x-3 gap-y-1 text-[13px] md:text-xs">
@@ -758,7 +844,7 @@ function DeleteConfirm({ contact, cancelHref }: { contact: Contact; cancelHref: 
       <div className="rounded-xl border border-border bg-surface p-4 md:rounded-lg">
         <p className="text-[15px] font-medium text-fg md:text-sm">Delete {contact.displayName}?</p>
         <p className="mt-2 text-[15px] text-muted md:text-sm">
-          The contact, its addresses, notes and project memberships are removed. Emails stay searchable, and deals are kept
+          The contact, its addresses, notes and project memberships are removed. Emails stay searchable, and goals are kept
           without a contact.
           {contact.source === "gmail" ? " If you email them again, a new contact is created." : null}
         </p>

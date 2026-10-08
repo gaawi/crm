@@ -5,13 +5,71 @@
 
 export type ContactStatus = "new" | "lead" | "active" | "inactive" | "archived";
 export type OpportunityStage = "lead" | "contacted" | "proposal" | "negotiation" | "won" | "lost";
-export type OpportunityKind = "booking" | "fundraising" | "partnership" | "grant" | "press" | "sale" | "other";
+/**
+ * An opportunity is a goal with a contact / organization: what we want from
+ * them (see GOAL_KINDS in lib/constants.ts for labels and groups).
+ */
+export type OpportunityKind =
+  | "booking"
+  | "perform_with"
+  | "residency"
+  | "education"
+  | "broadcast"
+  | "venue"
+  | "exchange"
+  | "fundraising"
+  | "sponsorship"
+  | "grant"
+  | "partnership"
+  | "coproduction"
+  | "network"
+  | "introduction"
+  | "press"
+  | "sale"
+  | "other";
+/** Group of a goal kind in pickers. */
+export type GoalGroup = "performances" | "support" | "partnerships" | "visibility" | "other";
+/** The structured next step of a goal (see NEXT_ACTIONS in lib/constants.ts). next_step stays the free-text detail. */
+export type NextAction =
+  | "first_contact"
+  | "call"
+  | "send_proposal"
+  | "send_materials"
+  | "follow_up"
+  | "meeting"
+  | "agree_terms"
+  | "send_contract"
+  | "close_contract"
+  | "logistics"
+  | "invoice"
+  | "thank_report"
+  | "keep_informed"
+  | "wait_reply";
 export type OrganizationKind = "venue" | "funder" | "partner" | "press" | "agency" | "institution" | "other";
-export type DraftStatus = "proposed" | "revising" | "sending" | "sent" | "discarded" | "failed";
+/** queued = approved as part of a running campaign, waiting its turn to be sent. */
+export type DraftStatus = "proposed" | "queued" | "revising" | "sending" | "sent" | "discarded" | "failed";
+/** draft = prepared, waiting for the owner's approval; running = sending gradually. */
+export type CampaignStatus = "draft" | "running" | "paused" | "done" | "cancelled";
 export type DraftPurpose = "reply" | "follow_up" | "nudge" | "outreach" | "other";
 export type DraftOrigin = "assistant" | "autopilot" | "owner";
 export type Direction = "inbound" | "outbound";
 export type AccountStatus = "active" | "reauth_required" | "disconnected";
+/** Logged by hand (everything but synced email); "status" = automatic entry when a booking row's status changes. */
+export type ActivityKind = "call" | "whatsapp" | "meeting" | "email" | "note" | "status";
+/** Calls only. reached = talked to them. */
+export type CallOutcome = "reached" | "no_answer" | "voicemail" | "call_back" | "wrong_number";
+/** The situation an email template is suggested for (custom = never suggested, pick it by hand). */
+export type TemplateTrigger =
+  | "first_contact"
+  | "returning"
+  | "follow_up"
+  | "after_call"
+  | "next_steps"
+  | "confirmed"
+  | "declined"
+  | "keep_informed"
+  | "thanks"
+  | "custom";
 export type BackfillStatus = "pending" | "running" | "done" | "error";
 
 export interface Address {
@@ -30,6 +88,8 @@ export interface ProjectRef {
   id: string;
   name: string;
   color: string;
+  /** A booking sheet (set on deals' projects). */
+  sheet?: boolean;
 }
 
 export interface OrganizationRef {
@@ -42,6 +102,9 @@ export interface ContactRef {
   id: string;
   /** name, or the primary address when the contact has no name. */
   displayName: string;
+  /** Normalized ("+34612345678"); present on opportunities' contacts. */
+  phone?: string | null;
+  whatsapp?: string | null;
 }
 
 export interface ContactSummary {
@@ -53,6 +116,10 @@ export interface ContactSummary {
   emails: string[];
   organization: OrganizationRef | null;
   role: string | null;
+  /** Normalized: digits with an optional leading + ("+34612345678"). */
+  phone: string | null;
+  /** WhatsApp number when it differs from `phone` (same format). */
+  whatsapp: string | null;
   tags: string[];
   status: ContactStatus;
   projects: ProjectRef[];
@@ -135,12 +202,36 @@ export interface Opportunity {
   /** numeric(12,2) as string, e.g. "2500.00". */
   value: string | null;
   currency: string;
+  /** Due date of the next step. */
   followUpAt: string | null;
+  /** Structured next step (null = none set). */
+  nextAction: NextAction | null;
+  /** Free-text detail of the next step. */
   nextStep: string | null;
   notes: string | null;
   closedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
+}
+
+/** Input of createGoalAction / updateGoalAction (pipeline) and addContactGoalAction (contact page). */
+export interface GoalInput {
+  title?: string;
+  kind?: OpportunityKind;
+  stage?: OpportunityStage;
+  contactId?: string | null;
+  organizationId?: string | null;
+  projectId?: string | null;
+  /** As typed ("4.500 €", "2500.50") or a number; "" / null clears. */
+  value?: string | number | null;
+  /** ISO 4217, e.g. "EUR". */
+  currency?: string;
+  /** 'YYYY-MM-DD', "" / null clears. */
+  followUpAt?: string | null;
+  /** "" / null clears. */
+  nextAction?: NextAction | "" | null;
+  nextStep?: string | null;
+  notes?: string | null;
 }
 
 export interface GmailAccountView {
@@ -184,6 +275,8 @@ export interface EmailDraft {
   accountEmail: string;
   contact: ContactRef | null;
   opportunityId: string | null;
+  /** The campaign it belongs to (sent gradually once the campaign is approved), null = standalone. */
+  campaignId: string | null;
   replyToMessageId: string | null;
   /** Subject of the message being replied to, for context. */
   replyToSubject: string | null;

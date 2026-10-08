@@ -17,7 +17,7 @@ const draftColumns = () => sql`
       (select ce.email from contact_emails ce where ce.contact_id = c.id order by ce.is_primary desc, ce.created_at limit 1),
       'Unknown')
   ) end as contact,
-  d.opportunity_id, d.reply_to_message_id, rm.subject as reply_to_subject,
+  d.opportunity_id, d.campaign_id, d.reply_to_message_id, rm.subject as reply_to_subject,
   d.purpose, d.origin, d.status,
   d.to_emails as "to", d.cc_emails as cc, d.subject, d.body_text as body, d.rationale, d.revisions,
   d.gmail_draft_id, d.gmail_thread_id, d.error, d.created_at, d.updated_at, d.sent_at
@@ -29,17 +29,33 @@ const draftJoins = () => sql`
   left join messages rm on rm.id = d.reply_to_message_id
 `;
 
-/** Open proposals first (newest first), or a given set of statuses. */
-export async function listDrafts(options: { statuses?: DraftStatus[]; contactId?: string; limit?: number } = {}): Promise<EmailDraft[]> {
-  const statuses = options.statuses ?? ["proposed", "revising", "sending", "failed"];
+/**
+ * Open proposals first (newest first), or a given set of statuses.
+ * `campaign`: "exclude" (default: standalone proposals only — campaign
+ * emails are listed inside their campaign), "include" (both), or a campaign
+ * id (only its emails, every status unless `statuses` is given, oldest first
+ * — the order they are sent in).
+ */
+export async function listDrafts(
+  options: { statuses?: DraftStatus[]; contactId?: string; limit?: number; campaign?: "exclude" | "include" | string } = {},
+): Promise<EmailDraft[]> {
+  const campaign = options.campaign ?? "exclude";
+  const oneCampaign = campaign !== "exclude" && campaign !== "include";
+  if (oneCampaign && !/^[0-9a-f-]{36}$/i.test(campaign)) return [];
+  const statuses =
+    options.statuses ??
+    (oneCampaign
+      ? (["proposed", "queued", "revising", "sending", "sent", "discarded", "failed"] satisfies DraftStatus[])
+      : (["proposed", "queued", "revising", "sending", "failed"] satisfies DraftStatus[]));
   return sql<EmailDraft[]>`
     select ${draftColumns()}
       from email_drafts d
       ${draftJoins()}
      where d.status = any(${statuses}::text[])
        ${options.contactId ? sql`and d.contact_id = ${options.contactId}` : sql``}
-     order by (d.status = 'failed') desc, d.created_at desc
-     limit ${clampLimit(options.limit, 100, 500)}
+       ${campaign === "exclude" ? sql`and d.campaign_id is null` : oneCampaign ? sql`and d.campaign_id = ${campaign}` : sql``}
+     order by ${oneCampaign ? sql`d.created_at, d.id` : sql`(d.status = 'failed') desc, d.created_at desc`}
+     limit ${clampLimit(options.limit, oneCampaign ? 500 : 100, 500)}
   `;
 }
 
@@ -49,10 +65,19 @@ export async function getDraft(id: string): Promise<EmailDraft | null> {
   return row ?? null;
 }
 
-/** Number of emails waiting for approval (tab badge). */
+/**
+ * Items waiting for the owner in Approvals (tab badge): each standalone
+ * email to approve (proposed / failed), plus ONE per campaign that needs
+ * attention — it has emails to approve (a prepared campaign, held-back or
+ * failed emails) or it was paused with an error.
+ */
 export async function countPendingDrafts(): Promise<number> {
   const [row] = await sql<{ count: number }[]>`
-    select count(*)::int as count from email_drafts where status in ('proposed', 'failed')
+    select (select count(*) from email_drafts where status in ('proposed', 'failed') and campaign_id is null)::int
+         + (select count(*) from email_campaigns c
+             where (c.status = 'paused' and c.error is not null)
+                or exists (select 1 from email_drafts d where d.campaign_id = c.id and d.status in ('proposed', 'failed')))::int
+           as count
   `;
   return row.count;
 }
@@ -71,6 +96,7 @@ export interface NewDraft {
   rationale?: string | null;
   gmailDraftId?: string | null;
   gmailThreadId?: string | null;
+  campaignId?: string | null;
 }
 
 /** Insert a proposal. Returns null when the autopilot already has an open proposal for the contact. */
@@ -90,6 +116,7 @@ export async function insertDraft(input: NewDraft): Promise<string | null> {
       rationale: input.rationale ?? null,
       gmailDraftId: input.gmailDraftId ?? null,
       gmailThreadId: input.gmailThreadId ?? null,
+      campaignId: input.campaignId ?? null,
     })}
     on conflict do nothing
     returning id
@@ -141,9 +168,18 @@ export async function pushRevision(id: string, note: string | null): Promise<voi
 /**
  * Atomically move a draft from one of `from` statuses to `to` (prevents double
  * sends from two taps). Returns false when the draft was not in `from`.
+ * With `campaignId`, the draft must also belong to that campaign and the
+ * campaign must be running (the gradual sender's re-check, in the same
+ * statement).
  */
-export async function transitionDraft(id: string, from: DraftStatus[], to: DraftStatus): Promise<boolean> {
-  const result = await sql`update email_drafts set status = ${to} where id = ${id} and status = any(${from}::text[])`;
+export async function transitionDraft(id: string, from: DraftStatus[], to: DraftStatus, options: { campaignId?: string } = {}): Promise<boolean> {
+  const result = options.campaignId
+    ? await sql`
+        update email_drafts d set status = ${to}
+          from email_campaigns c
+         where d.id = ${id} and d.status = any(${from}::text[])
+           and d.campaign_id = ${options.campaignId} and c.id = d.campaign_id and c.status = 'running'`
+    : await sql`update email_drafts set status = ${to} where id = ${id} and status = any(${from}::text[])`;
   return result.count === 1;
 }
 

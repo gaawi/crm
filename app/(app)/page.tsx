@@ -1,15 +1,20 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { ArrowDownLeft, ArrowUpRight, Check, Clock, Sparkles } from "lucide-react";
+import { PhoneActions } from "@/components/booking/phone-actions";
 import { ContactRow, RowList } from "@/components/contact-row";
+import { NextActionIcon } from "@/components/goals";
 import { StageBadge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
 import { EmptyState, Notice, PageHeader, SectionTitle } from "@/components/ui/layout";
+import { telHref } from "@/lib/booking/phone";
+import { goalLabel, nextStepParts, stageLabel } from "@/lib/constants";
 import { formatDue, formatRelative, todayIn } from "@/lib/dates";
 import { env } from "@/lib/env";
 import { getFollowUps, getUpcomingFollowUps } from "@/lib/queries/followups";
 import { recentActivity } from "@/lib/queries/messages";
 import { getOverviewCounts } from "@/lib/queries/stats";
+import type { ContactSummary } from "@/lib/types";
 import { cn, truncate } from "@/lib/utils";
 import { completeFollowUp, completeOpportunityFollowUp, markReplyDone, snoozeFollowUp } from "./actions";
 
@@ -27,6 +32,19 @@ function IconAction({ action, label, children }: { action: () => Promise<void>; 
         {children}
       </button>
     </form>
+  );
+}
+
+/** Call / WhatsApp for a contact row (nothing without a number); the log dialog opens after the tap. */
+function ContactPhoneActions({ contact, timezone }: { contact: ContactSummary; timezone: string }) {
+  return (
+    <PhoneActions
+      phone={contact.phone}
+      whatsapp={contact.whatsapp}
+      target={{ contactId: contact.id }}
+      timezone={timezone}
+      subject={[contact.displayName, contact.organization?.name].filter(Boolean).join(" · ")}
+    />
   );
 }
 
@@ -88,6 +106,7 @@ export default async function TodayPage() {
                     note={c.followUpNote ?? undefined}
                     actions={
                       <>
+                        <ContactPhoneActions contact={c} timezone={timezone} />
                         <IconAction action={snoozeFollowUp.bind(null, c.id, 7)} label="Snooze one week">
                           <Clock className="size-[18px] md:size-3.5" />
                         </IconAction>
@@ -98,32 +117,66 @@ export default async function TodayPage() {
                     }
                   />
                 ))}
-                {followUps.opportunities.map((o) => (
-                  <li key={o.id} className="flex items-center gap-3 px-4 py-2.5">
-                    <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-full border border-dashed border-border-strong text-[10px] font-medium text-subtle">
-                      Deal
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <Link href={`/pipeline?open=${o.id}`} className="truncate text-sm font-medium hover:underline">
-                          {o.title}
-                        </Link>
-                        <StageBadge stage={o.stage} />
-                      </div>
-                      <p className="truncate text-xs text-muted">
-                        {[o.nextStep, o.contact?.displayName, o.organization?.name].filter(Boolean).join(" · ") || "No next step"}
-                      </p>
-                    </div>
-                    {o.followUpAt ? (
-                      <span className={cn("hidden shrink-0 text-xs sm:block", o.followUpAt < today ? "text-danger" : "text-subtle")}>
-                        {formatDue(o.followUpAt, today)}
+                {followUps.opportunities.map((o) => {
+                  const step = nextStepParts(o);
+                  // The next step is a call and there is a number: Call is the main action.
+                  const callNow = o.nextAction === "call" && Boolean(telHref(o.contact?.phone));
+                  const rest = [step.detail, o.contact?.displayName, o.organization?.name !== o.title ? o.organization?.name : null].filter(Boolean);
+                  return (
+                    <li key={o.id} className="flex items-center gap-3 px-4 py-2.5">
+                      <span
+                        className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-surface-2 text-muted"
+                        title={step.label ? `Next step: ${step.label}` : `Goal: ${goalLabel(o.kind)}`}
+                      >
+                        <NextActionIcon action={o.nextAction} className="size-4" />
                       </span>
-                    ) : null}
-                    <IconAction action={completeOpportunityFollowUp.bind(null, o.id)} label="Done">
-                      <Check className="size-[18px] md:size-3.5" />
-                    </IconAction>
-                  </li>
-                ))}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          {/* A booking-sheet row opens its sheet, filtered to that venue. */}
+                          <Link
+                            href={
+                              o.project?.sheet
+                                ? `/booking/${o.project.id}?q=${encodeURIComponent(o.organization?.name ?? o.title)}`
+                                : `/pipeline?open=${o.id}`
+                            }
+                            className="truncate text-sm font-medium hover:underline"
+                          >
+                            {o.title}
+                          </Link>
+                          {/* Phones: the status moves to the second line, leaving room for the title next to Call / WhatsApp. */}
+                          <span className="hidden shrink-0 sm:inline-flex">
+                            <StageBadge stage={o.stage} label={stageLabel(o.stage, o.kind)} />
+                          </span>
+                        </div>
+                        <p className="truncate text-xs text-muted">
+                          <span className="sm:hidden">{stageLabel(o.stage, o.kind)} · </span>
+                          {step.label ? <span className="font-medium text-fg/90">{step.label}</span> : null}
+                          {step.label && rest.length ? " · " : null}
+                          {rest.join(" · ") || (step.label ? null : "No next step")}
+                        </p>
+                      </div>
+                      {o.followUpAt ? (
+                        <span className={cn("hidden shrink-0 text-xs sm:block", o.followUpAt < today ? "text-danger" : "text-subtle")}>
+                          {formatDue(o.followUpAt, today)}
+                        </span>
+                      ) : null}
+                      {o.contact ? (
+                        <PhoneActions
+                          phone={o.contact.phone}
+                          whatsapp={o.contact.whatsapp}
+                          target={{ opportunityId: o.id }}
+                          timezone={timezone}
+                          subject={[o.contact.displayName, o.title].join(" · ")}
+                          prominentCall={callNow}
+                          className="shrink-0"
+                        />
+                      ) : null}
+                      <IconAction action={completeOpportunityFollowUp.bind(null, o.id)} label="Next step done">
+                        <Check className="size-[18px] md:size-3.5" />
+                      </IconAction>
+                    </li>
+                  );
+                })}
               </RowList>
             </section>
           ) : null}
@@ -162,9 +215,12 @@ export default async function TodayPage() {
                     today={today}
                     meta="last_outbound"
                     actions={
-                      <IconAction action={markReplyDone.bind(null, c.id)} label="Mark done">
-                        <Check className="size-[18px] md:size-3.5" />
-                      </IconAction>
+                      <>
+                        <ContactPhoneActions contact={c} timezone={timezone} />
+                        <IconAction action={markReplyDone.bind(null, c.id)} label="Mark done">
+                          <Check className="size-[18px] md:size-3.5" />
+                        </IconAction>
+                      </>
                     }
                   />
                 ))}

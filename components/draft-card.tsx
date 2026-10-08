@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { useClaudeEnabled } from "@/components/features";
 import { useEffect, useState, useTransition } from "react";
-import { Check, Loader2, Pencil, Sparkles, Trash2 } from "lucide-react";
+import { Check, FileText, Loader2, Pencil, Send, Sparkles, Trash2 } from "lucide-react";
 import { AccountBadge, Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/field";
 import { Notice } from "@/components/ui/layout";
 import { approveDraftAction, discardDraftAction, reviseDraftAction, saveDraftEditsAction, type ActionResult } from "@/lib/ai/actions";
+import { isTemplateRationale } from "@/lib/booking/templates";
 import { formatRelative } from "@/lib/dates";
 import type { EmailDraft } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -85,9 +86,21 @@ export function DraftCard({
           )}
         </span>
         <Badge>{PURPOSE_LABEL[draft.purpose]}</Badge>
-        <Badge className="font-normal">
-          <Sparkles className="size-3" /> {ORIGIN_LABEL[draft.origin]}
-        </Badge>
+        {draft.status === "queued" ? (
+          <Badge className="bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300" title="Approved: it goes out with its campaign, a few at a time">
+            Queued
+          </Badge>
+        ) : null}
+        {/* Prepared from a booking-sheet template: your words, not Claude's. */}
+        {draft.origin === "owner" && isTemplateRationale(draft.rationale) ? (
+          <Badge className="font-normal">
+            <FileText className="size-3" /> Your template
+          </Badge>
+        ) : (
+          <Badge className="font-normal">
+            <Sparkles className="size-3" /> {ORIGIN_LABEL[draft.origin]}
+          </Badge>
+        )}
         <span className="ml-auto flex items-center gap-1.5 text-xs text-subtle">
           <AccountBadge email={draft.accountEmail} />
           {formatRelative(draft.updatedAt, timezone)}
@@ -197,6 +210,11 @@ export function DraftCard({
               </>
             ) : armed ? (
               "Tap again to send"
+            ) : draft.campaignId ? (
+              // A campaign email: this sends just this one now, outside the campaign's pace.
+              <>
+                <Send className="size-4" /> Send now
+              </>
             ) : (
               <>
                 <Check className="size-4" /> Approve & send

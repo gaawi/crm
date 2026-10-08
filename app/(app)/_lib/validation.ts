@@ -1,7 +1,7 @@
 import "server-only";
 import { z } from "zod";
-import { CONTACT_STATUSES, OPPORTUNITY_KINDS, OPPORTUNITY_STAGES, ORGANIZATION_KINDS } from "@/lib/constants";
-import type { ContactStatus, OpportunityKind, OpportunityStage, OrganizationKind } from "@/lib/types";
+import { CONTACT_STATUSES, GOAL_KINDS, NEXT_ACTIONS, OPPORTUNITY_STAGES, ORGANIZATION_KINDS } from "@/lib/constants";
+import type { ContactStatus, NextAction, OpportunityKind, OpportunityStage, OrganizationKind } from "@/lib/types";
 import { isValidEmail, normalizeEmail, normalizeTag, splitList } from "@/lib/utils";
 
 /**
@@ -23,7 +23,13 @@ export function isId(value: unknown): value is string {
 
 export const statusSchema = z.enum(CONTACT_STATUSES.map((s) => s.value) as [ContactStatus, ...ContactStatus[]]);
 export const stageSchema = z.enum(OPPORTUNITY_STAGES.map((s) => s.value) as [OpportunityStage, ...OpportunityStage[]]);
-export const opportunityKindSchema = z.enum(OPPORTUNITY_KINDS.map((k) => k.value) as [OpportunityKind, ...OpportunityKind[]]);
+export const opportunityKindSchema = z.enum(GOAL_KINDS.map((k) => k.value) as [OpportunityKind, ...OpportunityKind[]]);
+/** A goal's structured next step. */
+export const nextActionSchema = z.enum(NEXT_ACTIONS.map((a) => a.value) as [NextAction, ...NextAction[]]);
+/** "" → null, otherwise a next action. */
+export const optionalNextActionSchema = z
+  .union([z.literal(""), nextActionSchema])
+  .transform((value) => (value === "" ? null : value));
 export const organizationKindSchema = z.enum(
   ORGANIZATION_KINDS.map((k) => k.value) as [OrganizationKind, ...OrganizationKind[]],
 );

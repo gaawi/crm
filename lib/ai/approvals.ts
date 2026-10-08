@@ -3,12 +3,13 @@ import { sql } from "@/lib/db";
 import { draftFollowUp, reviseEmail } from "@/lib/ai/draft";
 import { getContact } from "@/lib/queries/contacts";
 import { getDraft, insertDraft, pushRevision, transitionDraft, updateDraft } from "@/lib/queries/drafts";
+import { HELD_BACK_PREFIX } from "@/lib/campaigns/types";
 import { todayIn } from "@/lib/dates";
 import { env } from "@/lib/env";
 import { GmailApiError } from "@/lib/gmail/client";
 import { gmailClientFor } from "@/lib/sync/accounts";
 import { deleteGmailDraft, DraftError as GmailDraftError, saveGmailDraft, sendGmailDraft, updateGmailDraft } from "@/lib/sync/drafts";
-import type { DraftOrigin, DraftPurpose, EmailDraft } from "@/lib/types";
+import type { DraftOrigin, DraftPurpose, DraftStatus, EmailDraft } from "@/lib/types";
 import { errorMessage, isValidEmail, normalizeEmail } from "@/lib/utils";
 
 /**
@@ -17,6 +18,12 @@ import { errorMessage, isValidEmail, normalizeEmail } from "@/lib/utils";
  */
 
 export class DraftError extends Error {}
+
+/** Statuses whose content (and Gmail draft) the owner may still change. */
+const EDITABLE: DraftStatus[] = ["proposed", "queued", "failed"];
+
+/** approveAndSend could not take the draft: already sent, being sent, or no longer approved (campaign paused…). Nothing was sent. */
+export class DraftUnavailableError extends DraftError {}
 
 /** Addresses Claude may write to for a proposal: the contact's own + everyone in the replied thread. */
 async function allowedRecipients(contactId: string | null, replyToMessageId: string | null): Promise<Set<string>> {
@@ -167,17 +174,25 @@ export async function proposeFollowUp(
   });
 }
 
-/** Owner edits (subject/body/recipients) → saved and mirrored to the Gmail draft. */
+/**
+ * Owner edits (subject/body/recipients) → saved and mirrored to the Gmail
+ * draft. A queued campaign email stays queued (the edited version is the one
+ * sent: every send overwrites the Gmail draft with the stored version first).
+ */
 export async function saveDraftEdits(id: string, edits: { subject: string; body: string; to: string[]; cc: string[] }): Promise<EmailDraft> {
   const draft = await getDraft(id);
   if (!draft) throw new DraftError("Draft not found.");
-  if (!["proposed", "failed"].includes(draft.status)) throw new DraftError("This email can no longer be edited.");
+  if (!EDITABLE.includes(draft.status)) throw new DraftError("This email can no longer be edited.");
   const to = cleanList(edits.to);
   const cc = cleanList(edits.cc);
   if (!to.length) throw new DraftError("The email needs at least one recipient.");
   const invalid = [...to, ...cc].find((e) => !isValidEmail(e));
   if (invalid) throw new DraftError(`Invalid address: ${invalid}`);
-  await updateDraft(id, { subject: edits.subject, body: edits.body, to, cc });
+  // Only while still editable (the gradual sender may have taken it meanwhile).
+  const saved = await sql`
+    update email_drafts set subject = ${edits.subject}, body_text = ${edits.body}, to_emails = ${to}, cc_emails = ${cc}
+     where id = ${id} and status = any(${EDITABLE}::text[])`;
+  if (saved.count === 0) throw new DraftError("This email can no longer be edited.");
   await syncGmailDraft(id);
   return (await getDraft(id))!;
 }
@@ -229,19 +244,33 @@ function draftParams(draft: EmailDraft) {
  */
 async function syncGmailDraft(id: string): Promise<boolean> {
   const draft = await getDraft(id);
-  if (!draft) return false;
+  // A campaign email can be taken by the gradual sender at any moment: once it
+  // is being sent (or sent), its Gmail draft is no longer ours to touch.
+  if (!draft || !EDITABLE.includes(draft.status)) return false;
   try {
     const params = draftParams(draft);
     const saved = draft.gmailDraftId
-      ? await updateGmailDraft({ ...params, draftId: draft.gmailDraftId }).catch((e) => {
-          if (isGone(e)) return saveGmailDraft(params);
-          throw e;
+      ? await updateGmailDraft({ ...params, draftId: draft.gmailDraftId }).catch(async (e) => {
+          if (!isGone(e)) throw e;
+          // Gone because it was just sent? Then never re-create it.
+          const current = await getDraft(id);
+          if (!current || !EDITABLE.includes(current.status)) throw new DraftError("This email is being sent.");
+          return saveGmailDraft(params);
         })
       : await saveGmailDraft(params);
-    await updateDraft(id, { gmailDraftId: saved.draftId, error: null });
-    return true;
+    // A campaign email the sender held back keeps its reason (and its "Queue again") through an edit.
+    const kept = await sql`
+      update email_drafts
+         set gmail_draft_id = ${saved.draftId},
+             error = case when starts_with(coalesce(error, ''), ${HELD_BACK_PREFIX}) then error end
+       where id = ${id} and status = any(${EDITABLE}::text[])`;
+    if (!kept.count && saved.draftId !== draft.gmailDraftId) await deleteGmailDraft(draft.accountId, saved.draftId).catch(() => {});
+    return kept.count > 0;
   } catch (e) {
-    await updateDraft(id, { error: `Not saved to Gmail yet: ${errorMessage(e)}` });
+    await sql`
+      update email_drafts
+         set error = case when starts_with(coalesce(error, ''), ${HELD_BACK_PREFIX}) then error else ${`Not saved to Gmail yet: ${errorMessage(e)}`} end
+       where id = ${id} and status = any(${EDITABLE}::text[])`;
     return false;
   }
 }
@@ -255,6 +284,18 @@ async function gmailDraftExists(accountId: string, draftId: string): Promise<boo
   }
 }
 
+export interface SendOptions {
+  /**
+   * Statuses the draft may be sent from. Default proposed / failed / queued
+   * (the owner's Approve, or "Send now" on a queued campaign email).
+   */
+  from?: DraftStatus[];
+  /** The gradual sender: the draft must belong to this campaign and the campaign must be running (checked atomically). */
+  campaignId?: string;
+  /** Clock for sent_at (the campaign scheduler's; default now). */
+  now?: () => Date;
+}
+
 /**
  * Approve → send through Gmail. Safe against double taps (status transition).
  *
@@ -264,10 +305,18 @@ async function gmailDraftExists(accountId: string, draftId: string): Promise<boo
  * sent: the row fails with an explanation, and only a second Approve sends a
  * fresh copy. When Gmail errors after possibly sending, the row is marked
  * sent with a warning instead of inviting a duplicate.
+ *
+ * The campaign scheduler calls it with { from: ["queued"], campaignId }.
+ * Throws DraftUnavailableError (nothing sent, row untouched) when the draft
+ * is not in an allowed status any more.
  */
-export async function approveAndSend(id: string): Promise<EmailDraft> {
-  if (!(await transitionDraft(id, ["proposed", "failed"], "sending"))) {
-    throw new DraftError("This email was already sent or is being sent.");
+export async function approveAndSend(id: string, options: SendOptions = {}): Promise<EmailDraft> {
+  const now = options.now ?? (() => new Date());
+  const from = options.from ?? ["proposed", "failed", "queued"];
+  if (!(await transitionDraft(id, from, "sending", { campaignId: options.campaignId }))) {
+    throw new DraftUnavailableError(
+      options.campaignId ? "This email is no longer queued in a running campaign." : "This email was already sent or is being sent.",
+    );
   }
   const draft = (await getDraft(id))!;
 
@@ -299,7 +348,7 @@ export async function approveAndSend(id: string): Promise<EmailDraft> {
     const sent = await sendGmailDraft(draft.accountId, gmailDraftId);
     await updateDraft(id, {
       status: "sent",
-      sentAt: new Date(),
+      sentAt: now(),
       sentGmailMessageId: sent.gmailMessageId,
       gmailThreadId: sent.gmailThreadId,
       error: null,
@@ -309,7 +358,7 @@ export async function approveAndSend(id: string): Promise<EmailDraft> {
       // The draft was consumed: Gmail sent it even though the request failed.
       await updateDraft(id, {
         status: "sent",
-        sentAt: new Date(),
+        sentAt: now(),
         error: "Gmail reported an error, but the email appears to have been sent. Check your Sent folder.",
       });
       return (await getDraft(id))!;
@@ -332,9 +381,10 @@ export async function approveAndSend(id: string): Promise<EmailDraft> {
   return (await getDraft(id))!;
 }
 
+/** Discard a proposal (or a queued campaign email: it is skipped). */
 export async function discardDraft(id: string): Promise<void> {
   const draft = await getDraft(id);
   if (!draft) return;
-  if (!(await transitionDraft(id, ["proposed", "failed"], "discarded"))) throw new DraftError("This email can no longer be discarded.");
+  if (!(await transitionDraft(id, ["proposed", "queued", "failed"], "discarded"))) throw new DraftError("This email can no longer be discarded.");
   if (draft.gmailDraftId) await deleteGmailDraft(draft.accountId, draft.gmailDraftId);
 }

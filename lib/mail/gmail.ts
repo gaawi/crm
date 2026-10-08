@@ -6,8 +6,9 @@ import { canCompose, canModify } from "@/lib/gmail/oauth";
 import { decodeMimeWords, extractBodies, getHeader, parseAddressList, parseGmailMessage, stripQuotedText } from "@/lib/gmail/parse";
 import type { GmailLabel, GmailMessage, GmailMessagePart, GmailThread } from "@/lib/gmail/types";
 import { applyLabelChange } from "@/lib/mail/queries";
+import type { InboxCategory } from "@/lib/mail/search";
 import { normalizeContentId, sanitizeEmailHtml } from "@/lib/mail/sanitize";
-import { getAccount, getSelfEmails, gmailClientFor, type GmailAccountRecord } from "@/lib/sync/accounts";
+import { getAccount, getSelfEmails, gmailClientFor, listAccounts, type GmailAccountRecord } from "@/lib/sync/accounts";
 import { ingestMessages, updateMessageLabels } from "@/lib/sync/ingest";
 import type { Address } from "@/lib/types";
 import { isValidEmail } from "@/lib/utils";
@@ -364,6 +365,107 @@ export async function changeThreadLabels(accountId: string, threadId: string, ad
   const safe = (ids: string[]) => ids.filter((id) => /^[A-Za-z0-9_-]{1,64}$/.test(id));
   const thread = await gmailClientFor(account.id).modifyThread(threadId, { addLabelIds: safe(add), removeLabelIds: safe(remove) });
   await storeThreadLabels(account.id, threadId, thread, safe(add), safe(remove));
+}
+
+/* ------------------------------------------------------------------------ */
+/* Archive all                                                              */
+/* ------------------------------------------------------------------------ */
+
+/** Most messages archived per account in one call (more = true beyond it: call again). */
+export const ARCHIVE_ALL_MAX_PER_ACCOUNT = 20_000;
+const ARCHIVE_LIST_PAGE = 500;
+const ARCHIVE_MODIFY_CHUNK = 1_000;
+
+export interface ArchiveAllResult {
+  /** Conversations archived (threads that had messages in the inbox scope). */
+  archived: number;
+  /** Messages whose INBOX label was removed. */
+  messages: number;
+  /** Accounts processed. */
+  accounts: number;
+  /** A cap was hit: some conversations are still in the inbox (run it again). */
+  more: boolean;
+  /** Accounts that failed (Gmail errors), with the reason. */
+  errors: { accountId: string; email: string; error: string }[];
+  /** Connected accounts left out because they need reconnecting (all-accounts mode). */
+  skipped: { accountId: string; email: string; reason: string }[];
+}
+
+type ArchiveClient = Pick<GmailClient, "listMessages" | "batchModifyMessages">;
+
+/**
+ * Inbox → archived, without selecting anything: for each selected active
+ * account (one, or every active account that allows changes), list the
+ * messages Gmail has in:inbox (+ category:<tab>), up to 20,000 per account,
+ * remove their INBOX label in chunks of 1,000 (messages.batchModify,
+ * idempotent), then update the stored copies so lists and counts change at
+ * once. Mail stays in All Mail and search. Nothing is deleted.
+ * `clientFor` replaces the Gmail client (tests).
+ */
+export async function archiveAllInbox(
+  params: { accountId?: string | null; category?: InboxCategory | null },
+  options: { clientFor?: (accountId: string) => ArchiveClient; maxPerAccount?: number } = {},
+): Promise<ArchiveAllResult> {
+  const cap = Math.max(1, options.maxPerAccount ?? ARCHIVE_ALL_MAX_PER_ACCOUNT);
+  const result: ArchiveAllResult = { archived: 0, messages: 0, accounts: 0, more: false, errors: [], skipped: [] };
+  let accounts: GmailAccountRecord[];
+  if (params.accountId) {
+    accounts = [await mailAccount(params.accountId, "modify")];
+  } else {
+    accounts = [];
+    for (const a of await listAccounts()) {
+      if (a.status === "disconnected") continue;
+      if (a.status === "active" && canModify(a.scopes)) accounts.push(a);
+      else result.skipped.push({ accountId: a.id, email: a.email, reason: `Reconnect ${a.email} in Settings to allow changes` });
+    }
+    if (!accounts.length) throw new MailError(result.skipped[0]?.reason ?? "Connect a Gmail account first");
+  }
+  const q = `in:inbox${params.category ? ` category:${params.category}` : ""}`;
+  let firstError: unknown = null;
+
+  for (const account of accounts) {
+    const client = options.clientFor ? options.clientFor(account.id) : gmailClientFor(account.id);
+    const threadOf = new Map<string, string>();
+    const archivedThreads = new Set<string>();
+    try {
+      // List first, then modify: archiving while paging would shift Gmail's pages.
+      let pageToken: string | undefined;
+      do {
+        const page = await client.listMessages({ q, maxResults: ARCHIVE_LIST_PAGE, pageToken });
+        const listed = page.messages ?? [];
+        for (const m of listed) {
+          if (threadOf.size >= cap) break;
+          threadOf.set(m.id, m.threadId);
+        }
+        pageToken = page.nextPageToken || undefined;
+        if (threadOf.size >= cap) {
+          if (pageToken || listed.some((m) => !threadOf.has(m.id))) result.more = true;
+          break;
+        }
+      } while (pageToken);
+
+      const ids = [...threadOf.keys()];
+      for (let i = 0; i < ids.length; i += ARCHIVE_MODIFY_CHUNK) {
+        const chunk = ids.slice(i, i + ARCHIVE_MODIFY_CHUNK);
+        await client.batchModifyMessages(chunk, { removeLabelIds: ["INBOX"] });
+        await sql`
+          update messages
+             set label_ids = array_remove(label_ids, 'INBOX')
+           where account_id = ${account.id} and gmail_message_id = any(${chunk}::text[]) and label_ids @> '{INBOX}'`;
+        result.messages += chunk.length;
+        for (const id of chunk) archivedThreads.add(threadOf.get(id)!);
+      }
+      result.accounts++;
+    } catch (error) {
+      firstError ??= error;
+      result.errors.push({ accountId: account.id, email: account.email, error: error instanceof Error ? error.message : String(error) });
+    } finally {
+      result.archived += archivedThreads.size;
+    }
+  }
+  // Nothing could be archived at all: report the (first) error as such.
+  if (result.errors.length && result.errors.length === accounts.length && result.messages === 0) throw firstError;
+  return result;
 }
 
 /* ------------------------------------------------------------------------ */

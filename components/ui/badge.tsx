@@ -4,13 +4,20 @@ import { CONTACT_STATUSES, OPPORTUNITY_STAGES, PROJECT_COLORS } from "@/lib/cons
 import type { ContactStatus, OpportunityStage, ProjectRef } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
+/** A text-color utility (not a size or alignment one). */
+const TEXT_COLOR = /^text-(?!\[\d|xs$|sm$|base$|lg$|\d*xl$|left$|center$|right$)/;
+
 export function Badge({ children, className, title }: { children: ReactNode; className?: string; title?: string }) {
+  // `cn` only joins classes and the stylesheet decides which color wins, so
+  // the default colors are dropped when the caller brings its own.
+  const own = className?.split(/\s+/) ?? [];
   return (
     <span
       title={title}
       className={cn(
         "inline-flex h-5 items-center gap-1 whitespace-nowrap rounded px-1.5 text-[11px] font-medium leading-none",
-        "bg-surface-2 text-muted",
+        !own.some((c) => c.startsWith("bg-")) && "bg-surface-2",
+        !own.some((c) => TEXT_COLOR.test(c)) && "text-muted",
         className,
       )}
     >

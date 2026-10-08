@@ -1,9 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Search, X } from "lucide-react";
+import { useEffect, useRef, useState, type ComponentType } from "react";
+import { createPortal } from "react-dom";
+import { Archive, ChevronLeft, ChevronRight, CircleEllipsis, Loader2, Search, X } from "lucide-react";
+import { TAB_TITLES } from "@/lib/mail/params";
 import { cn } from "@/lib/utils";
+import { useArchiveAll, type ArchiveAllScope } from "./archive-all";
 import { MAILBOX_ICONS, type MailboxEntry, type MailboxGroups } from "./mailboxes";
 
 const OPERATOR_HINT = "Search mail — from: to: subject: has:attachment is:unread label: after:";
@@ -40,7 +43,8 @@ export function DesktopSearch({ q, account, clearHref }: { q: string; account: s
 
 /**
  * iPhone Mail's list header: "‹ Mailboxes" bar (the title shrinks into it on
- * scroll), a large title, the search field, and the Mailboxes sheet.
+ * scroll) with the list's "…" menu (Archive all, in the Inbox), a large
+ * title, the search field, and the Mailboxes sheet.
  */
 export function PhoneMailHeader({
   title,
@@ -49,6 +53,7 @@ export function PhoneMailHeader({
   q,
   account,
   clearHref,
+  archiveAll = null,
 }: {
   title: string;
   subtitle?: string | null;
@@ -56,8 +61,11 @@ export function PhoneMailHeader({
   q: string;
   account: string | null;
   clearHref: string;
+  /** The Inbox (not search, not other views): the menu offers "Archive all". */
+  archiveAll?: ArchiveAllScope | null;
 }) {
   const [sheet, setSheet] = useState(false);
+  const archiver = useArchiveAll(archiveAll);
   const [collapsed, setCollapsed] = useState(false);
   const titleRef = useRef<HTMLHeadingElement>(null);
 
@@ -90,7 +98,20 @@ export function PhoneMailHeader({
           <span className={cn("max-w-[10rem] truncate text-[17px] font-semibold transition-opacity", collapsed ? "opacity-100" : "opacity-0")}>
             {title}
           </span>
-          <span />
+          {archiveAll || archiver.running ? (
+            <ListMenu
+              items={[
+                {
+                  label: archiver.running ? "Archiving…" : "Archive all",
+                  detail: archiveAll ? `${TAB_TITLES[archiveAll.tab]} · ${archiveAll.accountLabel}` : null,
+                  icon: archiver.running ? Spinner : Archive,
+                  run: archiver.start,
+                },
+              ]}
+            />
+          ) : (
+            <span />
+          )}
         </div>
       </div>
 
@@ -126,7 +147,113 @@ export function PhoneMailHeader({
       </div>
 
       {sheet ? <MailboxesSheet groups={groups} onClose={() => setSheet(false)} /> : null}
+      {archiver.dialog}
     </div>
+  );
+}
+
+interface ListMenuItem {
+  label: string;
+  detail?: string | null;
+  icon: ComponentType<{ className?: string; strokeWidth?: number }>;
+  run: () => void;
+}
+
+function Spinner({ className }: { className?: string }) {
+  return <Loader2 className={cn(className, "animate-spin")} />;
+}
+
+/**
+ * iOS pull-down menu behind the "…" button of the list header. Portaled (the
+ * collapsed header's backdrop blur would trap a fixed overlay), closed by a
+ * tap outside or Escape; focus goes to the first item and back to the button.
+ */
+function ListMenu({ items }: { items: ListMenuItem[] }) {
+  const [anchor, setAnchor] = useState<{ top: number; right: number } | null>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const open = anchor !== null;
+
+  useEffect(() => {
+    if (!open) return;
+    const button = buttonRef.current;
+    menuRef.current?.querySelector<HTMLElement>("[role='menuitem']")?.focus({ preventScroll: true });
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setAnchor(null);
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      if (button?.isConnected) button.focus({ preventScroll: true });
+    };
+  }, [open]);
+
+  function toggle() {
+    const rect = buttonRef.current?.getBoundingClientRect();
+    if (open || !rect) {
+      setAnchor(null);
+      return;
+    }
+    setAnchor({ top: rect.bottom + 4, right: Math.max(8, window.innerWidth - rect.right) });
+  }
+
+  return (
+    <>
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={toggle}
+        aria-label="More actions"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className="flex size-11 items-center justify-center justify-self-end text-blue-600 active:opacity-50 dark:text-blue-400"
+      >
+        <CircleEllipsis className="size-[26px]" strokeWidth={1.75} />
+      </button>
+      {anchor
+        ? createPortal(
+            <div className="fixed inset-0 z-[65]" onClick={() => setAnchor(null)}>
+              <div
+                ref={menuRef}
+                role="menu"
+                aria-label="List actions"
+                onClick={(e) => e.stopPropagation()}
+                style={{ top: anchor.top, right: anchor.right }}
+                className="absolute w-64 origin-top-right overflow-hidden rounded-[14px] bg-surface text-fg shadow-[0_12px_40px_rgba(0,0,0,0.22)] ring-1 ring-black/5 transition-[opacity,scale] duration-150 starting:scale-90 starting:opacity-0 dark:ring-white/10"
+              >
+                {items.map((item, i) => {
+                  const Icon = item.icon;
+                  return (
+                    <button
+                      key={item.label}
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setAnchor(null);
+                        item.run();
+                      }}
+                      className={cn(
+                        "flex min-h-11 w-full items-center gap-3 px-4 py-2.5 text-left outline-none active:bg-surface-2 focus-visible:bg-surface-2",
+                        i > 0 && "border-t border-border",
+                      )}
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[17px] leading-snug">{item.label}</span>
+                        {item.detail ? <span className="block truncate text-[13px] text-muted">{item.detail}</span> : null}
+                      </span>
+                      <Icon className="size-5 shrink-0" strokeWidth={1.75} />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+    </>
   );
 }
 

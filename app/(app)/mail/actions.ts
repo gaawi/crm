@@ -8,9 +8,11 @@ import { summarizeThread, writeEmailWithClaude, type ThreadSummaryResult } from 
 import { DraftError, proposeEmail } from "@/lib/ai/approvals";
 import { sql } from "@/lib/db";
 import { GmailApiError } from "@/lib/gmail/client";
-import { applyThreadAction, changeThreadLabels, MailError, sendMail, type ThreadAction } from "@/lib/mail/gmail";
+import { canModify } from "@/lib/gmail/oauth";
+import { applyThreadAction, archiveAllInbox, changeThreadLabels, MailError, sendMail, type ThreadAction } from "@/lib/mail/gmail";
+import { countInboxThreads } from "@/lib/mail/queries";
 import { likePattern } from "@/lib/queries/shared";
-import { AccountAuthError } from "@/lib/sync/accounts";
+import { AccountAuthError, getAccount, listAccounts } from "@/lib/sync/accounts";
 import { errorMessage } from "@/lib/utils";
 
 /**
@@ -60,6 +62,114 @@ export async function threadAction(
   if (options.refresh !== false) refresh();
   if (errors.length && !done) return { ok: false, error: errors[0] };
   return { ok: true, done };
+}
+
+const archiveAllSchema = z.object({
+  accountId: uuid.nullish(),
+  category: z.enum(["primary", "social", "promotions", "updates", "forums"]).nullish(),
+});
+
+/**
+ * Conversations in the Inbox (a tab, or every tab when `category` is null;
+ * one account or all) — the "Archive all N conversations…" confirmation.
+ */
+export async function inboxCountAction(input: z.input<typeof archiveAllSchema>): Promise<MailResult<{ count: number }>> {
+  await requireSession();
+  const parsed = archiveAllSchema.safeParse(input ?? {});
+  if (!parsed.success) return { ok: false, error: "Invalid request" };
+  return { ok: true, count: await countInboxThreads({ accountId: parsed.data.accountId ?? null, category: parsed.data.category ?? null }) };
+}
+
+export interface ArchiveAllPreview {
+  /** Conversations in the tab (`category`), counted in the accounts that will be archived. */
+  count: number;
+  /** The same across every inbox tab (equals `count` when no tab was given). */
+  total: number;
+  /** Accounts that will be archived. */
+  ready: number;
+  /** Accounts in scope that will be left out, as sentences ("Reconnect x in Settings to allow changes"). */
+  blocked: string[];
+}
+
+/**
+ * What "Archive all" would do, for its confirmation: the stored counts
+ * (as current as the last sync) for the tab and for the whole inbox, in the
+ * accounts archiveAllInbox will touch (active, allowed to change labels),
+ * and the accounts it would leave out. One action (actions run one at a time
+ * per client) so both counts arrive together.
+ */
+export async function archiveAllPreviewAction(input: z.input<typeof archiveAllSchema>): Promise<MailResult<ArchiveAllPreview>> {
+  await requireSession();
+  const parsed = archiveAllSchema.safeParse(input ?? {});
+  if (!parsed.success) return { ok: false, error: "Invalid request" };
+  const accountId = parsed.data.accountId ?? null;
+  const category = parsed.data.category ?? null;
+  try {
+    const records = accountId ? [await getAccount(accountId)] : await listAccounts();
+    const inScope = records.filter((a): a is NonNullable<typeof a> => a !== null && a.status !== "disconnected");
+    if (!inScope.length) return { ok: false, error: accountId ? "Gmail account not found" : "Connect a Gmail account in Settings first" };
+    // The same rule as archiveAllInbox: active and granted the modify scope.
+    const ready = inScope.filter((a) => a.status === "active" && canModify(a.scopes));
+    const blocked = inScope
+      .filter((a) => !ready.includes(a))
+      .map((a) => (a.status === "active" ? `Reconnect ${a.email} in Settings to allow changes` : `Reconnect ${a.email} in Settings`));
+    const counts = await Promise.all(
+      ready.map(async (a) => {
+        const [tab, all] = await Promise.all([
+          countInboxThreads({ accountId: a.id, category }),
+          category ? countInboxThreads({ accountId: a.id, category: null }) : null,
+        ]);
+        return { tab, all: all ?? tab };
+      }),
+    );
+    return {
+      ok: true,
+      count: counts.reduce((sum, c) => sum + c.tab, 0),
+      total: counts.reduce((sum, c) => sum + c.all, 0),
+      ready: ready.length,
+      blocked,
+    };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+/**
+ * "Archive all" in the Inbox: archives every conversation of the scope in
+ * Gmail (a tab — `category` — or the whole inbox; one account or every
+ * account that allows changes). Up to 20,000 messages per account per call:
+ * `more` = some are left, call again. Mail stays in All Mail and search.
+ */
+export async function archiveAllAction(
+  input: z.input<typeof archiveAllSchema>,
+): Promise<
+  MailResult<{
+    archived: number;
+    messages: number;
+    accounts: number;
+    more: boolean;
+    /** Accounts that failed or were left out (to reconnect), as sentences. */
+    warnings: string[];
+  }>
+> {
+  await requireSession();
+  const parsed = archiveAllSchema.safeParse(input ?? {});
+  if (!parsed.success) return { ok: false, error: "Invalid request" };
+  try {
+    const result = await archiveAllInbox({ accountId: parsed.data.accountId ?? null, category: parsed.data.category ?? null });
+    refresh();
+    return {
+      ok: true,
+      archived: result.archived,
+      messages: result.messages,
+      accounts: result.accounts,
+      more: result.more,
+      warnings: [...result.errors.map((e) => `${e.email}: ${e.error}`), ...result.skipped.map((s) => s.reason)],
+    };
+  } catch (error) {
+    refresh();
+    return failure(error);
+  }
 }
 
 export async function labelAction(accountId: string, threadId: string, add: string[], remove: string[]): Promise<MailResult> {
