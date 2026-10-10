@@ -192,3 +192,14 @@ html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
+
+/*
+ * Nothing may widen the page sideways: on iPhone a page even a few pixels
+ * wider than the screen pans left when a field is focused. `clip` (unlike
+ * `hidden`) keeps position: sticky working.
+ */
+html,
+body {
+  overflow-x: clip;
+  max-width: 100%;
+}
