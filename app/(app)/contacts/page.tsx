@@ -1,11 +1,12 @@
 import Link from "next/link";
+import { ContactAvatar } from "@/components/contact-avatar";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { Archive, Check, ChevronLeft, ChevronRight, SlidersHorizontal, X } from "lucide-react";
 import { ProjectBadge, ProjectDot, StatusBadge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
 import { Select } from "@/components/ui/field";
-import { Avatar, EmptyState, Notice, PageHeader } from "@/components/ui/layout";
+import { EmptyState, Notice, PageHeader } from "@/components/ui/layout";
 import { formatDateTime, formatDue, formatRelative, todayIn } from "@/lib/dates";
 import { env } from "@/lib/env";
 import { listContacts, listTags, type ContactFilters } from "@/lib/queries/contacts";
@@ -345,7 +346,7 @@ function ContactListRow({
 
   return (
     <li className="relative flex min-h-[60px] items-center gap-3 px-4 py-2.5 active:bg-surface-2 md:min-h-0 md:hover:bg-surface-2/40 md:active:bg-surface-2/40">
-      <Avatar name={c.displayName} />
+      <ContactAvatar contact={c} />
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-1.5">
           <Link

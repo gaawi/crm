@@ -124,6 +124,7 @@ export async function getSheetRows(projectId: string, options: { ids?: string[] 
              'email', e.email,
              'phone', c.phone,
              'whatsapp', c.whatsapp,
+             'photoUrl', c.photo_url,
              'lastContactedAt', c.last_contacted_at,
              'lastInboundAt', c.last_inbound_at,
              'lastOutboundAt', c.last_outbound_at,
@@ -196,7 +197,7 @@ export interface SheetSettings {
 /** Patch semantics. Existing rows keep their currency; new rows use the sheet's. */
 export async function updateSheetSettings(id: string, patch: SheetSettings): Promise<void> {
   const [sheet] = await sql`select 1 from projects where id = ${id} and sheet`;
-  if (!sheet) throw new Error("Booking sheet not found");
+  if (!sheet) throw new Error("Campaign not found");
   const values: Record<string, unknown> = {};
   if (patch.currency !== undefined) {
     const currency = patch.currency.trim().toUpperCase();
@@ -296,9 +297,9 @@ function organizationKindFor(kind: OpportunityKind): OrganizationKind {
 export async function addSheetRow(input: NewSheetRow): Promise<string> {
   const [sheet] = await sql<{ id: string; currency: string; phonePrefix: string | null }[]>`
     select id, currency, phone_prefix from projects where id = ${input.projectId} and sheet`;
-  if (!sheet) throw new Error("Booking sheet not found");
+  if (!sheet) throw new Error("Campaign not found");
   const orgName = input.organization.replace(/\s+/g, " ").trim();
-  if (!orgName) throw new Error("Name the venue or presenter.");
+  if (!orgName) throw new Error("Name the organization.");
   const kind: OpportunityKind = input.kind ?? "booking";
   checkGoalValues({ kind, nextAction: input.nextAction });
 
@@ -578,7 +579,7 @@ export async function advanceSheetStages(projectId?: string | null): Promise<num
  */
 export async function importSheetRows(projectId: string, text: string): Promise<ImportResult> {
   const [sheet] = await sql`select 1 from projects where id = ${projectId} and sheet`;
-  if (!sheet) throw new Error("Booking sheet not found");
+  if (!sheet) throw new Error("Campaign not found");
   const parsed = parseSheetImport(text);
   const errors = [...parsed.errors];
   let created = 0;
@@ -596,7 +597,7 @@ export async function importSheetRows(projectId: string, text: string): Promise<
   for (const { line, ...row } of parsed.rows) {
     const key = `${row.organization.replace(/\s+/g, " ").trim().toLowerCase()}\n${row.email ? normalizeEmail(row.email) : ""}`;
     if (seen.has(key)) {
-      errors.push({ line, message: `${row.organization}: already in this sheet.` });
+      errors.push({ line, message: `${row.organization}: already in this campaign.` });
       skipped++;
       continue;
     }

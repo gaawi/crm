@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useId, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { celebrateSend, flourishOrigin } from "@/components/brand/send-flourish";
+import { VelaLoader } from "@/components/brand/vela-logo";
 import { CircleCheck, Loader2, Pause, Play, Send, ShieldCheck, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox, Field, Input, Select } from "@/components/ui/field";
@@ -186,6 +188,8 @@ export function CampaignPanel({
 
   const approve = () => {
     if (formError || !checked.ok) return;
+    // Where the "sent" flourish starts: the confirm button, when the browser focused it.
+    const origin = flourishOrigin(document.activeElement instanceof HTMLButtonElement ? document.activeElement : null);
     const next = estimate.next ? whenPhrase(roundUpToTick(estimate.next), settings.timezone, now) : null;
     run(
       "approve",
@@ -197,6 +201,7 @@ export function CampaignPanel({
         return startCampaignAction(c.id, checked.settings);
       },
       `Approved. ${plural(approvable, "email")} queued${next ? ` — the first one goes out ${next}` : ""}.`,
+      () => celebrateSend(origin),
     );
   };
 
@@ -613,7 +618,7 @@ function ApproveSheet({
             Cancel
           </Button>
           <Button variant="primary" onClick={onConfirm} disabled={pending}>
-            {pending ? <Loader2 className="size-4 animate-spin" /> : <ShieldCheck className="size-4" strokeWidth={2} />}
+            {pending ? <VelaLoader size={16} label="Starting" /> : <ShieldCheck className="size-4" strokeWidth={2} />}
             {label}
           </Button>
         </>
@@ -638,7 +643,7 @@ function ApproveSheet({
         {error ? <p className="text-danger">{error}</p> : null}
         {/* Phones: a full-width button as well as the header's “Approve”. */}
         <Button variant="primary" className={cn("w-full md:hidden")} onClick={onConfirm} disabled={pending}>
-          {pending ? <Loader2 className="size-4 animate-spin" /> : <ShieldCheck className="size-4" strokeWidth={2} />}
+          {pending ? <VelaLoader size={16} label="Starting" /> : <ShieldCheck className="size-4" strokeWidth={2} />}
           {label}
         </Button>
       </div>

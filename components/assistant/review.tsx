@@ -4,6 +4,9 @@ import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
 import { CalendarClock, Check, ChevronDown, ListTodo, Mail, MessageCircle, MessageSquareText, Pencil, Phone, Send, Trash2, X } from "lucide-react";
 import { CallButton, WhatsAppButton } from "@/components/booking/phone-actions";
+import { VelaLoader } from "@/components/brand/vela-logo";
+import { celebrateSend, flourishOrigin } from "@/components/brand/send-flourish";
+import { ContactAvatar } from "@/components/contact-avatar";
 import { OrgProfileLine } from "@/components/organizations/profile-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -55,7 +58,7 @@ function useRun() {
 }
 
 /** Postpone with a date (default a week from today). */
-function PostponeForm({ today, onSubmit, onCancel, pending }: { today: string; onSubmit: (date: string) => void; onCancel: () => void; pending: boolean }) {
+export function PostponeForm({ today, onSubmit, onCancel, pending }: { today: string; onSubmit: (date: string) => void; onCancel: () => void; pending: boolean }) {
   const [date, setDate] = useState(addDays(today, DEFAULT_POSTPONE_DAYS));
   return (
     <form
@@ -108,13 +111,14 @@ export function AssistantDraftCard({
     return () => clearTimeout(timer);
   }, [armed]);
 
-  const onApprove = () => {
+  const onApprove = (event: React.MouseEvent<HTMLButtonElement>) => {
     if (!armed) {
       setArmed(true);
       return;
     }
     setArmed(false);
-    run(() => approveAssistantDraftAction(draft.id));
+    const origin = flourishOrigin(event.currentTarget);
+    run(() => approveAssistantDraftAction(draft.id), () => celebrateSend(origin));
   };
 
   const to = draft.contact?.displayName ?? draft.to.join(", ");
@@ -122,7 +126,7 @@ export function AssistantDraftCard({
   return (
     <article data-testid="assistant-draft" className="min-w-0 overflow-hidden rounded-xl border border-border bg-surface md:rounded-lg">
       <header className="flex flex-wrap items-center gap-1.5 border-b border-border px-4 py-3">
-        <Mail className="size-4 shrink-0 text-subtle" aria-hidden />
+        {draft.contact ? <ContactAvatar contact={draft.contact} size="sm" className="mr-1" /> : <Mail className="size-4 shrink-0 text-subtle" aria-hidden />}
         <span className="min-w-0 truncate text-[15px] font-medium md:text-sm">
           {draft.contact ? (
             <Link href={`/contacts/${draft.contact.id}`} className="hover:underline">
@@ -201,6 +205,7 @@ export function AssistantDraftCard({
               onChange={(e) => setComment(e.target.value)}
               rows={3}
               placeholder="What should change? (e.g. shorter, mention the October dates)"
+              autoFocus
               aria-label="Requested changes"
               required
             />
@@ -228,14 +233,15 @@ export function AssistantDraftCard({
 
         {mode === "view" ? (
           <div className="grid grid-cols-2 gap-2 md:flex md:flex-wrap md:items-center">
-            <Button variant="primary" onClick={onApprove} disabled={busy} className="col-span-2 md:order-last md:ml-auto">
-              <Send className="size-4" /> {draft.status === "sending" ? "Sending…" : armed ? "Tap again to send" : "Approve & send"}
+            <Button variant="primary" onClick={onApprove} disabled={busy} className={cn("col-span-2 md:min-w-[11rem]", armed && "bg-success text-white")}>
+              {draft.status === "sending" || (pending && armed) ? <VelaLoader size={16} label="Sending" /> : <Send className="size-4" />}{" "}
+              {draft.status === "sending" || (pending && armed) ? "Sending…" : armed ? "Tap again to send" : "Approve & send"}
+            </Button>
+            <Button onClick={() => setMode("changes")} disabled={busy}>
+              <MessageSquareText className="size-4 shrink-0" /> Request changes
             </Button>
             <Button onClick={() => setMode("edit")} disabled={busy}>
               <Pencil className="size-4" /> Edit
-            </Button>
-            <Button onClick={() => setMode("changes")} disabled={busy}>
-              <MessageSquareText className="size-4" /> Request changes
             </Button>
             <Button onClick={() => setMode("postpone")} disabled={busy}>
               <CalendarClock className="size-4" /> Postpone
@@ -262,12 +268,21 @@ export function AssistantActionRow({ action, today, showProject = true }: { acti
   return (
     <li data-testid="assistant-action" className="flex flex-col gap-2 px-4 py-3">
       <div className="flex items-start gap-2.5">
-        <Icon className="mt-0.5 size-4 shrink-0 text-subtle" aria-hidden />
+        {action.contact ? (
+          <span className="relative shrink-0" title={action.contact.displayName}>
+            <ContactAvatar contact={action.contact} size="sm" />
+            <span className="absolute -bottom-0.5 -right-0.5 flex size-4 items-center justify-center rounded-full border border-border bg-surface">
+              <Icon className="size-2.5 text-muted" aria-hidden />
+            </span>
+          </span>
+        ) : (
+          <Icon className="mt-0.5 size-4 shrink-0 text-subtle" aria-hidden />
+        )}
         <div className="min-w-0 flex-1">
           <p className={cn("text-[15px] font-medium md:text-sm", closed && "text-muted line-through decoration-subtle/60")}>{action.title}</p>
           {action.reason ? <p className="text-sm text-muted md:text-xs">{action.reason}</p> : null}
           <p className="mt-0.5 truncate text-xs text-subtle">
-            {[showProject ? action.projectName : null, action.rowName, action.status === "postponed" && action.postponedUntil ? `Until ${action.postponedUntil}` : null]
+            {[showProject ? action.projectName : null, action.rowName, action.contact && action.contact.displayName !== action.rowName ? action.contact.displayName : null, action.status === "postponed" && action.postponedUntil ? `Until ${action.postponedUntil}` : null]
               .filter(Boolean)
               .join(" · ")}
           </p>

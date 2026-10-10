@@ -35,6 +35,13 @@ const STRICT_CSP = csp("'self' data: blob:");
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   devIndicators: false,
+  // Booking sheets became Campaigns (/campaigns). Old links and bookmarks keep working.
+  async redirects() {
+    return [
+      { source: "/booking", destination: "/campaigns", permanent: true },
+      { source: "/booking/:path*", destination: "/campaigns/:path*", permanent: true },
+    ];
+  },
   async headers() {
     return [
       {

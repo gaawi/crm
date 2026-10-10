@@ -5,6 +5,8 @@ import { DraftCard } from "@/components/draft-card";
 import { EmptyState, PageHeader, SectionTitle } from "@/components/ui/layout";
 import { heldBackCounts, listCampaigns, listCampaignSummaries } from "@/lib/campaigns/campaigns";
 import { env } from "@/lib/env";
+import { ASSISTANT_REVIEW_TIMES } from "@/lib/assistant/types";
+import { releasePostponed } from "@/lib/queries/assistant";
 import { listDrafts, recoverStaleDrafts } from "@/lib/queries/drafts";
 import { getSettings } from "@/lib/queries/settings";
 import { CampaignCard } from "./campaign-card";
@@ -17,6 +19,8 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 export default async function ApprovalsPage() {
   const timezone = env.timezone;
   await recoverStaleDrafts();
+  // Postponed emails whose day has come are back in the list.
+  await releasePostponed();
   const now = new Date();
   // Campaign emails are listed inside their campaign, standalone emails below.
   const [campaigns, open, recent, autopilot, finished, waitingVersion] = await Promise.all([
@@ -85,8 +89,9 @@ export default async function ApprovalsPage() {
                     <span className="text-muted"> · {d.subject}</span>
                   </span>
                   {d.revisionRequest ? <span className="block text-[13px] text-muted md:text-xs">You asked: “{d.revisionRequest}”</span> : null}
+                  <span className="block text-[13px] text-subtle md:text-xs">Claude rewrites it in the next review ({ASSISTANT_REVIEW_TIMES}).</span>
                 </span>
-                <span className="shrink-0 text-xs text-subtle">Waiting for new version</span>
+
               </li>
             ))}
           </ul>

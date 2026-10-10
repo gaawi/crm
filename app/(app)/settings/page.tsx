@@ -108,7 +108,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
 
         <Card
           title="Gmail accounts"
-          description="Every email sent or received in these mailboxes is synced to the CRM."
+          description="Every email sent or received in these mailboxes is synced to Vela."
           actions={
             <ButtonLink href="/api/google/connect" variant="primary" size="sm" prefetch={false}>
               <Plus className="size-4" /> Connect
@@ -202,7 +202,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
                         {removing === account.id ? (
                           <form action={removeAccount.bind(null, account.id)} className="flex flex-col gap-2">
                             <label className="flex items-center gap-2 text-sm">
-                              <Checkbox name="confirm" value="yes" /> Delete this account and all its emails from the CRM
+                              <Checkbox name="confirm" value="yes" /> Delete this account and all its emails from Vela
                             </label>
                             <SubmitButton variant="danger" pendingLabel="Removing…">
                               Remove permanently

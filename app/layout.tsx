@@ -2,12 +2,12 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: { default: "CRM", template: "%s · CRM" },
-  description: "Contacts, email history and follow-ups across Gmail accounts.",
+  title: { default: "Vela", template: "%s · Vela" },
+  description: "Contacts, campaigns, email history and follow-ups across Gmail accounts.",
   robots: { index: false, follow: false },
-  applicationName: "CRM",
+  applicationName: "Vela",
   // Add to Home Screen on iPhone → full-screen app with its own icon.
-  appleWebApp: { capable: true, title: "CRM", statusBarStyle: "default" },
+  appleWebApp: { capable: true, title: "Vela", statusBarStyle: "default" },
   formatDetection: { telephone: false, email: false, address: false },
 };
 

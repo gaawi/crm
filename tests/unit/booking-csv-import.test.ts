@@ -95,7 +95,7 @@ describe("parseSheetImport", () => {
   it("keeps what it cannot read in the notes and reports rows without a venue", () => {
     const text = "Organization,Email,Status,Fee,Follow up,Phone\n,a@b.es,,,,\nSala X,not-an-email,Maybe later,a convenir,next week,call me\n";
     const result = parseSheetImport(text);
-    expect(result.errors).toEqual([{ line: 2, message: "No venue / presenter name." }]);
+    expect(result.errors).toEqual([{ line: 2, message: "No organization name." }]);
     expect(result.rows).toHaveLength(1);
     expect(result.rows[0].email).toBeUndefined();
     expect(result.rows[0].stage).toBeUndefined();

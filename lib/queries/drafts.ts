@@ -16,14 +16,19 @@ const draftColumns = () => sql`
     'id', c.id,
     'displayName', coalesce(nullif(btrim(c.name), ''),
       (select ce.email from contact_emails ce where ce.contact_id = c.id order by ce.is_primary desc, ce.created_at limit 1),
-      'Unknown')
+      'Unknown'),
+    'photoUrl', c.photo_url
   ) end as contact,
   d.opportunity_id, d.campaign_id, d.reply_to_message_id, rm.subject as reply_to_subject,
   d.purpose, d.origin, d.status,
   d.to_emails as "to", d.cc_emails as cc, d.subject, d.body_text as body, d.rationale, d.assistant_reason, d.revision_request, d.postponed_until::text as postponed_until, d.revisions,
   d.gmail_draft_id, d.gmail_thread_id, d.error, d.created_at, d.updated_at, d.sent_at,
   case when dorg.id is null then null
-       else json_build_object('id', dorg.id, 'name', dorg.name, 'website', dorg.website, 'city', dorg.city, 'profile', dorg.profile) end as organization
+       else json_build_object('id', dorg.id, 'name', dorg.name, 'website', dorg.website, 'city', dorg.city, 'profile', dorg.profile) end as organization,
+  coalesce(
+    (select aa.project_id from assistant_actions aa where aa.draft_id = d.id limit 1),
+    (select aop.project_id from opportunities aop join projects ap on ap.id = aop.project_id and ap.sheet where aop.id = d.opportunity_id)
+  ) as assistant_project_id
 `;
 
 const draftJoins = () => sql`

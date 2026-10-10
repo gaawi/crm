@@ -1,17 +1,23 @@
 "use client";
 
 import Link from "next/link";
+import { ContactAvatar } from "@/components/contact-avatar";
 import { useClaudeEnabled } from "@/components/features";
 import { useEffect, useState, useTransition } from "react";
-import { Check, FileText, Loader2, Pencil, Send, Sparkles, Trash2 } from "lucide-react";
+import { CalendarClock, Check, FileText, Hourglass, MessageSquareText, Pencil, Send, Sparkles, Trash2 } from "lucide-react";
+import { PostponeForm } from "@/components/assistant/review";
+import { VelaLoader } from "@/components/brand/vela-logo";
+import { celebrateSend, flourishOrigin, type FlourishOrigin } from "@/components/brand/send-flourish";
 import { OrgProfileLine } from "@/components/organizations/profile-card";
 import { AccountBadge, Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/field";
 import { Notice } from "@/components/ui/layout";
 import { approveDraftAction, discardDraftAction, reviseDraftAction, saveDraftEditsAction, type ActionResult } from "@/lib/ai/actions";
+import { postponeAssistantDraftAction, requestAssistantChangesAction } from "@/lib/assistant/actions";
+import { ASSISTANT_REVIEW_TIMES } from "@/lib/assistant/types";
 import { isTemplateRationale } from "@/lib/booking/templates";
-import { formatRelative } from "@/lib/dates";
+import { formatDate, formatRelative, todayIn } from "@/lib/dates";
 import type { EmailDraft } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -44,13 +50,27 @@ export function DraftCard({
   compact?: boolean;
 }) {
   const claude = useClaudeEnabled();
-  const [mode, setMode] = useState<"view" | "edit" | "revise">("view");
+  const [mode, setMode] = useState<"view" | "edit" | "revise" | "changes" | "postpone">("view");
   const [armed, setArmed] = useState(false);
   const [note, setNote] = useState("");
+  const [comment, setComment] = useState("");
   const [result, setResult] = useState<ActionResult | null>(null);
   const [pending, startTransition] = useTransition();
   const busy = pending || draft.status === "sending" || draft.status === "revising";
   const closed = draft.status === "sent" || draft.status === "discarded";
+  /**
+   * "Request changes" and "Postpone" go through the daily campaign assistant:
+   * its review (lib/assistant/context.ts → POST /api/assistant-agent/proposals
+   * "revisions") only rewrites emails tied to a campaign — a campaign row's
+   * email or one of its actions (assistantProjectId). Other drafts (Claude's
+   * replies, the autopilot's, even origin "assistant" ones without a
+   * campaign) would wait forever, so they keep "Change" (Claude rewrites
+   * right away) instead. Emails of an Approvals campaign (campaignId) follow
+   * that campaign's approval and pace, so they are left out too.
+   */
+  const assistantFlow = Boolean(draft.assistantProjectId) && !draft.campaignId;
+  const waitingVersion = draft.status === "changes_requested";
+  const postponed = draft.status === "postponed";
 
   useEffect(() => {
     if (!armed) return;
@@ -65,18 +85,20 @@ export function DraftCard({
       if (outcome.ok) after?.();
     });
 
-  const onApprove = () => {
+  const onApprove = (event: React.MouseEvent<HTMLButtonElement>) => {
     if (!armed) {
       setArmed(true);
       return;
     }
     setArmed(false);
-    run(() => approveDraftAction(draft.id));
+    const origin: FlourishOrigin | null = flourishOrigin(event.currentTarget);
+    run(() => approveDraftAction(draft.id), () => celebrateSend(origin));
   };
 
   return (
     <article id={`draft-${draft.id}`} className="min-w-0 overflow-hidden rounded-xl border border-border bg-surface md:rounded-lg">
       <header className="flex flex-wrap items-center gap-1.5 border-b border-border px-4 py-3">
+        {draft.contact ? <ContactAvatar contact={draft.contact} size="sm" className="mr-1" /> : null}
         <span className="min-w-0 truncate text-[15px] font-medium md:text-sm">
           {draft.contact ? (
             <Link href={`/contacts/${draft.contact.id}`} className="hover:underline">
@@ -92,7 +114,7 @@ export function DraftCard({
             Queued
           </Badge>
         ) : null}
-        {/* Prepared from a booking-sheet template: your words, not Claude's. */}
+        {/* Prepared from a campaign template: your words, not Claude's. */}
         {draft.assistantReason ? (
           <Badge className="font-normal" title="Prepared by the daily campaign assistant">
             <Sparkles className="size-3" /> Campaign assistant
@@ -197,7 +219,7 @@ export function DraftCard({
               <Button type="submit" variant="primary" disabled={pending || !note.trim()}>
                 {pending ? (
                   <>
-                    <Loader2 className="size-4 animate-spin" /> Rewriting…
+                    <VelaLoader size={16} label="Rewriting" /> Rewriting…
                   </>
                 ) : (
                   "Rewrite"
@@ -205,6 +227,49 @@ export function DraftCard({
               </Button>
             </div>
           </form>
+        ) : null}
+
+        {mode === "changes" ? (
+          <form
+            className="flex flex-col gap-2 rounded-lg bg-surface-2 p-3"
+            onSubmit={(e) => {
+              e.preventDefault();
+              run(() => requestAssistantChangesAction(draft.id, comment), () => {
+                setComment("");
+                setMode("view");
+              });
+            }}
+          >
+            <label htmlFor={`changes-${draft.id}`} className="text-xs font-medium text-muted">
+              What should change?
+            </label>
+            <Textarea
+              id={`changes-${draft.id}`}
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              rows={3}
+              placeholder="Shorter, mention the October dates, write it in Spanish…"
+              autoFocus
+              required
+            />
+            <div className="grid grid-cols-2 gap-2 md:flex md:justify-end">
+              <Button type="button" variant="ghost" onClick={() => setMode("view")} disabled={pending}>
+                Cancel
+              </Button>
+              <Button type="submit" variant="primary" disabled={pending || !comment.trim()}>
+                Send to assistant
+              </Button>
+            </div>
+          </form>
+        ) : null}
+
+        {mode === "postpone" ? (
+          <PostponeForm
+            today={todayIn(timezone)}
+            pending={pending}
+            onCancel={() => setMode("view")}
+            onSubmit={(date) => run(() => postponeAssistantDraftAction(draft.id, date), () => setMode("view"))}
+          />
         ) : null}
 
         {result && !result.ok ? <p className="text-sm text-danger">{result.error}</p> : null}
@@ -215,17 +280,31 @@ export function DraftCard({
         <footer className="border-t border-border px-4 py-3 text-sm text-muted">
           {draft.status === "sent" ? `Sent ${formatRelative(draft.sentAt, timezone)}` : "Discarded"}
         </footer>
+      ) : waitingVersion ? (
+        <footer className="flex items-start gap-2.5 border-t border-border px-4 py-3 text-sm" data-testid="waiting-version">
+          <Hourglass className="mt-0.5 size-4 shrink-0 text-subtle" aria-hidden />
+          <div className="min-w-0">
+            <p className="font-medium">Waiting for new version</p>
+            <p className="text-[13px] text-muted md:text-xs">Claude rewrites it in the next review ({ASSISTANT_REVIEW_TIMES}).</p>
+            {draft.revisionRequest ? <p className="mt-1 text-[13px] text-muted md:text-xs">You asked: “{draft.revisionRequest}”</p> : null}
+          </div>
+        </footer>
+      ) : postponed && mode === "view" ? (
+        <footer className="flex items-center gap-2.5 border-t border-border px-4 py-3 text-sm text-muted">
+          <CalendarClock className="size-4 shrink-0 text-subtle" aria-hidden />
+          <span className="min-w-0 flex-1">Postponed{draft.postponedUntil ? ` until ${formatDate(draft.postponedUntil, timezone)}` : ""}: it comes back by itself that day.</span>
+        </footer>
       ) : mode === "view" ? (
-        <footer className="grid grid-cols-3 gap-2 border-t border-border px-4 py-3 md:flex md:items-center">
+        <footer className="grid grid-cols-2 gap-2 border-t border-border px-4 py-3 md:flex md:flex-wrap md:items-center">
           <Button
             variant="primary"
-            className={cn("col-span-3 md:order-last md:ml-auto", armed && "bg-success text-white")}
+            className={cn("col-span-2 md:order-first md:min-w-[11rem]", armed && "bg-success text-white")}
             onClick={onApprove}
             disabled={busy}
           >
             {draft.status === "sending" || (pending && armed) ? (
               <>
-                <Loader2 className="size-4 animate-spin" /> Sending…
+                <VelaLoader size={16} label="Sending" className="text-current" /> Sending…
               </>
             ) : armed ? (
               "Tap again to send"
@@ -240,7 +319,11 @@ export function DraftCard({
               </>
             )}
           </Button>
-          {claude ? (
+          {assistantFlow ? (
+            <Button onClick={() => setMode("changes")} disabled={busy}>
+              <MessageSquareText className="size-4 shrink-0" /> Request changes
+            </Button>
+          ) : claude ? (
             <Button onClick={() => setMode("revise")} disabled={busy}>
               <Sparkles className="size-4" /> Change
             </Button>
@@ -248,7 +331,17 @@ export function DraftCard({
           <Button onClick={() => setMode("edit")} disabled={busy}>
             <Pencil className="size-4" /> Edit
           </Button>
-          <Button variant="danger" onClick={() => run(() => discardDraftAction(draft.id))} disabled={busy}>
+          {assistantFlow ? (
+            <Button onClick={() => setMode("postpone")} disabled={busy}>
+              <CalendarClock className="size-4" /> Postpone
+            </Button>
+          ) : null}
+          <Button
+            variant="danger"
+            className={!assistantFlow && claude ? "col-span-2 md:col-span-1" : undefined}
+            onClick={() => run(() => discardDraftAction(draft.id))}
+            disabled={busy}
+          >
             <Trash2 className="size-4" /> Discard
           </Button>
         </footer>

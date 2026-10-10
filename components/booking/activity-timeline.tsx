@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { ArrowDownLeft, ArrowRightLeft, ArrowUpRight, CircleCheck, CircleX, Trash2 } from "lucide-react";
 import { contactTimelineAction, deleteActivityAction } from "@/app/(app)/activity-actions";
-import { updateCellAction, timelineAction } from "@/app/(app)/booking/actions";
+import { updateCellAction, timelineAction } from "@/app/(app)/campaigns/actions";
 import { iconButtonClass } from "@/app/(app)/_components/ui";
 import type { Timeline, TimelineItem } from "@/lib/booking/types";
 import { ACTIVITY_KINDS, stageLabel } from "@/lib/constants";

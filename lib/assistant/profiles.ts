@@ -95,7 +95,7 @@ export async function applyProfiles(body: unknown, now: Date = new Date()): Prom
 }
 
 export async function listProfilesForProject(projectId: string | null, missingOnly: boolean) {
-  if (!projectId || !z.guid().safeParse(projectId).success) throw new ProfilesError("Pass ?projectId=<uuid> (a booking sheet).", 400);
+  if (!projectId || !z.guid().safeParse(projectId).success) throw new ProfilesError("Pass ?projectId=<uuid> (a campaign).", 400);
   const list = await listProjectOrganizations(projectId, { missingOnly });
   if (!list) throw new ProfilesError("Project not found.", 404);
   return {

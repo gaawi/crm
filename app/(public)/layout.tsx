@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { VelaMark } from "@/components/brand/vela-logo";
 import { APP_NAME } from "@/lib/legal";
 
 /** Public pages (no sign-in): the home page and privacy policy for Google's consent screen. */
@@ -7,7 +8,7 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
     <div className="mx-auto flex min-h-dvh w-full max-w-2xl flex-col px-5 pb-[calc(env(safe-area-inset-bottom)+2rem)] pt-[calc(env(safe-area-inset-top)+2rem)]">
       <header className="mb-8 flex items-center justify-between gap-3">
         <Link href="/about" className="flex items-center gap-2 text-sm font-semibold tracking-tight">
-          <span className="inline-block size-5 rounded-md bg-accent" aria-hidden />
+          <VelaMark size={20} />
           {APP_NAME}
         </Link>
         <Link href="/login" className="text-sm text-muted hover:text-fg">

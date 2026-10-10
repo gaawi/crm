@@ -34,7 +34,7 @@ vi.mock("@/lib/auth", () => ({
 }));
 
 import { sql } from "@/lib/db";
-import { GET as exportSheet } from "@/app/(app)/booking/[id]/export/route";
+import { GET as exportSheet } from "@/app/(app)/campaigns/[id]/export/route";
 import { suggestTemplate } from "@/lib/booking/templates";
 import { proposeEmail } from "@/lib/ai/approvals";
 import { addActivity, deleteActivity, listActivities, logCall, timelineForContact, timelineForRow } from "@/lib/queries/activities";
@@ -381,7 +381,7 @@ describe.skipIf(process.env.SKIP_DB_TESTS === "1")("booking tracker", () => {
       origin: "owner",
       purpose: "outreach",
       subject: "Propuesta de colaboración — Valdediós",
-      rationale: 'Booking sheet "Festival ADAR 2026" · template "Propuesta"',
+      rationale: 'Campaign "Festival ADAR 2026" · template "Propuesta"',
       replyToMessageId: null,
       status: "proposed",
     });
@@ -422,9 +422,9 @@ describe.skipIf(process.env.SKIP_DB_TESTS === "1")("booking tracker", () => {
     expect(result.created).toBe(2);
     expect(result.skipped).toBe(3);
     expect(result.errors).toEqual([
-      { line: 3, message: "No venue / presenter name." },
+      { line: 3, message: "No organization name." },
       { line: 4, message: "Llanes: Invalid phone number: 1234567890123456" },
-      { line: 5, message: "Teatro Riera: already in this sheet." },
+      { line: 5, message: "Teatro Riera: already in this campaign." },
     ]);
     const rows = await getSheetRows(sheet);
     expect(rows.find((r) => r.title === "Valdediós")).toMatchObject({
@@ -483,7 +483,7 @@ describe.skipIf(process.env.SKIP_DB_TESTS === "1")("booking tracker", () => {
     const sheet = await createSheet({ name: "Export", phonePrefix: "+34" });
     const row = await addSheetRow({ projectId: sheet, organization: "Sala", contactName: "Ana", phone: "612345678", section: "Norte", spaces: "Sala 1", returning: true });
     await logCall({ opportunityId: row, outcome: "reached", body: "=cmd() interested", occurredAt: new Date("2026-09-28T10:00:00Z") });
-    const response = await exportSheet(new Request("http://localhost/booking/x/export"), { params: Promise.resolve({ id: sheet }) } as never);
+    const response = await exportSheet(new Request("http://localhost/campaigns/x/export"), { params: Promise.resolve({ id: sheet }) } as never);
     const text = await response.text();
     const [header, line] = text.replace(/^﻿/, "").trim().split("\r\n");
     expect(header).toContain('"Section","City","Spaces","Returning","Contact","Role","Email","Phone","WhatsApp"');

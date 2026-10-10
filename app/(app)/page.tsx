@@ -1,9 +1,10 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { ArrowDownLeft, ArrowUpRight, Check, Clock, Sparkles } from "lucide-react";
-import { ReviewInbox } from "@/components/assistant/review-inbox";
+import { loadReviewInbox, ReviewInbox } from "@/components/assistant/review-inbox";
 import { PhoneActions } from "@/components/booking/phone-actions";
 import { ContactRow, RowList } from "@/components/contact-row";
+import { CampaignFilter } from "@/components/today/campaign-filter";
 import { NextActionIcon } from "@/components/goals";
 import { StageBadge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
@@ -15,9 +16,12 @@ import { env } from "@/lib/env";
 import { getFollowUps, getUpcomingFollowUps } from "@/lib/queries/followups";
 import { recentActivity } from "@/lib/queries/messages";
 import { getOverviewCounts } from "@/lib/queries/stats";
+import { contactCampaigns, listCampaignRefs } from "@/lib/queries/today";
+import { campaignOptions, countByCampaign, inCampaign, TODAY_CAMPAIGN_PARAM } from "@/lib/today/campaign-filter";
 import type { ContactSummary } from "@/lib/types";
 import { cn, truncate } from "@/lib/utils";
 import { completeFollowUp, completeOpportunityFollowUp, markReplyDone, snoozeFollowUp } from "./actions";
+import { param } from "./_lib/url";
 
 export const metadata: Metadata = { title: "Today" };
 
@@ -49,15 +53,50 @@ function ContactPhoneActions({ contact, timezone }: { contact: ContactSummary; t
   );
 }
 
-export default async function TodayPage() {
+export default async function TodayPage({ searchParams }: PageProps<"/">) {
   const timezone = env.timezone;
   const today = todayIn(timezone);
-  const [followUps, upcoming, activity, counts] = await Promise.all([
+  const [allFollowUps, allUpcoming, allActivity, counts, allReview, campaigns] = await Promise.all([
     getFollowUps({ today, limit: 30 }),
     getUpcomingFollowUps({ today, days: 7, limit: 8 }),
     recentActivity(12),
     getOverviewCounts(),
+    loadReviewInbox(today),
+    listCampaignRefs(),
   ]);
+
+  // Filter by campaign (?campaign=<id>): each item knows its campaigns; items outside every campaign show under All only.
+  const requested = param(await searchParams, TODAY_CAMPAIGN_PARAM, 40);
+  const campaign = campaigns.find((c) => c.id === requested) ?? null;
+  const selected = campaign?.id ?? null;
+  const memberships = await contactCampaigns([
+    ...[...allFollowUps.due, ...allFollowUps.needsReply, ...allFollowUps.awaitingReply, ...allUpcoming].map((c) => c.id),
+    ...allActivity.flatMap((m) => (m.contact ? [m.contact.id] : [])),
+  ]);
+  const ofContact = (id: string | undefined) => (id ? memberships.get(id) : undefined);
+  const ofOpportunity = (o: { project: { id: string; sheet?: boolean } | null }) => (o.project?.sheet ? [o.project.id] : undefined);
+  const todayItems = [
+    ...allReview.drafts.map((d) => [d.projectId]),
+    ...allReview.actions.map((a) => [a.projectId]),
+    ...allFollowUps.due.map((c) => ofContact(c.id)),
+    ...allFollowUps.opportunities.map(ofOpportunity),
+    ...allFollowUps.needsReply.map((c) => ofContact(c.id)),
+    ...allFollowUps.awaitingReply.map((c) => ofContact(c.id)),
+  ];
+  const options = campaignOptions(campaigns, countByCampaign(todayItems));
+  const review = {
+    ...allReview,
+    drafts: allReview.drafts.filter((d) => inCampaign([d.projectId], selected)),
+    actions: allReview.actions.filter((a) => inCampaign([a.projectId], selected)),
+  };
+  const followUps = {
+    due: allFollowUps.due.filter((c) => inCampaign(ofContact(c.id), selected)),
+    opportunities: allFollowUps.opportunities.filter((o) => inCampaign(ofOpportunity(o), selected)),
+    needsReply: allFollowUps.needsReply.filter((c) => inCampaign(ofContact(c.id), selected)),
+    awaitingReply: allFollowUps.awaitingReply.filter((c) => inCampaign(ofContact(c.id), selected)),
+  };
+  const upcoming = allUpcoming.filter((c) => inCampaign(ofContact(c.id), selected));
+  const activity = allActivity.filter((m) => inCampaign(ofContact(m.contact?.id), selected));
 
   const dateLabel = new Intl.DateTimeFormat("en-US", { timeZone: timezone, weekday: "long", month: "long", day: "numeric" }).format(new Date());
   const nothingToDo =
@@ -65,7 +104,11 @@ export default async function TodayPage() {
 
   return (
     <>
-      <PageHeader title="Today" description={dateLabel} />
+      <PageHeader
+        title="Today"
+        description={dateLabel}
+        actions={options.length ? <CampaignFilter options={options} selected={selected} total={todayItems.length} /> : null}
+      />
 
       {counts.accounts === 0 ? (
         <div className="mb-6">
@@ -89,10 +132,14 @@ export default async function TodayPage() {
 
       <div className="grid gap-8 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] [&>*]:min-w-0">
         <div className="flex flex-col gap-8">
-          <ReviewInbox today={today} />
+          <ReviewInbox today={today} data={review} campaignName={campaign?.name} />
 
           {nothingToDo && counts.accounts > 0 ? (
-            <EmptyState title="You're all caught up">No follow-ups due and nobody is waiting on you.</EmptyState>
+            campaign ? (
+              <EmptyState title={`Nothing due in ${campaign.name}`}>No follow-ups due in this campaign and nobody in it is waiting on you.</EmptyState>
+            ) : (
+              <EmptyState title="You're all caught up">No follow-ups due and nobody is waiting on you.</EmptyState>
+            )
           ) : null}
 
           {followUps.due.length || followUps.opportunities.length ? (
@@ -135,11 +182,11 @@ export default async function TodayPage() {
                       </span>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
-                          {/* A booking-sheet row opens its sheet, filtered to that venue. */}
+                          {/* A campaign row opens its campaign, filtered to that organization. */}
                           <Link
                             href={
                               o.project?.sheet
-                                ? `/booking/${o.project.id}?q=${encodeURIComponent(o.organization?.name ?? o.title)}`
+                                ? `/campaigns/${o.project.id}?q=${encodeURIComponent(o.organization?.name ?? o.title)}`
                                 : `/pipeline?open=${o.id}`
                             }
                             className="truncate text-sm font-medium hover:underline"

@@ -3,6 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useClaudeEnabled } from "@/components/features";
 import { startTransition, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { celebrateSend, flourishOrigin } from "@/components/brand/send-flourish";
+import { VelaLoader } from "@/components/brand/vela-logo";
 import { ChevronDown, Loader2, Maximize2, Minimize2, Minus, Send, Sparkles, Trash2, X } from "lucide-react";
 import { sendMailAction, writeWithClaudeAction } from "@/app/(app)/mail/actions";
 import { formatAddress, outgoingBody, parseRecipientInput } from "@/lib/mail/compose";
@@ -191,6 +193,8 @@ export function Composer({
       return;
     }
     if (!subject.trim() && !window.confirm("Send this message without a subject?")) return;
+    // Where the "sent" flourish starts (the Send button pressed, when the browser focused it).
+    const origin = flourishOrigin(document.activeElement instanceof HTMLButtonElement ? document.activeElement : null);
     setSending(true);
     try {
       const result = await sendMailAction({
@@ -207,6 +211,7 @@ export function Composer({
         return;
       }
       onClose();
+      celebrateSend(origin);
       toast({ message: "Sent", link: { label: "View message", href: threadHref(accountId, result.threadId, {}) } });
       startTransition(() => router.refresh());
     } catch {
@@ -272,7 +277,7 @@ export function Composer({
             disabled={sending}
             className="flex h-11 items-center gap-1.5 justify-self-end text-[17px] font-semibold text-blue-600 active:opacity-60 disabled:opacity-50 dark:text-blue-400"
           >
-            {sending ? <Loader2 className="size-4 animate-spin" /> : null}
+            {sending ? <VelaLoader size={16} label="Sending" /> : null}
             {sending ? "Sending" : "Send"}
           </button>
         </header>
@@ -505,7 +510,7 @@ export function Composer({
             title="Send (⌘/Ctrl+Enter)"
             className="inline-flex h-9 items-center gap-2 rounded-full bg-blue-600 px-5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
           >
-            {sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" strokeWidth={2} />}
+            {sending ? <VelaLoader size={16} label="Sending" /> : <Send className="size-4" strokeWidth={2} />}
             {sending ? "Sending…" : "Send"}
           </button>
           {claude ? (

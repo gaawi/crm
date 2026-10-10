@@ -76,7 +76,7 @@ export default async function CampaignPage({ params, searchParams }: PageProps<"
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-[13px] text-muted md:text-xs">
           <CampaignStatusBadge status={campaign.status} />
           {campaign.projectId && campaign.projectName ? (
-            <Link href={`/booking/${campaign.projectId}`} className="hover:text-fg hover:underline">
+            <Link href={`/campaigns/${campaign.projectId}`} className="hover:text-fg hover:underline">
               {campaign.projectName}
             </Link>
           ) : null}

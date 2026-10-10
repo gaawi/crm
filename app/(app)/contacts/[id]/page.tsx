@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { cache, type ReactNode } from "react";
 import { Archive, CalendarClock, Check, Ellipsis, GitMerge, Plus, Trash2, X } from "lucide-react";
+import { ContactAvatar } from "@/components/contact-avatar";
 import { DraftFollowUp } from "@/components/draft-follow-up";
 import { PhoneLink } from "@/components/booking/phone-actions";
 import { EmailTimeline } from "@/components/email-timeline";
@@ -11,7 +12,7 @@ import { RowList } from "@/components/contact-row";
 import { Badge, ProjectDot, StatusBadge, TagBadge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
-import { Avatar, Notice } from "@/components/ui/layout";
+import { Notice } from "@/components/ui/layout";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { formatPhone, telHref, whatsappNumber } from "@/lib/booking/phone";
 import { CONTACT_STATUSES, PROJECT_COLORS } from "@/lib/constants";
@@ -31,7 +32,7 @@ import { listOrganizations } from "@/lib/queries/organizations";
 import { listProjects } from "@/lib/queries/projects";
 import { getOwnAddresses } from "@/lib/queries/stats";
 import type { Contact, ContactSummary, Opportunity, Project } from "@/lib/types";
-import { cn, initials } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { ActionForm, FormSubmit } from "../../_components/action-form";
 import { Dropdown } from "../../_components/dropdown";
 import { FilterForm } from "../../_components/filter-form";
@@ -46,11 +47,13 @@ import {
   deleteContactAction,
   makePrimaryEmail,
   mergeFromAddEmail,
+  removePhotoAction,
   mergeIntoContact,
   removeEmail,
   saveFollowUp,
   setFollowUpPreset,
   toggleProject,
+  updatePhotoAction,
   updateProfile,
 } from "./actions";
 import { AddEmailForm } from "./add-email-form";
@@ -156,7 +159,7 @@ export default async function ContactPage({ params, searchParams }: PageProps<"/
 
   return (
     <>
-      <ContactHeader contact={contact} accounts={accounts} timezone={timezone} />
+      <ContactHeader contact={contact} accounts={accounts} timezone={timezone} editingPhoto={param(sp, "edit") === "photo"} />
 
       {orgProfile ? (
         <OrgProfileLine
@@ -252,14 +255,83 @@ export default async function ContactPage({ params, searchParams }: PageProps<"/
 
 /* Header ------------------------------------------------------------------- */
 
+/** "Edit photo": paste the https address of an image (and, optionally, the page it is on); Remove goes back to initials. */
+function PhotoForm({ contact, cancelHref }: { contact: Contact; cancelHref: string }) {
+  return (
+    <section aria-label="Photo" className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-4 md:rounded-lg">
+      <ActionForm action={updatePhotoAction.bind(null, contact.id)} className="flex flex-col gap-3">
+        <Field label="Photo URL" htmlFor="photo-url" hint="An https image address, e.g. from their website or a festival page. Shown without sending your address to that site.">
+          <Input
+            id="photo-url"
+            name="photoUrl"
+            type="url"
+            inputMode="url"
+            autoComplete="off"
+            required
+            autoFocus
+            maxLength={2048}
+            defaultValue={contact.photoUrl ?? ""}
+            placeholder="https://example.org/team/ana.jpg"
+          />
+        </Field>
+        <Field label="Found on (optional)" htmlFor="photo-source">
+          <Input
+            id="photo-source"
+            name="photoSource"
+            type="url"
+            inputMode="url"
+            autoComplete="off"
+            maxLength={2048}
+            defaultValue={contact.photoSource ?? ""}
+            placeholder="https://example.org/team"
+          />
+        </Field>
+        <FormActions>
+          <FormSubmit pendingLabel="Saving…">Save photo</FormSubmit>
+          <ButtonLink href={cancelHref} variant="ghost">
+            Cancel
+          </ButtonLink>
+        </FormActions>
+      </ActionForm>
+      {contact.photoUrl ? (
+        <form action={removePhotoAction.bind(null, contact.id)} className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
+          <p className="min-w-0 text-[13px] text-muted md:text-xs">
+            {contact.photoSource ? (
+              <>
+                From{" "}
+                <a href={contact.photoSource} target="_blank" rel="noreferrer noopener" className="underline underline-offset-2 [overflow-wrap:anywhere]">
+                  {(() => {
+                    try {
+                      return new URL(contact.photoSource).hostname;
+                    } catch {
+                      return contact.photoSource;
+                    }
+                  })()}
+                </a>
+              </>
+            ) : (
+              "Remove the photo to show initials again."
+            )}
+          </p>
+          <SubmitButton variant="ghost" className="text-danger">
+            Remove photo
+          </SubmitButton>
+        </form>
+      ) : null}
+    </section>
+  );
+}
+
 function ContactHeader({
   contact,
   accounts,
   timezone,
+  editingPhoto,
 }: {
   contact: Contact;
   accounts: { id: string; email: string }[];
   timezone: string;
+  editingPhoto: boolean;
 }) {
   const base = `/contacts/${contact.id}`;
   return (
@@ -287,12 +359,17 @@ function ContactHeader({
       </div>
 
       <div className="flex flex-col items-center gap-3 text-center md:flex-row md:gap-4 md:text-left">
-        <span
-          aria-hidden
-          className="inline-flex size-20 shrink-0 items-center justify-center rounded-full bg-surface-2 text-2xl font-medium text-muted md:size-12 md:text-base"
-        >
-          {initials(contact.displayName)}
-        </span>
+        <div className="flex shrink-0 flex-col items-center">
+          <ContactAvatar contact={contact} size="lg" />
+          {editingPhoto ? null : (
+            <Link
+              href={`${base}?edit=photo`}
+              className="inline-flex min-h-11 items-center px-2 text-[13px] text-muted hover:text-fg hover:underline md:min-h-0 md:pt-1 md:text-[11px]"
+            >
+              {contact.photoUrl ? "Edit photo" : "Add photo"}
+            </Link>
+          )}
+        </div>
         <div className="flex w-full min-w-0 flex-col items-center md:flex-1 md:items-start">
           <h1 className="max-w-full truncate text-[26px] font-bold leading-tight tracking-tight text-fg md:text-xl md:font-semibold">
             {contact.displayName}
@@ -323,6 +400,8 @@ function ContactHeader({
           </div>
         </div>
       </div>
+
+      {editingPhoto ? <PhotoForm contact={contact} cancelHref={base} /> : null}
 
       <div className="flex flex-col items-center gap-3 md:flex-row md:flex-wrap md:items-start md:gap-2">
         <ContactActions
@@ -730,7 +809,7 @@ function DuplicatesSection({ contact, duplicates }: { contact: Contact; duplicat
       <RowList>
         {duplicates.map((d) => (
           <li key={d.id} className="flex min-h-[60px] items-center gap-3 px-4 py-2.5 md:min-h-0">
-            <Avatar name={d.displayName} />
+            <ContactAvatar contact={d} />
             <div className="min-w-0 flex-1">
               <Link href={`/contacts/${d.id}`} className="block truncate text-[15px] font-medium text-fg hover:underline md:text-sm">
                 {d.displayName}
@@ -819,7 +898,7 @@ function MergeScreen({
           <RowList>
             {candidates.map((c) => (
               <li key={c.id} className="relative flex min-h-[60px] items-center gap-3 px-4 py-2.5 active:bg-surface-2 md:min-h-0 md:hover:bg-surface-2/40">
-                <Avatar name={c.displayName} />
+                <ContactAvatar contact={c} />
                 <div className="min-w-0 flex-1">
                   <Link
                     href={hrefWith(base, { merge: 1, mq, source: c.id })}

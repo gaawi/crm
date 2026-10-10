@@ -81,7 +81,7 @@ export function BriefEditor({ projectId, brief }: { projectId: string; brief: st
           {pending ? "Saving…" : "Save brief"}
         </Button>
       </div>
-      {!value.trim() && !brief ? <Notice>Without a brief the assistant follows the sheet: stages, next steps and replies.</Notice> : null}
+      {!value.trim() && !brief ? <Notice>Without a brief the assistant follows the campaign: stages, next steps and replies.</Notice> : null}
     </form>
   );
 }

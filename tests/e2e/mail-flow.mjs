@@ -35,7 +35,7 @@ async function login(context) {
   await row.locator("a").first().click();
   await page.waitForURL(/\/mail\/t\//);
   check(await page.getByRole("heading", { name: "Spring cycle — open call" }).isVisible(), "thread opens with its subject");
-  check(await page.getByText("Showing the copy stored in the CRM").isVisible(), "stored-copy notice is shown when Gmail is unavailable");
+  check(await page.getByText("Showing the copy stored in Vela").isVisible(), "stored-copy notice is shown when Gmail is unavailable");
   check((await page.locator("article").count()) >= 1, "latest message is expanded");
 
   await page.getByRole("button", { name: "Archive (e)" }).click();

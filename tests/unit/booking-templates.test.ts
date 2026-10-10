@@ -178,10 +178,12 @@ describe("suggestTemplate by next step", () => {
 });
 
 describe("templateRationale", () => {
-  it("names the sheet and template, and Approvals can tell it apart", () => {
+  it("names the campaign and template, and Approvals can tell it apart", () => {
     const r = templateRationale("Festival ADAR", "Propuesta");
-    expect(r).toBe('Booking sheet "Festival ADAR" · template "Propuesta"');
+    expect(r).toBe('Campaign "Festival ADAR" · template "Propuesta"');
     expect(isTemplateRationale(r)).toBe(true);
+    // Emails prepared before the rename.
+    expect(isTemplateRationale('Booking sheet "Festival ADAR" · template "Propuesta"')).toBe(true);
     expect(isTemplateRationale("Reply to the latest message in this conversation.")).toBe(false);
     expect(isTemplateRationale(null)).toBe(false);
   });

@@ -72,7 +72,7 @@ export async function prepareSheetEmails(input: { projectId: string; rowIds: str
   const rowIds = [...new Set(input.rowIds)];
   if (rowIds.length > PREPARE_MAX_ROWS) throw new Error(`Prepare at most ${PREPARE_MAX_ROWS} emails at a time.`);
   const sheet = await getSheet(input.projectId);
-  if (!sheet) throw new Error("Booking sheet not found");
+  if (!sheet) throw new Error("Campaign not found");
   const templates = await listTemplates(sheet.id);
   const chosen: EmailTemplate | null = input.templateId ? (templates.find((t) => t.id === input.templateId) ?? null) : null;
   if (input.templateId && !chosen) throw new Error("Template not found");
@@ -85,7 +85,7 @@ export async function prepareSheetEmails(input: { projectId: string; rowIds: str
   for (const rowId of rowIds) {
     const row = rows.get(rowId);
     if (!row) {
-      result.skipped.push({ rowId, reason: "Not in this sheet" });
+      result.skipped.push({ rowId, reason: "Not in this campaign" });
       continue;
     }
     if (!row.contact?.email) {

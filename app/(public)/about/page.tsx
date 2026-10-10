@@ -7,7 +7,8 @@ export const metadata: Metadata = { title: APP_NAME };
 export default function AboutPage() {
   return (
     <article className="flex flex-col gap-4 text-[15px] leading-relaxed text-fg">
-      <h1 className="text-[28px] font-bold leading-tight tracking-tight">{APP_NAME}</h1>
+      {/* The app is called Vela; APP_NAME stays the name verified with Google's OAuth consent screen. */}
+      <h1 className="text-[28px] font-bold leading-tight tracking-tight">Vela — {APP_NAME}</h1>
       <p>
         {APP_NAME} is the private tool CreArtBox uses to manage its professional correspondence with venues, partners, funders and
         press: one contact history across its Gmail accounts, follow-up reminders and a simple pipeline.

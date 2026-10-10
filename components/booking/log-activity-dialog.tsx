@@ -75,7 +75,7 @@ const CALL_AGAIN: (CallOutcome | null)[] = ["no_answer", "voicemail", "call_back
 const NO_ACTION = "__none";
 
 const HINTS: Partial<Record<LoggableKind, string>> = {
-  email: "For emails the CRM can't see (another account, a contact form, post). Gmail emails appear by themselves.",
+  email: "For emails Vela can't see (another account, a contact form, post). Gmail emails appear by themselves.",
   note: "A note does not count as contacting them.",
 };
 

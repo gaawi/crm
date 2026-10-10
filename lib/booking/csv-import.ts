@@ -373,7 +373,7 @@ export function parseSheetImport(text: string): SheetImport {
   const normalized = text.replace(/^﻿/, "").replace(/\r\n?/g, "\n");
   const firstLine = normalized.split("\n").find((l) => l.trim() !== "") ?? "";
   if (!firstLine) {
-    result.errors.push({ line: 0, message: "Nothing to import: paste a header line and one line per venue." });
+    result.errors.push({ line: 0, message: "Nothing to import: paste a header line and one line per organization." });
     return result;
   }
   result.delimiter = detectDelimiter(firstLine);
@@ -400,7 +400,7 @@ export function parseSheetImport(text: string): SheetImport {
   if (!result.columns.includes("organization")) {
     result.errors.push({
       line: header.line,
-      message: "No venue column: the first line must name the columns, with one called Venue, Sala, Municipio or Organization.",
+      message: "No organization column: the first line must name the columns, with one called Organization, Venue, Sala or Municipio.",
     });
     return result;
   }
@@ -417,7 +417,7 @@ export function parseSheetImport(text: string): SheetImport {
     const extraNotes: string[] = [];
     const row: ParsedImportRow = { line: record.line, organization: clip(oneLine(get("organization")), 300) };
     if (!row.organization) {
-      result.errors.push({ line: record.line, message: "No venue / presenter name." });
+      result.errors.push({ line: record.line, message: "No organization name." });
       continue;
     }
 

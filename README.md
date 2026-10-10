@@ -17,10 +17,12 @@ fundraising, partners, press and grants.
   deals and all correspondence.
 - **Pipeline:** deals by stage, per kind (booking, fundraising, partnership,
   grant, press).
-- **Booking sheets:** one sheet per campaign (e.g. "Booking USA", "Gira España
-  2027"): venue, contact, status, last email, next step and follow-up date,
-  dates, fee and notes, edited in place, with CSV export. Rows are booking
-  deals, so they also show in the Pipeline, the organization and the contact.
+- **Campaigns** (`/campaigns`; formerly booking sheets, `/booking` redirects):
+  one per push — bookings, partners, press, funding (e.g. "Booking USA",
+  "Gira España 2027"): organization, contact, status, last email, next step and
+  follow-up date, dates, fee and notes, edited in place, with CSV export. Rows
+  are deals, so they also show in the Pipeline, the organization and the
+  contact.
 - **Today:** follow-ups due, people waiting for your reply, people you're
   waiting on, and what's coming up.
 - **Approvals:**

@@ -19,6 +19,8 @@ import {
   updateContact,
 } from "@/lib/queries/contacts";
 import type { ActionOutcome } from "@/lib/booking/types";
+import { httpsUrlIssue, normalizeHttpsUrl } from "@/lib/contacts/photo";
+import { setContactPhoto } from "@/lib/queries/contact-photos";
 import type { GoalInput, Opportunity } from "@/lib/types";
 import { errorMessage } from "@/lib/utils";
 import type { ActionResult } from "../../_components/action-form";
@@ -78,6 +80,27 @@ export async function updateProfile(contactId: string, _prev: ActionResult, form
     return { error: errorMessage(error) };
   }
   redirect(contactPath(id, "details"));
+}
+
+/* Photo -------------------------------------------------------------------- */
+
+/** Contact page → "Edit photo": an https image URL pasted by the owner (optional page it came from). */
+export async function updatePhotoAction(contactId: string, _prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  await requireSession();
+  const id = parseId(contactId);
+  const url = field(formData, "photoUrl").trim();
+  const issue = httpsUrlIssue(url);
+  if (issue) return { error: issue === "Give an https URL." ? "Paste the https address of an image." : issue };
+  const sourceRaw = field(formData, "photoSource").trim();
+  if (sourceRaw && httpsUrlIssue(sourceRaw)) return { error: "The page address must be an https URL too." };
+  if (!(await setContactPhoto(id, normalizeHttpsUrl(url), sourceRaw ? normalizeHttpsUrl(sourceRaw) : null))) return { error: "Contact not found." };
+  redirect(contactPath(id));
+}
+
+export async function removePhotoAction(contactId: string): Promise<void> {
+  await requireSession();
+  await setContactPhoto(parseId(contactId), null);
+  redirect(contactPath(parseId(contactId)));
 }
 
 /* Phone / WhatsApp --------------------------------------------------------- */

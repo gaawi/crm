@@ -20,6 +20,8 @@
   --warning: #b45309;
   --success: #15803d;
   --ring: #a1a1aa;
+  /* Vela's indigo (logo, loader, send animation). */
+  --brand: #3b4cca;
   color-scheme: light;
 }
 
@@ -39,6 +41,7 @@
     --warning: #fbbf24;
     --success: #4ade80;
     --ring: #52525b;
+    --brand: #8b97f0;
     color-scheme: dark;
   }
 }
@@ -58,6 +61,7 @@
   --color-warning: var(--warning);
   --color-success: var(--success);
   --color-ring: var(--ring);
+  --color-brand: var(--brand);
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
@@ -171,6 +175,99 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .animate-sheet-up {
     animation: none;
+  }
+}
+
+/*
+ * Vela loader: the sail rocks gently on its wave while its staff lines fill
+ * in and out. Still with reduced motion.
+ */
+@keyframes vela-rock {
+  0%,
+  100% {
+    transform: rotate(-4deg);
+  }
+  50% {
+    transform: rotate(3deg);
+  }
+}
+@keyframes vela-staff {
+  0%,
+  100% {
+    stroke-width: 1.1px;
+  }
+  50% {
+    stroke-width: 0.35px;
+  }
+}
+@keyframes vela-wave {
+  0%,
+  100% {
+    transform: translateX(-0.6px);
+  }
+  50% {
+    transform: translateX(0.6px);
+  }
+}
+.vela-rock .vela-sail {
+  transform-box: view-box;
+  transform-origin: 11.6px 24.4px;
+  animation: vela-rock 1.6s ease-in-out infinite;
+}
+.vela-rock .vela-staff {
+  animation: vela-staff 1.6s ease-in-out infinite;
+}
+.vela-rock .vela-wave {
+  animation: vela-wave 1.6s ease-in-out infinite;
+}
+
+/*
+ * Sent! The sail glides up and to the right and fades, leaving a soft trail
+ * (components/brand/send-flourish.tsx). Purely visual, after success; with
+ * reduced motion it is not shown at all.
+ */
+@keyframes vela-glide {
+  0% {
+    transform: translate(0, 0) rotate(0deg) scale(0.9);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(150px, -170px) rotate(10deg) scale(1.08);
+    opacity: 0;
+  }
+}
+@keyframes vela-trail {
+  0% {
+    transform: translate(0, 0) rotate(-48.6deg) scaleX(0.2);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.55;
+  }
+  100% {
+    transform: translate(60px, -70px) rotate(-48.6deg) scaleX(1);
+    opacity: 0;
+  }
+}
+.vela-glide {
+  animation: vela-glide 0.9s cubic-bezier(0.3, 0.6, 0.2, 1) forwards;
+}
+.vela-trail {
+  transform-origin: 0% 50%;
+  animation: vela-trail 0.9s cubic-bezier(0.3, 0.6, 0.2, 1) forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .vela-rock .vela-sail,
+  .vela-rock .vela-staff,
+  .vela-rock .vela-wave {
+    animation: none;
+  }
+  .vela-glide,
+  .vela-trail {
+    display: none;
   }
 }
 

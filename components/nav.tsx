@@ -9,11 +9,11 @@ import {
   Inbox,
   LayoutList,
   Mail,
+  Megaphone,
   Menu,
   Send,
   Settings,
   Sparkles,
-  Ticket,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -34,7 +34,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/organizations", label: "Organizations", icon: Building2 },
   { href: "/projects", label: "Projects", icon: FolderKanban },
   { href: "/pipeline", label: "Pipeline", icon: LayoutList },
-  { href: "/booking", label: "Booking", icon: Ticket },
+  { href: "/campaigns", label: "Campaigns", icon: Megaphone },
   { href: "/assistant", label: "Claude", icon: Sparkles },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
@@ -49,7 +49,7 @@ const TAB_ITEMS: NavItem[] = [
 ];
 
 /** Routes reached through "More" keep the More tab highlighted. */
-const MORE_ROUTES = ["/more", "/booking", "/organizations", "/projects", "/pipeline", "/settings", "/search", "/assistant"];
+const MORE_ROUTES = ["/more", "/campaigns", "/organizations", "/projects", "/pipeline", "/settings", "/search", "/assistant"];
 
 function isActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";

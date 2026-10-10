@@ -111,7 +111,7 @@ export async function GET(request: Request) {
   if (!account.refreshTokenEnc) {
     await recordAccountError(
       account.id,
-      "Google did not return a refresh token: remove the CRM's access at myaccount.google.com/permissions, then connect again",
+      "Google did not return a refresh token: remove CreArtBox CRM's access (Vela) at myaccount.google.com/permissions, then connect again",
     );
   }
   try {

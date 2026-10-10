@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ContactAvatar } from "@/components/contact-avatar";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { cache, type ReactNode } from "react";
@@ -6,7 +7,6 @@ import { Archive, ArchiveRestore, Ellipsis, Pencil, Plus, Trash2, X } from "luci
 import { ContactRow, RowList } from "@/components/contact-row";
 import { Badge, ProjectDot } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
-import { Avatar } from "@/components/ui/layout";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { formatDate, todayIn } from "@/lib/dates";
 import { env } from "@/lib/env";
@@ -252,7 +252,7 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
               <RowList>
                 {mentions.slice(0, 20).map((m) => (
                   <li key={m.contact.id} className="flex min-h-[60px] items-center gap-3 px-4 py-2.5 md:min-h-0">
-                    <Avatar name={m.contact.displayName} />
+                    <ContactAvatar contact={m.contact} />
                     <div className="min-w-0 flex-1">
                       <Link
                         href={`/contacts/${m.contact.id}`}
@@ -328,7 +328,7 @@ function CandidateRow({ contact: c, action }: { contact: ContactSummary; action:
   const subtitle = [c.role, c.organization?.name].filter(Boolean).join(" · ") || c.primaryEmail || "";
   return (
     <li className="flex min-h-[60px] items-center gap-3 px-4 py-2.5 md:min-h-0">
-      <Avatar name={c.displayName} />
+      <ContactAvatar contact={c} />
       <div className="min-w-0 flex-1">
         <Link href={`/contacts/${c.id}`} className="block truncate text-[15px] font-medium text-fg hover:underline md:text-sm">
           {c.displayName}

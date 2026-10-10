@@ -8,12 +8,14 @@ import type { CallOutcome, NextAction, OpportunityStage, TemplateTrigger } from 
 export { formatFee };
 
 /** Why an email prepared from a sheet is in Approvals (and how Approvals tells it apart from Claude's). */
-const RATIONALE_PREFIX = "Booking sheet ";
+const RATIONALE_PREFIX = "Campaign ";
+/** Emails prepared before booking sheets were renamed Campaigns still read as template emails. */
+const LEGACY_RATIONALE_PREFIX = "Booking sheet ";
 export function templateRationale(sheetName: string, templateName: string): string {
   return `${RATIONALE_PREFIX}"${sheetName}" · template "${templateName}"`;
 }
 export function isTemplateRationale(rationale: string | null | undefined): boolean {
-  return Boolean(rationale?.startsWith(`${RATIONALE_PREFIX}"`));
+  return Boolean(rationale?.startsWith(`${RATIONALE_PREFIX}"`) || rationale?.startsWith(`${LEGACY_RATIONALE_PREFIX}"`));
 }
 
 export const TEMPLATE_VARIABLE_NAMES = [

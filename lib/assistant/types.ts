@@ -14,6 +14,9 @@ export const ASSISTANT_ACTION_KINDS: AssistantActionKind[] = ["email", "call", "
 /** Most emails the routine may propose for one campaign in one call. */
 export const MAX_EMAILS_PER_CALL = 10;
 
+/** When the daily review runs (it writes the new versions the owner asked for). */
+export const ASSISTANT_REVIEW_TIMES = "7:00 / 16:00 New York";
+
 /** Default "Postpone": a week. */
 export const DEFAULT_POSTPONE_DAYS = 7;
 
@@ -24,7 +27,7 @@ export interface AssistantAction {
   opportunityId: string | null;
   /** Venue / organization of the row, else the row's title. */
   rowName: string | null;
-  contact: { id: string; displayName: string; phone: string | null; whatsapp: string | null } | null;
+  contact: { id: string; displayName: string; phone: string | null; whatsapp: string | null; photoUrl?: string | null } | null;
   kind: AssistantActionKind;
   title: string;
   reason: string | null;

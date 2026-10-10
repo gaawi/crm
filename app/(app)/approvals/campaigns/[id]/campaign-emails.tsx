@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { ChevronDown, ListRestart, Loader2 } from "lucide-react";
+import { ContactAvatar } from "@/components/contact-avatar";
 import { DraftCard } from "@/components/draft-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -99,6 +100,7 @@ export function CampaignEmails({ drafts, timezone, defaultOpen = false }: { draf
               <span className="mt-0.5 w-6 shrink-0 text-right text-xs tabular-nums text-subtle" aria-hidden>
                 {i + 1}
               </span>
+              <ContactAvatar contact={d.contact ?? { displayName: d.to[0] ?? "?" }} size="sm" className="-my-0.5" />
               <span className="min-w-0 flex-1">
                 <span className="flex min-w-0 items-center gap-2">
                   <span className="truncate text-[15px] font-medium text-fg md:text-sm">{d.contact?.displayName ?? d.to.join(", ")}</span>

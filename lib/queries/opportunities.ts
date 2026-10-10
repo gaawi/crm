@@ -23,7 +23,8 @@ export const opportunityColumns = () => sql`
       (select ce.email from contact_emails ce where ce.contact_id = c.id order by ce.is_primary desc, ce.created_at limit 1),
       'Unknown'),
     'phone', c.phone,
-    'whatsapp', c.whatsapp
+    'whatsapp', c.whatsapp,
+    'photoUrl', c.photo_url
   ) end as contact,
   case when o.id is null then null else json_build_object('id', o.id, 'name', o.name) end as organization,
   case when p.id is null then null else json_build_object('id', p.id, 'name', p.name, 'color', p.color, 'sheet', p.sheet) end as project

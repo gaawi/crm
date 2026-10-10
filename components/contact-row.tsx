@@ -1,7 +1,7 @@
 import Link from "next/link";
+import { ContactAvatar } from "@/components/contact-avatar";
 import type { ReactNode } from "react";
 import { ProjectDot, StatusBadge } from "@/components/ui/badge";
-import { Avatar } from "@/components/ui/layout";
 import { formatDue, formatRelative } from "@/lib/dates";
 import type { ContactSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -46,7 +46,7 @@ export function ContactRow({
 
   return (
     <li className="group relative flex min-h-[60px] items-center gap-3 px-4 py-2.5 active:bg-surface-2 md:min-h-0 md:active:bg-transparent">
-      <Avatar name={contact.displayName} />
+      <ContactAvatar contact={contact} />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <Link

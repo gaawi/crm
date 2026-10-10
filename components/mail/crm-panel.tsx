@@ -184,7 +184,7 @@ function UnknownCard({ address }: { address: Address }) {
       </span>
       <div className="min-w-0 flex-1">
         <p className="truncate text-[17px] font-medium md:text-sm">{address.name || address.email}</p>
-        {address.name ? <p className="truncate text-[13px] text-subtle md:text-xs">{address.email}</p> : <p className="text-[13px] text-subtle md:text-xs">Not in the CRM</p>}
+        {address.name ? <p className="truncate text-[13px] text-subtle md:text-xs">{address.email}</p> : <p className="text-[13px] text-subtle md:text-xs">Not in Vela</p>}
       </div>
       <Link
         href={href}

@@ -127,16 +127,16 @@ export default async function ThreadPage({ params, searchParams }: PageProps<"/m
     try {
       const fetched = await fetchThread(accountId, threadId);
       if (fetched) thread = fromLive(fetched);
-      else notice = "This conversation is no longer in Gmail. Showing the copy stored in the CRM.";
+      else notice = "This conversation is no longer in Gmail. Showing the copy stored in Vela.";
     } catch (error) {
       console.warn(`Could not load thread ${threadId} from Gmail:`, errorMessage(error));
-      notice = "Gmail couldn't be reached, so this is the copy stored in the CRM (plain text, no attachments to download).";
+      notice = "Gmail couldn't be reached, so this is the copy stored in Vela (plain text, no attachments to download).";
     }
   } else {
     notice =
       account.status === "reauth_required"
-        ? `Reconnect ${account.email} in Settings to see the full email. Showing the copy stored in the CRM (plain text).`
-        : `${account.email} is not connected to Gmail. Showing the copy stored in the CRM (plain text).`;
+        ? `Reconnect ${account.email} in Settings to see the full email. Showing the copy stored in Vela (plain text).`
+        : `${account.email} is not connected to Gmail. Showing the copy stored in Vela (plain text).`;
   }
   if (!thread) thread = await fromStored(account, threadId);
   if (!thread) notFound();
@@ -181,7 +181,7 @@ export default async function ThreadPage({ params, searchParams }: PageProps<"/m
               notice={notice}
             />
           </div>
-          <aside className="border-t border-border bg-bg px-4 pb-[calc(env(safe-area-inset-bottom)+6rem)] pt-6 md:px-6 md:pb-8 xl:overflow-y-auto xl:border-l xl:border-t-0 xl:px-4 xl:pt-4" aria-label="CRM">
+          <aside className="border-t border-border bg-bg px-4 pb-[calc(env(safe-area-inset-bottom)+6rem)] pt-6 md:px-6 md:pb-8 xl:overflow-y-auto xl:border-l xl:border-t-0 xl:px-4 xl:pt-4" aria-label="Contact in Vela">
             <CrmPanel
               participants={participants(thread, own)}
               accountId={accountId}

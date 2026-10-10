@@ -60,14 +60,19 @@ Detailed specs: `docs/SYNC_SPEC.md` (sync engine), `docs/MAIL_CLIENT_SPEC.md`
   shape in `lib/organizations/profile.ts`) + `profile_updated_at`, written by
   Claude through `/api/assistant-agent/profiles` or by the owner.
 - **projects** — CreArtBox, ADAR, Personal, Booking, Press, Grants,
-  Fundraising, Partners (editable). A project flagged `sheet` is a booking
-  sheet (one row per booking deal), with its currency, phone prefix and
+  Fundraising, Partners (editable). A project flagged `sheet` is a campaign
+  (shown as "Campaigns", `/campaigns`; formerly "booking sheet"; one row per
+  deal with an organization), with its currency, phone prefix and
   send-from Gmail account.
 - **contacts** — name, organization, role, phone + WhatsApp (normalized
   `+34612345678`), notes, tags, status (`new | lead |
   active | inactive | archived`), follow-up date + note, source, denormalized
   history stats (`last_contacted_at`, `last_inbound_at`, `last_outbound_at`,
-  `awaiting_reply_since`, `message_count`), `reply_dismissed_at`.
+  `awaiting_reply_since`, `message_count`), `reply_dismissed_at`;
+  `photo_url` (https only) + `photo_source` (https page it was found on) +
+  `photo_updated_at`, set by the owner on the contact page or by Claude through
+  `POST /api/assistant-agent/contact-photos` (a campaign's people:
+  `GET /api/assistant-agent/contacts?projectId=…`).
 - **contact_emails**, **contact_projects**.
 - **messages** — one row per Gmail message per account (ids, thread, RFC 822
   ids, direction, sender, subject, snippet, stripped body, labels, automated
@@ -126,6 +131,7 @@ Detailed specs: `docs/SYNC_SPEC.md` (sync engine), `docs/MAIL_CLIENT_SPEC.md`
 | `/organizations`, `/organizations/[id]` | Venues, funders, partners, press…; people, deals, all correspondence |
 | `/projects`, `/projects/[id]` | People, "mentioned this project in email", deals |
 | `/pipeline` | Deals by stage, per kind (booking, fundraising, …) |
+| `/campaigns`, `/campaigns/[id]` (+ `/templates`, `/export`) | Campaigns (projects flagged `sheet`, formerly "booking sheets"; `/booking/*` redirects permanently) |
 | `/assistant` | Chat with Claude over the CRM |
 | `/settings` | Gmail accounts, import progress, default project per mailbox, writing profile, autopilot, database usage |
 | `/more`, `/search` | Phone "More" tab; global search |

@@ -398,7 +398,7 @@ export function ThreadList({
                 </Link>
                 <span className="relative z-10 ml-2 flex shrink-0 items-center gap-2 group-hover:pointer-events-none">
                   {r.contact && !toContact ? (
-                    <Link href={`/contacts/${r.contact.id}`} className="pointer-events-auto hidden xl:inline-flex" title={`CRM: ${r.contact.displayName}`}>
+                    <Link href={`/contacts/${r.contact.id}`} className="pointer-events-auto hidden xl:inline-flex" title={`Contact: ${r.contact.displayName}`}>
                       <StatusBadge status={r.contact.status} />
                     </Link>
                   ) : null}

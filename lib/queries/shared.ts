@@ -27,7 +27,8 @@ export const contactSummaryColumns = () => sql`
   c.last_contacted_at,
   c.last_inbound_at,
   c.last_outbound_at,
-  c.message_count
+  c.message_count,
+  c.photo_url
 `;
 
 export const contactSummaryJoins = () => sql`
@@ -38,7 +39,7 @@ export const contactSummaryJoins = () => sql`
      where ce.contact_id = c.id
   ) e on true
   left join lateral (
-    select json_agg(json_build_object('id', pr.id, 'name', pr.name, 'color', pr.color)
+    select json_agg(json_build_object('id', pr.id, 'name', pr.name, 'color', pr.color, 'sheet', pr.sheet)
                     order by pr.sort_order, pr.name) as projects
       from contact_projects cp
       join projects pr on pr.id = cp.project_id

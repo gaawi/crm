@@ -6,6 +6,8 @@ import { getMailCounts } from "@/lib/mail/queries";
 import { countPendingDrafts } from "@/lib/queries/drafts";
 import { getOverviewCounts } from "@/lib/queries/stats";
 import { deadlineFor, syncStaleAccounts } from "@/lib/sync/runner";
+import { VelaLogo } from "@/components/brand/vela-logo";
+import { SendFlourishHost } from "@/components/brand/send-flourish";
 import { FeaturesProvider } from "@/components/features";
 import { SideNav, TabBar } from "@/components/nav";
 import { env } from "@/lib/env";
@@ -28,9 +30,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <FeaturesProvider claude={env.claudeEnabled}>
       <div className="flex min-h-dvh">
         <aside className="sticky top-0 hidden h-dvh w-56 shrink-0 flex-col border-r border-border bg-surface px-3 py-4 md:flex">
-          <Link href="/" className="mb-5 flex items-center gap-2 px-2.5 text-sm font-semibold tracking-tight">
-            <span className="inline-block size-5 rounded-md bg-accent" aria-hidden />
-            CRM
+          <Link href="/" className="mb-5 flex items-center px-2.5" aria-label="Vela — Today">
+            <VelaLogo size={22} wordmarkClassName="text-[15px]" />
           </Link>
           <form action="/search" className="relative mb-4">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-subtle" />
@@ -67,6 +68,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </div>
 
         <TabBar approvals={approvals} mail={mail.inbox.primary} />
+        <SendFlourishHost />
       </div>
     </FeaturesProvider>
   );

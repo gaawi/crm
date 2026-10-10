@@ -45,7 +45,7 @@ export async function updateAssistantSettings(projectId: string, patch: { active
   if ("brief" in patch) values.assistantBrief = patch.brief?.trim() ? patch.brief.trim() : null;
   if (!Object.keys(values).length) return;
   const result = await sql`update projects set ${sql(values as never)} where id = ${projectId} and sheet`;
-  if (!result.count) throw new Error("Booking sheet not found");
+  if (!result.count) throw new Error("Campaign not found");
 }
 
 interface ActionRow extends Omit<AssistantAction, "createdAt" | "completedAt"> {
@@ -70,7 +70,7 @@ export async function listAssistantActions(
              'id', c.id,
              'displayName', coalesce(nullif(btrim(c.name), ''),
                (select ce.email from contact_emails ce where ce.contact_id = c.id order by ce.is_primary desc, ce.created_at limit 1), 'Unknown'),
-             'phone', c.phone, 'whatsapp', c.whatsapp) end as contact,
+             'phone', c.phone, 'whatsapp', c.whatsapp, 'photoUrl', c.photo_url) end as contact,
            aa.kind, aa.title, aa.reason, aa.priority, aa.status, aa.postponed_until, aa.draft_id, aa.created_at, aa.completed_at
       from assistant_actions aa
       join projects p on p.id = aa.project_id

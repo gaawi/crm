@@ -63,6 +63,8 @@ export interface SheetRowContact {
   /** Normalized ("+34612345678"). */
   phone: string | null;
   whatsapp: string | null;
+  /** https photo; null/absent = initials. */
+  photoUrl?: string | null;
   lastContactedAt: string | null;
   lastInboundAt: string | null;
   lastOutboundAt: string | null;

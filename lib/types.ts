@@ -101,7 +101,7 @@ export interface ProjectRef {
   id: string;
   name: string;
   color: string;
-  /** A booking sheet (set on deals' projects). */
+  /** A campaign (projects.sheet; formerly "booking sheet"). Set on deals' and contacts' projects. */
   sheet?: boolean;
 }
 
@@ -118,6 +118,8 @@ export interface ContactRef {
   /** Normalized ("+34612345678"); present on opportunities' contacts. */
   phone?: string | null;
   whatsapp?: string | null;
+  /** https photo (contacts.photo_url); null/absent = initials. */
+  photoUrl?: string | null;
 }
 
 export interface ContactSummary {
@@ -142,9 +144,14 @@ export interface ContactSummary {
   lastInboundAt: Date | null;
   lastOutboundAt: Date | null;
   messageCount: number;
+  /** https photo (contacts.photo_url); null = initials. */
+  photoUrl?: string | null;
 }
 
 export interface Contact extends ContactSummary {
+  /** The https page the photo was found on. */
+  photoSource: string | null;
+  photoUpdatedAt: Date | null;
   notes: string | null;
   source: "manual" | "gmail";
   replyDismissedAt: Date | null;
@@ -305,6 +312,12 @@ export interface EmailDraft {
   assistantReason: string | null;
   /** The owner's comment when they asked for a new version. */
   revisionRequest: string | null;
+  /**
+   * The campaign (projects.sheet) whose daily assistant can write a new
+   * version ("Request changes"): the draft is a campaign row's email or one
+   * of the assistant's actions. Null = no assistant revision flow.
+   */
+  assistantProjectId?: string | null;
   /** 'YYYY-MM-DD' while postponed. */
   postponedUntil: string | null;
   revisions: { at: string; note: string | null; subject: string; body: string }[];

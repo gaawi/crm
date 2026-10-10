@@ -94,6 +94,7 @@ export async function listContacts(filters: ContactFilters = {}): Promise<{ cont
 async function selectContact(where: ReturnType<typeof sql>): Promise<Contact | null> {
   const [row] = await sql<Contact[]>`
     select ${contactSummaryColumns()},
+           c.photo_source, c.photo_updated_at,
            c.notes, c.source, c.reply_dismissed_at, c.created_at, c.updated_at
       from contacts c
       ${contactSummaryJoins()}

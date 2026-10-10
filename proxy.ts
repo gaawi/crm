@@ -23,7 +23,7 @@ const PUBLIC_PREFIXES = [
   // App icons and manifest (Add to Home Screen).
   "/manifest.webmanifest",
   "/apple-icon",
-  "/pwa-icon/",
+  "/icons/",
 ];
 
 export async function proxy(request: NextRequest) {
