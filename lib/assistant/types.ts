@@ -1,0 +1,44 @@
+/**
+ * The daily campaign assistant, as the client receives it (no "server-only":
+ * safe to import from client components). Dates are 'YYYY-MM-DD', timestamps
+ * ISO strings.
+ */
+
+export type AssistantActionKind = "email" | "call" | "whatsapp" | "task";
+export type AssistantActionStatus = "open" | "done" | "postponed" | "dismissed";
+/** 1 high · 2 normal · 3 low. */
+export type AssistantPriority = 1 | 2 | 3;
+
+export const ASSISTANT_ACTION_KINDS: AssistantActionKind[] = ["email", "call", "whatsapp", "task"];
+
+/** Most emails the routine may propose for one campaign in one call. */
+export const MAX_EMAILS_PER_CALL = 10;
+
+/** Default "Postpone": a week. */
+export const DEFAULT_POSTPONE_DAYS = 7;
+
+export interface AssistantAction {
+  id: string;
+  projectId: string;
+  projectName: string;
+  opportunityId: string | null;
+  /** Venue / organization of the row, else the row's title. */
+  rowName: string | null;
+  contact: { id: string; displayName: string; phone: string | null; whatsapp: string | null } | null;
+  kind: AssistantActionKind;
+  title: string;
+  reason: string | null;
+  priority: AssistantPriority;
+  status: AssistantActionStatus;
+  postponedUntil: string | null;
+  draftId: string | null;
+  createdAt: string;
+  completedAt: string | null;
+}
+
+/** A sheet's assistant settings. */
+export interface AssistantSettings {
+  active: boolean;
+  brief: string | null;
+  lastRunAt: string | null;
+}

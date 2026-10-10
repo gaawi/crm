@@ -7,7 +7,8 @@ import { SESSION_COOKIE, verifySessionToken } from "@/lib/session";
  *
  * Machine endpoints authenticate on their own and are excluded:
  *   /api/gmail/push (Pub/Sub token), /api/cron/* and /api/sync/* (CRON_SECRET
- *   or session), /api/mcp (MCP_API_KEY).
+ *   or session), /api/mcp (MCP_API_KEY), /api/assistant-agent/*
+ *   (ASSISTANT_API_TOKEN).
  */
 const PUBLIC_PREFIXES = [
   "/login",
@@ -18,6 +19,7 @@ const PUBLIC_PREFIXES = [
   "/api/cron/",
   "/api/sync/",
   "/api/mcp",
+  "/api/assistant-agent/",
   // App icons and manifest (Add to Home Screen).
   "/manifest.webmanifest",
   "/apple-icon",

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { ArrowDownLeft, ArrowUpRight, Check, Clock, Sparkles } from "lucide-react";
+import { ReviewInbox } from "@/components/assistant/review-inbox";
 import { PhoneActions } from "@/components/booking/phone-actions";
 import { ContactRow, RowList } from "@/components/contact-row";
 import { NextActionIcon } from "@/components/goals";
@@ -88,6 +89,8 @@ export default async function TodayPage() {
 
       <div className="grid gap-8 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] [&>*]:min-w-0">
         <div className="flex flex-col gap-8">
+          <ReviewInbox today={today} />
+
           {nothingToDo && counts.accounts > 0 ? (
             <EmptyState title="You're all caught up">No follow-ups due and nobody is waiting on you.</EmptyState>
           ) : null}

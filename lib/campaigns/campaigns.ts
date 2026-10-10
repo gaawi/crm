@@ -24,7 +24,7 @@ export class CampaignError extends Error {}
 
 const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const STATUSES: DraftStatus[] = ["proposed", "queued", "revising", "sending", "sent", "discarded", "failed"];
+const STATUSES: DraftStatus[] = ["proposed", "queued", "revising", "sending", "sent", "discarded", "failed", "postponed", "changes_requested"];
 
 const iso = (value: Date | string | null | undefined): string | null => (value ? new Date(value).toISOString() : null);
 

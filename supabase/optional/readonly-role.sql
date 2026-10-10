@@ -10,7 +10,7 @@ alter role crm_reader set statement_timeout = '5s';
 
 grant usage on schema public to crm_reader;
 grant select on organizations, projects, contacts, contact_emails, contact_projects,
-  messages, message_participants, opportunities, email_drafts, activities, email_templates, email_campaigns to crm_reader;
+  messages, message_participants, opportunities, email_drafts, activities, email_templates, email_campaigns, assistant_actions to crm_reader;
 grant select (id, email, display_name, status, last_synced_at, backfill_status, created_at)
   on gmail_accounts to crm_reader;
 grant select on self_addresses to crm_reader;
@@ -22,7 +22,7 @@ declare t text;
 begin
   foreach t in array array['organizations','projects','contacts','contact_emails','contact_projects',
                            'messages','message_participants','opportunities','email_drafts','gmail_accounts',
-                           'activities','email_templates','email_campaigns']
+                           'activities','email_templates','email_campaigns','assistant_actions']
   loop
     execute format('create policy crm_reader_select on %I for select to crm_reader using (true)', t);
   end loop;

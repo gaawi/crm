@@ -47,7 +47,18 @@ export type NextAction =
   | "wait_reply";
 export type OrganizationKind = "venue" | "funder" | "partner" | "press" | "agency" | "institution" | "other";
 /** queued = approved as part of a running campaign, waiting its turn to be sent. */
-export type DraftStatus = "proposed" | "queued" | "revising" | "sending" | "sent" | "discarded" | "failed";
+export type DraftStatus =
+  | "proposed"
+  | "queued"
+  | "revising"
+  | "sending"
+  | "sent"
+  | "discarded"
+  | "failed"
+  /** The owner put it off until postponed_until; it comes back as proposed that day. */
+  | "postponed"
+  /** The owner asked the campaign assistant for a new version (revision_request). */
+  | "changes_requested";
 /** draft = prepared, waiting for the owner's approval; running = sending gradually. */
 export type CampaignStatus = "draft" | "running" | "paused" | "done" | "cancelled";
 export type DraftPurpose = "reply" | "follow_up" | "nudge" | "outreach" | "other";
@@ -288,6 +299,12 @@ export interface EmailDraft {
   subject: string;
   body: string;
   rationale: string | null;
+  /** Why the daily campaign assistant proposes this email (null = not from the campaign assistant). */
+  assistantReason: string | null;
+  /** The owner's comment when they asked for a new version. */
+  revisionRequest: string | null;
+  /** 'YYYY-MM-DD' while postponed. */
+  postponedUntil: string | null;
   revisions: { at: string; note: string | null; subject: string; body: string }[];
   gmailDraftId: string | null;
   gmailThreadId: string | null;

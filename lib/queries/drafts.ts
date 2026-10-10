@@ -19,7 +19,7 @@ const draftColumns = () => sql`
   ) end as contact,
   d.opportunity_id, d.campaign_id, d.reply_to_message_id, rm.subject as reply_to_subject,
   d.purpose, d.origin, d.status,
-  d.to_emails as "to", d.cc_emails as cc, d.subject, d.body_text as body, d.rationale, d.revisions,
+  d.to_emails as "to", d.cc_emails as cc, d.subject, d.body_text as body, d.rationale, d.assistant_reason, d.revision_request, d.postponed_until::text as postponed_until, d.revisions,
   d.gmail_draft_id, d.gmail_thread_id, d.error, d.created_at, d.updated_at, d.sent_at
 `;
 

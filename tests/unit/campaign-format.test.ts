@@ -13,7 +13,7 @@ import { estimateSends } from "@/lib/campaigns/schedule";
 import { DEFAULT_CAMPAIGN_SETTINGS, type CampaignCounts } from "@/lib/campaigns/types";
 
 const counts = (partial: Partial<CampaignCounts>): CampaignCounts => {
-  const c = { proposed: 0, queued: 0, revising: 0, sending: 0, sent: 0, discarded: 0, failed: 0, ...partial };
+  const c = { proposed: 0, queued: 0, revising: 0, sending: 0, sent: 0, discarded: 0, failed: 0, postponed: 0, changes_requested: 0, ...partial };
   return { ...c, total: Object.values(c).reduce((a, b) => a + b, 0) };
 };
 

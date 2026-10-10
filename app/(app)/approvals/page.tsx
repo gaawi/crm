@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Hourglass } from "lucide-react";
 import { DraftCard } from "@/components/draft-card";
 import { EmptyState, PageHeader, SectionTitle } from "@/components/ui/layout";
 import { heldBackCounts, listCampaigns, listCampaignSummaries } from "@/lib/campaigns/campaigns";
@@ -19,12 +19,13 @@ export default async function ApprovalsPage() {
   await recoverStaleDrafts();
   const now = new Date();
   // Campaign emails are listed inside their campaign, standalone emails below.
-  const [campaigns, open, recent, autopilot, finished] = await Promise.all([
+  const [campaigns, open, recent, autopilot, finished, waitingVersion] = await Promise.all([
     listCampaignSummaries({}, now),
     listDrafts(),
     listDrafts({ statuses: ["sent"], limit: 10, campaign: "include" }),
     getSettings("autopilot"),
     listCampaigns({ statuses: ["done", "cancelled"], limit: 10 }),
+    listDrafts({ statuses: ["changes_requested"], campaign: "include", limit: 50 }),
   ]);
   // Finished campaigns with nothing left for the owner: a way back to them (what was sent, when).
   const past = finished.filter((c) => !campaigns.some((x) => x.id === c.id)).slice(0, 5);
@@ -70,6 +71,27 @@ export default async function ApprovalsPage() {
           )}
         </div>
       </section>
+
+      {waitingVersion.length ? (
+        <section className="mt-10" aria-label="Waiting for new version">
+          <SectionTitle count={waitingVersion.length}>Waiting for new version</SectionTitle>
+          <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface md:rounded-lg">
+            {waitingVersion.map((d) => (
+              <li key={d.id} className="flex min-h-[52px] items-start gap-3 px-4 py-2.5 text-sm">
+                <Hourglass className="mt-0.5 size-4 shrink-0 text-subtle" aria-hidden />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate">
+                    <span className="font-medium">{d.contact?.displayName ?? d.to.join(", ")}</span>
+                    <span className="text-muted"> · {d.subject}</span>
+                  </span>
+                  {d.revisionRequest ? <span className="block text-[13px] text-muted md:text-xs">You asked: “{d.revisionRequest}”</span> : null}
+                </span>
+                <span className="shrink-0 text-xs text-subtle">Waiting for new version</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       {past.length ? (
         <section className="mt-10" aria-label="Past campaigns">

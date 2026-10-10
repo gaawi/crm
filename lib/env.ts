@@ -102,6 +102,14 @@ export const env = {
     return read("MCP_API_KEY");
   },
 
+  /**
+   * Bearer token of the daily campaign assistant's private API
+   * (/api/assistant-agent/*). The API answers 404 while it is unset.
+   */
+  get assistantApiToken(): string | undefined {
+    return read("ASSISTANT_API_TOKEN");
+  },
+
   get timezone(): string {
     return read("APP_TIMEZONE") ?? "America/New_York";
   },

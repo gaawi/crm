@@ -9,6 +9,7 @@ import { approveAndSend, discardDraft, DraftError, proposeFollowUp, reviseDraft,
 import { draftErrorMessage } from "@/lib/ai/draft";
 import { getCrmTools, runCrmTool } from "@/lib/ai/tools";
 import { runAutopilotIfDue } from "@/lib/ai/autopilot";
+import { syncDraftAction } from "@/lib/queries/assistant";
 import { DraftError as GmailDraftError } from "@/lib/sync/drafts";
 import { splitList } from "@/lib/utils";
 
@@ -52,6 +53,8 @@ export async function approveDraftAction(id: string): Promise<ActionResult> {
   if (!uuid.safeParse(id).success) return { ok: false, error: "Invalid draft" };
   try {
     const draft = await approveAndSend(id);
+    // An email of the daily campaign assistant: its action is done.
+    await syncDraftAction(id, "done");
     refresh();
     return { ok: true, message: `Sent to ${draft.to.join(", ")}` };
   } catch (error) {
@@ -95,6 +98,7 @@ export async function discardDraftAction(id: string): Promise<ActionResult> {
   if (!uuid.safeParse(id).success) return { ok: false, error: "Invalid draft" };
   try {
     await discardDraft(id);
+    await syncDraftAction(id, "dismissed");
     refresh();
     return { ok: true, message: "Discarded" };
   } catch (error) {

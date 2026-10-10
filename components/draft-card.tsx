@@ -92,7 +92,11 @@ export function DraftCard({
           </Badge>
         ) : null}
         {/* Prepared from a booking-sheet template: your words, not Claude's. */}
-        {draft.origin === "owner" && isTemplateRationale(draft.rationale) ? (
+        {draft.assistantReason ? (
+          <Badge className="font-normal" title="Prepared by the daily campaign assistant">
+            <Sparkles className="size-3" /> Campaign assistant
+          </Badge>
+        ) : draft.origin === "owner" && isTemplateRationale(draft.rationale) ? (
           <Badge className="font-normal">
             <FileText className="size-3" /> Your template
           </Badge>
@@ -108,7 +112,14 @@ export function DraftCard({
       </header>
 
       <div className="flex flex-col gap-3 px-4 py-3">
-        {draft.rationale ? <p className="text-sm italic text-muted">{draft.rationale}</p> : null}
+        {draft.assistantReason ? (
+          <p className="text-sm text-muted">
+            <span className="font-medium text-fg">Why: </span>
+            {draft.assistantReason}
+          </p>
+        ) : draft.rationale ? (
+          <p className="text-sm italic text-muted">{draft.rationale}</p>
+        ) : null}
         {draft.error && !closed ? <Notice tone="warning">{draft.error}</Notice> : null}
 
         {mode === "edit" ? (
