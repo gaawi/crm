@@ -4,10 +4,12 @@ import Link from "next/link";
 import { ArrowDownLeft, ArrowUpRight, Clock, Flame, History, Loader2, Mail, MailCheck, RotateCcw } from "lucide-react";
 import { ActivityIcon, describeLastTouch, TOUCH_TONE_CLASS } from "@/components/booking/activity-meta";
 import { phoneActionClass, type PhoneActionSize } from "@/components/booking/phone-action-class";
+import { PlaceLink } from "@/components/organizations/place-link";
 import { Badge } from "@/components/ui/badge";
 import { lastTouch, rowFollowUpTiming, type LastTouch } from "@/lib/booking/timing";
 import type { EmailTemplate, SheetRow } from "@/lib/booking/types";
 import { OPPORTUNITY_STAGES, stageLabel } from "@/lib/constants";
+import { orgPlace } from "@/lib/organizations/profile";
 import type { OpportunityKind, OpportunityStage } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -61,6 +63,14 @@ export interface RowContext {
 
 export function venueName(row: Pick<SheetRow, "organization" | "title">): string {
   return row.organization?.name ?? row.title;
+}
+
+/** Where the row's organization is ("Kuopio, Finland"), linked to Google Maps; nothing when unknown. */
+export function RowPlace({ row, className, block = false }: { row: Pick<SheetRow, "organization">; className?: string; block?: boolean }) {
+  const place = orgPlace(row.organization, row.organization?.profile);
+  if (!place) return null;
+  const link = <PlaceLink place={place} className={block ? undefined : className} iconClassName="size-3" />;
+  return block ? <div className={cn("flex min-w-0", className)}>{link}</div> : link;
 }
 
 /** "María López · Teatro Jovellanos" (for the log dialog and the drawer). */

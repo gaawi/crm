@@ -4,6 +4,7 @@ import { memo } from "react";
 import Link from "next/link";
 import { Phone } from "lucide-react";
 import { WhatsAppButton } from "@/components/booking/phone-actions";
+import { OrgProfileIconButton } from "@/components/organizations/profile-card";
 import { Checkbox } from "@/components/ui/field";
 import { formatPhone, telHref } from "@/lib/booking/phone";
 import { isFollowUpDue, isOpenStage } from "@/lib/booking/timing";
@@ -11,6 +12,7 @@ import type { SheetRow } from "@/lib/booking/types";
 import { cn } from "@/lib/utils";
 import { DateCell, DeleteRowButton, KindCell, NextActionCell, StageCell, TextCell } from "./cells";
 import {
+  RowPlace,
   HistoryButton,
   LastTouchLine,
   PrepareEmailButton,
@@ -207,15 +209,25 @@ const TableRow = memo(function TableRow({
       </td>
       <td className="px-3 py-2.5">
         {row.organization ? (
-          <Link href={`/organizations/${row.organization.id}`} className="font-medium text-fg [overflow-wrap:anywhere] hover:underline">
-            {name}
-          </Link>
+          <span className="inline">
+            <Link href={`/organizations/${row.organization.id}`} className="font-medium text-fg [overflow-wrap:anywhere] hover:underline">
+              {name}
+            </Link>
+            {row.organization.profile ? (
+              <OrgProfileIconButton
+                profile={row.organization.profile}
+                organization={row.organization}
+                editHref={`/organizations/${row.organization.id}?profile=edit`}
+                className="-my-1 ml-1 align-middle"
+              />
+            ) : null}
+          </span>
         ) : (
           <span className="font-medium [overflow-wrap:anywhere]">{name}</span>
         )}
         <RowBadges row={row} className="mt-1 flex" />
         {row.spaces ? <p className="mt-0.5 line-clamp-2 text-xs text-muted" title={row.spaces}>{row.spaces}</p> : null}
-        {row.organization?.city ? <p className="mt-0.5 truncate text-xs text-subtle">{row.organization.city}</p> : null}
+        <RowPlace row={row} block className="mt-0.5 text-xs text-subtle" />
       </td>
       <td className="px-3 py-2.5">
         {c ? (

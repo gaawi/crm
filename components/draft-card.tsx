@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useClaudeEnabled } from "@/components/features";
 import { useEffect, useState, useTransition } from "react";
 import { Check, FileText, Loader2, Pencil, Send, Sparkles, Trash2 } from "lucide-react";
-import { OrgProfileCard } from "@/components/organizations/profile-card";
+import { OrgProfileLine } from "@/components/organizations/profile-card";
 import { AccountBadge, Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/field";
@@ -75,7 +75,7 @@ export function DraftCard({
   };
 
   return (
-    <article id={`draft-${draft.id}`} className="overflow-hidden rounded-xl border border-border bg-surface md:rounded-lg">
+    <article id={`draft-${draft.id}`} className="min-w-0 overflow-hidden rounded-xl border border-border bg-surface md:rounded-lg">
       <header className="flex flex-wrap items-center gap-1.5 border-b border-border px-4 py-3">
         <span className="min-w-0 truncate text-[15px] font-medium md:text-sm">
           {draft.contact ? (
@@ -112,11 +112,9 @@ export function DraftCard({
         </span>
       </header>
 
-      <div className="flex flex-col gap-3 px-4 py-3">
+      <div className="flex min-w-0 flex-col gap-3 px-4 py-3 [overflow-wrap:anywhere]">
         {draft.organization ? (
-          <OrgProfileCard
-            compact
-            expandable
+          <OrgProfileLine
             profile={draft.organization.profile}
             organization={draft.organization}
             editHref={`/organizations/${draft.organization.id}?profile=edit`}

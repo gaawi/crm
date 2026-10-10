@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { CallButton, WhatsAppButton } from "@/components/booking/phone-actions";
 import { GoalBadge, NextActionIcon } from "@/components/goals";
-import { OrgProfileCard } from "@/components/organizations/profile-card";
+import { OrgProfileLine } from "@/components/organizations/profile-card";
 import { StageBadge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/field";
 import { formatPhone } from "@/lib/booking/phone";
@@ -22,6 +22,7 @@ import {
   STAGE_STRIPE,
   stageOptions,
   TimingBadge,
+  RowPlace,
   venueName,
   type EmailSuggestion,
   type RowActions,
@@ -58,7 +59,6 @@ export const RowCard = memo(function RowCard({
 }) {
   const name = venueName(row);
   const c = row.contact;
-  const place = [row.organization?.city, row.spaces].filter(Boolean).join(" · ");
   const who = c ? [c.displayName, c.role].filter(Boolean).join(" · ") : null;
 
   const select = selectMode ? (
@@ -101,7 +101,8 @@ export const RowCard = memo(function RowCard({
                 <span className="truncate">{nextActionLabel(row.nextAction)}</span>
               </span>
             ) : null}
-            <span className="min-w-0 truncate text-[13px] text-muted">{[row.organization?.city, c?.displayName].filter(Boolean).join(" · ")}</span>
+            <RowPlace row={row} className="shrink-[2] text-[13px] text-muted" />
+            {c?.displayName ? <span className="min-w-0 truncate text-[13px] text-muted">{c.displayName}</span> : null}
           </div>
           <LastTouchLine row={row} timezone={ctx.timezone} today={ctx.today} className="mt-0.5" />
         </div>
@@ -139,16 +140,17 @@ export const RowCard = memo(function RowCard({
             {row.kind !== "booking" ? <GoalBadge kind={row.kind} /> : null}
             <RowBadges row={row} />
           </div>
-          {place ? <p className="mt-0.5 text-[13px] text-muted">{place}</p> : null}
           {row.organization?.profile && !selectMode ? (
-            <OrgProfileCard
-              compact
-              plain
+            <OrgProfileLine
               profile={row.organization.profile}
-              onSelect={() => actions.onHistory(row.id)}
-              className="mt-2.5"
+              organization={row.organization}
+              editHref={`/organizations/${row.organization.id}?profile=edit`}
+              className="mt-1"
             />
-          ) : null}
+          ) : (
+            <RowPlace row={row} block className="mt-0.5 text-[13px] text-muted" />
+          )}
+          {row.spaces ? <p className="mt-0.5 truncate text-[13px] text-muted">{row.spaces}</p> : null}
 
           <div className="mt-2.5">
             {c ? (

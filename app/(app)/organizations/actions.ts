@@ -119,6 +119,10 @@ export async function deleteOrganizationAction(organizationId: string): Promise<
 /* Profile ------------------------------------------------------------------- */
 
 const PROFILE_FIELD_LABEL: Record<string, string> = {
+  tagline: "One-line summary",
+  city: "City",
+  country: "Country",
+  address: "Address",
   summary: "Summary",
   programming: "Programs",
   venues: "Venues",
@@ -148,8 +152,12 @@ export async function updateOrganizationProfileAction(organizationId: string, _p
 
   const input: OrgProfileInput = {
     ...previous,
+    tagline: field(formData, "tagline"),
     summary: field(formData, "summary"),
     kind: (PROFILE_KINDS as readonly string[]).includes(kind) ? (kind as OrgProfileInput["kind"]) : undefined,
+    city: field(formData, "city"),
+    country: field(formData, "country"),
+    address: field(formData, "address"),
     location: field(formData, "location"),
     dates: field(formData, "dates"),
     scale: field(formData, "scale"),

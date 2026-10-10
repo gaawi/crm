@@ -3,7 +3,8 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { cache, type ReactNode } from "react";
 import { Ellipsis, ExternalLink, Pencil, Plus, Sparkles, Trash2, UserPlus } from "lucide-react";
-import { OrgProfileCard } from "@/components/organizations/profile-card";
+import { PlaceLink } from "@/components/organizations/place-link";
+import { OrgProfileLine } from "@/components/organizations/profile-card";
 import { PhoneActions } from "@/components/booking/phone-actions";
 import { ContactRow, RowList } from "@/components/contact-row";
 import { EmailTimeline } from "@/components/email-timeline";
@@ -16,6 +17,7 @@ import { ORGANIZATION_KINDS } from "@/lib/constants";
 import { formatDate, formatRelative, todayIn } from "@/lib/dates";
 import { env } from "@/lib/env";
 import { listOpportunities } from "@/lib/queries/opportunities";
+import { orgPlace } from "@/lib/organizations/profile";
 import { getOrganizationProfile } from "@/lib/queries/org-profiles";
 import { getOrganization, getOrganizationContacts, getOrganizationHistory } from "@/lib/queries/organizations";
 import { getOwnAddresses } from "@/lib/queries/stats";
@@ -107,6 +109,7 @@ export default async function OrganizationPage({ params, searchParams }: PagePro
   ]);
   const profile = stored?.profile ?? null;
   const profileEditHref = `${base}?profile=edit`;
+  const headerPlace = orgPlace(organization, profile);
   const openDeals = deals.filter((d) => d.stage !== "won" && d.stage !== "lost");
   const olderHref =
     history.length === HISTORY_PAGE
@@ -149,7 +152,7 @@ export default async function OrganizationPage({ params, searchParams }: PagePro
           <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[15px] text-muted md:text-sm">
             <OrganizationKindBadge kind={organization.kind} />
             {[
-              organization.city ? <span key="city">{organization.city}</span> : null,
+              headerPlace ? <PlaceLink key="city" place={headerPlace} /> : null,
               organization.website ? (
                 <a
                   key="web"
@@ -183,7 +186,15 @@ export default async function OrganizationPage({ params, searchParams }: PagePro
       ) : profile ? (
         <section aria-label="Profile" className="mb-6">
           <GroupTitle actions={<GroupAction href={profileEditHref}>Edit profile</GroupAction>}>Profile</GroupTitle>
-          <OrgProfileCard profile={profile} organization={organization} showName={false} wide />
+          <OrgProfileLine
+            profile={profile}
+            organization={organization}
+            editHref={profileEditHref}
+            buttonLabel="Open profile"
+            labelOnPhone
+            showPlace={false}
+            className="rounded-xl border border-border bg-surface px-4 py-3 md:rounded-lg md:px-3 md:py-2"
+          />
         </section>
       ) : (
         <Link

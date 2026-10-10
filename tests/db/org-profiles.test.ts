@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { sql } from "@/lib/db";
 import { GET as profilesGet, POST as profilesPost } from "@/app/api/assistant-agent/profiles/route";
-import { orgProfileSchema, parseImageLines, parseLinkLines, parseVenueLines, readProfile } from "@/lib/organizations/profile";
+import { orgProfileSchema, parseImageLines, parseLinkLines, parseVenueLines, profileTagline, profileTaglineParts, readProfile } from "@/lib/organizations/profile";
 import { addSheetRow, createSheet } from "@/lib/queries/booking";
 import { getOrganizationProfile, getOrganizationWithProfile } from "@/lib/queries/org-profiles";
 import { getDraft } from "@/lib/queries/drafts";
@@ -25,11 +25,14 @@ function post(body: unknown, token: string | null = TOKEN) {
 }
 
 const PROFILE = {
+  tagline: "Summer festival of new music and dance · Girona, Spain",
   summary: "A summer festival of new music and dance in the old town. Three weeks of premieres every July.",
   kind: "festival",
   programming: "Contemporary music, dance, site-specific work",
   venues: [{ name: "Cloister", type: "outdoor stage", capacity: 600 }],
   location: "Girona, Spain",
+  city: "Girona",
+  country: "Spain",
   dates: "July",
   fitForAdar: "They commission site-specific pieces.",
   ideas: ["Pitch the cloister piece", "Offer a workshop"],
@@ -90,7 +93,7 @@ describe("organization profiles API", () => {
     expect(body.results.map((r: { organizationId: string }) => r.organizationId)).toEqual([orgA, orgB, orgA]);
 
     const a = await getOrganizationProfile(orgA);
-    expect(a?.profile).toMatchObject({ summary: "Updated through the email.", kind: "festival", researchedBy: "claude" });
+    expect(a?.profile).toMatchObject({ summary: "Updated through the email.", kind: "festival", tagline: PROFILE.tagline, city: "Girona", country: "Spain", researchedBy: "claude" });
     expect(a?.profile?.researchedAt).toMatch(/^\d{4}-\d\d-\d\dT/);
     expect(a?.profileUpdatedAt).toBeInstanceOf(Date);
     expect(a?.profile?.venues).toEqual([{ name: "Cloister", type: "outdoor stage", capacity: 600 }]);
@@ -112,7 +115,8 @@ describe("organization profiles API", () => {
         { organizationId: orgA, opportunityId: null, contactEmail: "bo@beta.org", profile: PROFILE },
         { organizationId: "00000000-0000-4000-8000-000000000000", profile: PROFILE },
         { organizationId: orgB, profile: { ...PROFILE, links: [{ label: "x", url: "javascript:alert(1)" }] } },
-        { organizationId: orgB, profile: { summary: "Short and valid.", kind: null, venues: null, location: "" } },
+        { organizationId: orgB, profile: { ...PROFILE, tagline: "x".repeat(121) } },
+        { organizationId: orgB, profile: { summary: "Short and valid.", kind: null, venues: null, location: "", tagline: "  " } },
       ],
     });
     const body = await res.json();
@@ -126,7 +130,8 @@ describe("organization profiles API", () => {
     expect(errors[5]).toMatch(/different organizations/);
     expect(errors[6]).toMatch(/not found/);
     expect(errors[7]).toMatch(/links\.0\.url/);
-    expect(errors[8]).toBe("ok");
+    expect(errors[8]).toMatch(/^profile\.tagline/);
+    expect(errors[9]).toBe("ok");
     expect((await getOrganizationProfile(orgA))?.profile).toBeNull();
     expect((await getOrganizationProfile(orgB))?.profile).toEqual({
       summary: "Short and valid.",
@@ -190,5 +195,29 @@ describe("profile parsing", () => {
     expect(readProfile({ nope: 1 })).toBeNull();
     expect(readProfile({ summary: "Hi", researchedAt: "2026-10-01" })?.researchedAt).toBe("2026-10-01T00:00:00.000Z");
     expect(orgProfileSchema.safeParse({ summary: "x".repeat(1501) }).success).toBe(false);
+  });
+
+  it("sums a profile up in one line", () => {
+    const base = { summary: "A chamber music festival by the lake. Every summer since 1970." };
+    const kuopio = { city: "Kuopio", country: "Finland" };
+    expect(profileTagline({ ...base, ...kuopio, tagline: "Chamber music festival · Kuopio, Finland", kind: "festival" })).toBe(
+      "Chamber music festival · Kuopio, Finland",
+    );
+    expect(profileTaglineParts({ ...base, ...kuopio, tagline: "Chamber music festival · Kuopio, Finland" }).lead).toBe("Chamber music festival");
+    expect(profileTagline({ ...base, ...kuopio, tagline: "Chamber music festival" })).toBe("Chamber music festival · Kuopio, Finland");
+    expect(profileTagline({ ...base, tagline: "Chamber music hall · 400 seats" })).toBe("Chamber music hall · 400 seats");
+    expect(profileTagline({ ...base, kind: "festival", location: "Larisa, Greece" })).toBe("Festival · Larisa, Greece");
+    expect(profileTagline({ ...base, kind: "venue" }, { city: "Madrid" })).toBe("Venue · Madrid");
+    expect(profileTagline({ ...base, kind: "venue" })).toBe("A chamber music festival by the lake");
+    const long = profileTagline({ summary: `${"word ".repeat(60)}end.` });
+    expect(long.length).toBeLessThanOrEqual(120);
+    expect(long.endsWith("…")).toBe(true);
+  });
+
+  it("accepts city and country", () => {
+    const parsed = orgProfileSchema.parse({ summary: "Hi", city: " Kuopio ", country: "Finland", tagline: "" });
+    expect(parsed).toEqual({ summary: "Hi", city: "Kuopio", country: "Finland" });
+    expect(orgProfileSchema.safeParse({ summary: "Hi", city: "x".repeat(81) }).success).toBe(false);
+    expect(orgProfileSchema.safeParse({ summary: "Hi", country: "x".repeat(61) }).success).toBe(false);
   });
 });

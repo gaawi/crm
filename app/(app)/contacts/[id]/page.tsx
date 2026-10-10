@@ -6,7 +6,7 @@ import { Archive, CalendarClock, Check, Ellipsis, GitMerge, Plus, Trash2, X } fr
 import { DraftFollowUp } from "@/components/draft-follow-up";
 import { PhoneLink } from "@/components/booking/phone-actions";
 import { EmailTimeline } from "@/components/email-timeline";
-import { OrgProfileCard } from "@/components/organizations/profile-card";
+import { OrgProfileLine } from "@/components/organizations/profile-card";
 import { RowList } from "@/components/contact-row";
 import { Badge, ProjectDot, StatusBadge, TagBadge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
@@ -159,7 +159,12 @@ export default async function ContactPage({ params, searchParams }: PageProps<"/
       <ContactHeader contact={contact} accounts={accounts} timezone={timezone} />
 
       {orgProfile ? (
-        <OrgProfileCard compact profile={orgProfile.profile} organization={orgProfile} href={`/organizations/${orgProfile.id}`} className="mb-5" />
+        <OrgProfileLine
+          profile={orgProfile.profile}
+          organization={orgProfile}
+          editHref={`/organizations/${orgProfile.id}?profile=edit`}
+          className="mb-5"
+        />
       ) : null}
 
       {notice === "merged" ? (

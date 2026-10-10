@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
 import { CalendarClock, Check, ChevronDown, ListTodo, Mail, MessageCircle, MessageSquareText, Pencil, Phone, Send, Trash2, X } from "lucide-react";
 import { CallButton, WhatsAppButton } from "@/components/booking/phone-actions";
-import { OrgProfileCard } from "@/components/organizations/profile-card";
+import { OrgProfileLine } from "@/components/organizations/profile-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/field";
@@ -120,7 +120,7 @@ export function AssistantDraftCard({
   const to = draft.contact?.displayName ?? draft.to.join(", ");
 
   return (
-    <article data-testid="assistant-draft" className="overflow-hidden rounded-xl border border-border bg-surface md:rounded-lg">
+    <article data-testid="assistant-draft" className="min-w-0 overflow-hidden rounded-xl border border-border bg-surface md:rounded-lg">
       <header className="flex flex-wrap items-center gap-1.5 border-b border-border px-4 py-3">
         <Mail className="size-4 shrink-0 text-subtle" aria-hidden />
         <span className="min-w-0 truncate text-[15px] font-medium md:text-sm">
@@ -136,11 +136,9 @@ export function AssistantDraftCard({
         {showProject ? <span className="ml-auto truncate text-xs text-subtle">{projectName}</span> : null}
       </header>
 
-      <div className="flex flex-col gap-3 px-4 py-3">
+      <div className="flex min-w-0 flex-col gap-3 px-4 py-3 [overflow-wrap:anywhere]">
         {draft.organization ? (
-          <OrgProfileCard
-            compact
-            expandable
+          <OrgProfileLine
             profile={draft.organization.profile}
             organization={draft.organization}
             editHref={`/organizations/${draft.organization.id}?profile=edit`}

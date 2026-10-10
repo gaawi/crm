@@ -1,7 +1,7 @@
 import { ButtonLink } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { SubmitButton } from "@/components/ui/submit-button";
-import { PROFILE_KIND_LABEL, PROFILE_KINDS, profileFormValues, type OrgProfile } from "@/lib/organizations/profile";
+import { MAX_TAGLINE, PROFILE_KIND_LABEL, PROFILE_KINDS, profileFormValues, type OrgProfile } from "@/lib/organizations/profile";
 import { ActionForm, FormSubmit } from "../../_components/action-form";
 import { FormActions, GroupTitle } from "../../_components/ui";
 import { removeOrganizationProfileAction, updateOrganizationProfileAction } from "../actions";
@@ -21,6 +21,20 @@ export function ProfileForm({ organizationId, profile, cancelHref }: { organizat
         action={updateOrganizationProfileAction.bind(null, organizationId)}
         className="flex flex-col gap-4 rounded-xl border border-border bg-surface p-4 md:rounded-lg"
       >
+        <Field
+          label="One-line summary"
+          htmlFor="p-tagline"
+          hint="What they are, e.g. Chamber music festival. Shown in lists with the city and country; empty = the kind."
+        >
+          <Input
+            id="p-tagline"
+            name="tagline"
+            maxLength={MAX_TAGLINE}
+            defaultValue={v.tagline}
+            placeholder="Chamber music festival"
+            {...text}
+          />
+        </Field>
         <Field label="Summary" htmlFor="p-summary" hint="Two to four sentences: who they are and what they do.">
           <Textarea id="p-summary" name="summary" rows={4} required maxLength={1500} defaultValue={v.summary} />
         </Field>
@@ -35,8 +49,17 @@ export function ProfileForm({ organizationId, profile, cancelHref }: { organizat
               ))}
             </Select>
           </Field>
-          <Field label="Location" htmlFor="p-location">
-            <Input id="p-location" name="location" maxLength={200} defaultValue={v.location} placeholder="Girona, Spain" {...text} />
+          <Field label="City" htmlFor="p-city">
+            <Input id="p-city" name="city" maxLength={80} defaultValue={v.city} placeholder="Kuopio" {...text} />
+          </Field>
+          <Field label="Country" htmlFor="p-country">
+            <Input id="p-country" name="country" maxLength={60} defaultValue={v.country} placeholder="Finland" {...text} />
+          </Field>
+          <Field label="Address" htmlFor="p-address" hint="Street address, shown as a Google Maps link.">
+            <Input id="p-address" name="address" maxLength={200} defaultValue={v.address} placeholder="Kuopionlahdenkatu 23" {...text} />
+          </Field>
+          <Field label="Area / region" htmlFor="p-location" hint="Optional; shown only without a city and country.">
+            <Input id="p-location" name="location" maxLength={200} defaultValue={v.location} placeholder="Northern Savonia" {...text} />
           </Field>
           <Field label="Dates / season" htmlFor="p-dates">
             <Input id="p-dates" name="dates" maxLength={300} defaultValue={v.dates} placeholder="Every July · season Oct–May" {...text} />
@@ -48,7 +71,7 @@ export function ProfileForm({ organizationId, profile, cancelHref }: { organizat
         <Field label="Programs" htmlFor="p-programming" hint="What they program: genres, formats.">
           <Textarea id="p-programming" name="programming" rows={3} maxLength={2000} defaultValue={v.programming} />
         </Field>
-        <Field label="Venues" htmlFor="p-venues" hint="One per line: Name — type — capacity (e.g. Main hall — black box theatre — 450).">
+        <Field label="Venues" htmlFor="p-venues" hint="One per line: Name — type — capacity — @ address (e.g. Main hall — black box theatre — 450 — @ Calle Mayor 1). Each links to Google Maps.">
           <Textarea id="p-venues" name="venues" rows={3} defaultValue={v.venues} {...text} />
         </Field>
         <Field label="Audience" htmlFor="p-audience">

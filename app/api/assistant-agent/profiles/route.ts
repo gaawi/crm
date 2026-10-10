@@ -9,7 +9,13 @@ import { applyProfiles, listProfilesForProject, ProfilesError } from "@/lib/assi
  *      current profile (missing=1: only those without one).
  * POST /api/assistant-agent/profiles
  *      {"profiles": [{"organizationId"? | "opportunityId"? | "contactEmail"?, "profile": {…}}]}
- *      replaces each organization's profile; per-item results.
+ *      replaces each organization's profile; per-item results. Profile shape:
+ *      lib/organizations/profile.ts (summary required). Optional "tagline"
+ *      (≤120 chars) is the one-line summary lists show, e.g. "Chamber music
+ *      festival" (a trailing " · Kuopio, Finland" is fine); "city" (≤80) and
+ *      "country" (≤60) are shown as "Kuopio, Finland", linked to Google Maps
+ *      (else "location", else the organization's city); "address" (≤200)
+ *      and each venue's name (or its own "address", ≤200) link to Maps too.
  */
 
 export const maxDuration = 60;

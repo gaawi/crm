@@ -5,12 +5,11 @@ import { useState, type ReactNode } from "react";
 import {
   Building2,
   CalendarDays,
-  ChevronDown,
   ChevronRight,
   ExternalLink,
+  Info,
   Lightbulb,
   Mail,
-  MapPin,
   Music,
   Pencil,
   Sparkles,
@@ -18,7 +17,9 @@ import {
   Theater,
   Users,
 } from "lucide-react";
-import { hostOf, isHttpsUrl, PROFILE_KIND_LABEL, type OrgProfile, type OrgProfileOwner, type ProfileKind } from "@/lib/organizations/profile";
+import { PlaceLink } from "@/components/organizations/place-link";
+import { Sheet } from "@/components/ui/sheet";
+import { hostOf, isHttpsUrl, addressMapsUrl, orgPlace, PROFILE_KIND_LABEL, profileTagline, profileTaglineParts, venueMapsUrl, type OrgProfile, type OrgProfileOwner, type ProfileKind } from "@/lib/organizations/profile";
 import { cn } from "@/lib/utils";
 
 /**
@@ -27,9 +28,9 @@ import { cn } from "@/lib/utils";
  * scale), what they program, their venues, why ADAR fits and ideas, people,
  * links, and who researched it with the sources.
  *
- * `compact`: thumbnail + name + summary + two chips, for lists; with
- * `expandable` a "More" toggle opens the full card in place, otherwise
- * `onSelect` or `href` (if any) make the whole card tappable.
+ * `OrgProfileLine` is what lists show (Today, Approvals, booking sheet,
+ * contact page): one line with a "Profile" button that opens this card in
+ * a modal.
  *
  * Remote images: plain <img> without referrer, lazy, and hidden when they
  * fail to load (a dead link never leaves a broken icon behind).
@@ -109,159 +110,6 @@ function RemoteImage({
   );
 }
 
-export function OrgProfileCard({
-  profile,
-  organization,
-  compact = false,
-  expandable = false,
-  href,
-  onSelect,
-  plain = false,
-  editHref,
-  showName = true,
-  wide = false,
-  className,
-}: {
-  profile: OrgProfile;
-  organization?: OrgProfileOwner | null;
-  compact?: boolean;
-  /** Full card on a wide page: photos left, text right from md up. */
-  wide?: boolean;
-  /** Compact only: a "More" toggle that opens the full card in place. */
-  expandable?: boolean;
-  /** Compact only: link to the organization (when not expandable). */
-  href?: string | null;
-  /** Compact only: the whole card is a button (e.g. open the row's history). */
-  onSelect?: () => void;
-  /** Compact only: no border or padding, to sit inside another card. */
-  plain?: boolean;
-  /** Full card: an "Edit" link in the footer. */
-  editHref?: string | null;
-  /** Full card: the organization's name above the summary. */
-  showName?: boolean;
-  className?: string;
-}) {
-  const [open, setOpen] = useState(false);
-  if (compact && !open) {
-    return (
-      <CompactCard
-        profile={profile}
-        organization={organization}
-        href={expandable ? null : href}
-        onExpand={expandable ? () => setOpen(true) : onSelect}
-        expands={expandable}
-        plain={plain}
-        className={className}
-      />
-    );
-  }
-  return (
-    <FullCard
-      profile={profile}
-      organization={organization}
-      editHref={editHref}
-      showName={showName}
-      wide={wide && !compact}
-      onCollapse={compact ? () => setOpen(false) : undefined}
-      className={className}
-    />
-  );
-}
-
-function CompactCard({
-  profile,
-  organization,
-  href,
-  onExpand,
-  expands,
-  plain,
-  className,
-}: {
-  profile: OrgProfile;
-  organization?: OrgProfileOwner | null;
-  href?: string | null;
-  onExpand?: () => void;
-  /** onExpand opens the full card in place (else it is a plain action). */
-  expands: boolean;
-  plain: boolean;
-  className?: string;
-}) {
-  const { images, fail, check } = useImages(profile);
-  const thumb = images[0];
-  const KindIcon = KIND_ICON[profile.kind ?? "organization"];
-  const chips = [
-    profile.kind ? <Chip key="kind">{PROFILE_KIND_LABEL[profile.kind]}</Chip> : null,
-    profile.location ? (
-      <Chip key="loc" icon={MapPin}>
-        {profile.location}
-      </Chip>
-    ) : null,
-    profile.dates ? (
-      <Chip key="dates" icon={CalendarDays}>
-        {profile.dates}
-      </Chip>
-    ) : null,
-  ]
-    .filter(Boolean)
-    .slice(0, 2);
-
-  const body = (
-    <>
-      <span className="relative size-14 shrink-0 overflow-hidden rounded-lg bg-surface-2 md:size-12">
-        <span className="absolute inset-0 flex items-center justify-center text-subtle" aria-hidden>
-          <KindIcon className="size-6 md:size-5" strokeWidth={1.5} />
-        </span>
-        {thumb ? (
-          <RemoteImage key={thumb.url} url={thumb.url} alt="" onFail={() => fail(thumb.url)} check={check(thumb.url)} className="relative size-full" />
-        ) : null}
-      </span>
-      <span className="flex min-w-0 flex-1 flex-col gap-1">
-        {organization?.name ? <span className="truncate text-[15px] font-semibold text-fg md:text-sm">{organization.name}</span> : null}
-        <span className="line-clamp-2 text-[13px] leading-snug text-muted md:text-xs">{profile.summary}</span>
-        {chips.length ? <span className="flex min-w-0 flex-wrap gap-1">{chips}</span> : null}
-      </span>
-    </>
-  );
-
-  const shell = plain
-    ? "flex w-full items-start gap-3 rounded-lg text-left"
-    : "flex w-full items-start gap-3 rounded-xl border border-border bg-surface p-3 text-left md:rounded-lg md:p-2.5";
-  if (onExpand) {
-    return (
-      <button
-        type="button"
-        onClick={onExpand}
-        aria-expanded={expands ? false : undefined}
-        data-testid="org-profile-compact"
-        className={cn(shell, "active:bg-surface-2 md:hover:bg-surface-2/60", className)}
-      >
-        {body}
-        {expands ? (
-          <span className="flex shrink-0 items-center gap-0.5 self-center text-[13px] text-muted md:text-xs">
-            <span className="sr-only md:not-sr-only">More</span>
-            <ChevronDown className="size-5 md:size-4" strokeWidth={2} aria-hidden />
-          </span>
-        ) : (
-          <ChevronRight className="size-4 shrink-0 self-center text-subtle" strokeWidth={2} aria-hidden />
-        )}
-      </button>
-    );
-  }
-  if (href) {
-    return (
-      <Link href={href} data-testid="org-profile-compact" className={cn(shell, "active:bg-surface-2 md:hover:bg-surface-2/60", className)}>
-        {body}
-        <ChevronRight className="size-4 shrink-0 self-center text-subtle" strokeWidth={2} aria-hidden />
-      </Link>
-    );
-  }
-  return (
-    <div data-testid="org-profile-compact" className={cn(shell, className)}>
-      {body}
-    </div>
-  );
-}
-
 function Section({ title, icon: Icon, children }: { title: string; icon?: typeof Building2; children: ReactNode }) {
   return (
     <section className="flex flex-col gap-1.5">
@@ -274,21 +122,173 @@ function Section({ title, icon: Icon, children }: { title: string; icon?: typeof
   );
 }
 
-function FullCard({
-  profile: p,
+/** The full card in a modal: a centered dialog on desktop, a full-screen sheet on phones. */
+export function OrgProfileDialog({
+  open,
+  onClose,
+  profile,
   organization,
   editHref,
-  showName,
-  wide,
-  onCollapse,
+}: {
+  open: boolean;
+  onClose: () => void;
+  profile: OrgProfile;
+  organization?: OrgProfileOwner | null;
+  editHref?: string | null;
+}) {
+  return (
+    <Sheet
+      open={open}
+      onClose={onClose}
+      title={organization?.name ?? "Profile"}
+      description={profileTagline(profile, organization)}
+      className="md:w-[min(40rem,calc(100vw-2rem))]"
+    >
+      <OrgProfileCard
+        profile={profile}
+        organization={organization}
+        showName={false}
+        editHref={editHref}
+        orgHref={organization?.id ? `/organizations/${organization.id}` : null}
+        bare
+      />
+    </Sheet>
+  );
+}
+
+/** A small info icon that opens the profile popup (next to a venue's name in the booking sheet). */
+export function OrgProfileIconButton({
+  profile,
+  organization,
+  editHref,
   className,
 }: {
   profile: OrgProfile;
   organization?: OrgProfileOwner | null;
   editHref?: string | null;
-  showName: boolean;
-  wide: boolean;
-  onCollapse?: () => void;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-haspopup="dialog"
+        aria-label={organization?.name ? `Profile of ${organization.name}` : "Profile"}
+        title="Profile"
+        data-testid="org-profile-icon"
+        className={cn(
+          "inline-flex size-11 shrink-0 items-center justify-center rounded-full text-subtle active:bg-surface-2 md:size-6 md:rounded-md md:hover:bg-surface-2 md:hover:text-fg",
+          className,
+        )}
+      >
+        <Info className="size-5 md:size-3.5" strokeWidth={1.75} aria-hidden />
+      </button>
+      <OrgProfileDialog open={open} onClose={() => setOpen(false)} profile={profile} organization={organization} editHref={editHref} />
+    </>
+  );
+}
+
+/**
+ * The profile in one line: a small round photo, what they are and where
+ * (a Google Maps link), and a "Profile" button. The photo, the text and the
+ * button all open the full card in a popup; the card is never inline.
+ */
+export function OrgProfileLine({
+  profile,
+  organization,
+  editHref,
+  buttonLabel = "Profile",
+  labelOnPhone = false,
+  thumb = true,
+  showPlace = true,
+  className,
+}: {
+  profile: OrgProfile;
+  organization?: OrgProfileOwner | null;
+  /** The popup's "Edit" link. */
+  editHref?: string | null;
+  /** The button's label on desktop (phones show the icon only). */
+  buttonLabel?: string;
+  /** Show the label on phones too (a 44pt pill instead of the icon alone). */
+  labelOnPhone?: boolean;
+  thumb?: boolean;
+  /** false: the place is shown elsewhere on the page (the org page header). */
+  showPlace?: boolean;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const { images, fail, check } = useImages(profile);
+  const photo = thumb ? images[0] : undefined;
+  const { lead, place } = profileTaglineParts(profile, organization);
+  const name = organization?.name;
+  const show = () => setOpen(true);
+
+  return (
+    <div data-testid="org-profile-line" className={cn("flex min-w-0 items-center gap-2", className)}>
+      {photo ? (
+        <button type="button" tabIndex={-1} aria-hidden onClick={show} className="shrink-0 rounded-full">
+          <RemoteImage key={photo.url} url={photo.url} alt="" onFail={() => fail(photo.url)} check={check(photo.url)} className="size-7 rounded-full bg-surface-2" />
+        </button>
+      ) : null}
+      <span className="flex min-w-0 flex-1 items-center gap-1.5 text-[15px] text-muted md:text-sm">
+        <button
+          type="button"
+          onClick={show}
+          tabIndex={-1}
+          title={place && showPlace ? `${lead} · ${place.label}` : lead}
+          className="min-w-0 shrink truncate text-left hover:text-fg"
+        >
+          {lead}
+        </button>
+        {place && showPlace ? (
+          <>
+            <span aria-hidden className="shrink-0 text-subtle">
+              ·
+            </span>
+            <PlaceLink place={place} className="max-w-[60%] shrink-0 text-[13px] md:text-sm" />
+          </>
+        ) : null}
+      </span>
+      <button
+        type="button"
+        onClick={show}
+        aria-haspopup="dialog"
+        aria-label={name ? `${buttonLabel} of ${name}` : buttonLabel}
+        data-testid="org-profile-open"
+        className={cn(
+          "-my-2 inline-flex shrink-0 items-center justify-center rounded-full active:bg-surface-2 md:my-0 md:h-7 md:gap-1 md:border md:border-border md:px-2.5 md:text-xs md:hover:bg-surface-2 md:hover:text-fg",
+          labelOnPhone ? "h-11 gap-1.5 border border-border px-3.5 text-[15px] font-medium text-fg md:font-normal md:text-muted" : "size-11 text-muted md:size-auto",
+        )}
+      >
+        <Info className={cn("md:size-3.5", labelOnPhone ? "size-4" : "size-5")} strokeWidth={1.75} aria-hidden />
+        <span className={labelOnPhone ? undefined : "hidden md:inline"}>{buttonLabel}</span>
+      </button>
+      <OrgProfileDialog open={open} onClose={() => setOpen(false)} profile={profile} organization={organization} editHref={editHref} />
+    </div>
+  );
+}
+
+/** The full card (shown in the popup). `bare`: no border, edge to edge. */
+export function OrgProfileCard({
+  profile: p,
+  organization,
+  editHref,
+  orgHref,
+  showName = true,
+  bare = false,
+  className,
+}: {
+  profile: OrgProfile;
+  organization?: OrgProfileOwner | null;
+  /** An "Edit" link in the footer. */
+  editHref?: string | null;
+  /** An "Open organization" link in the footer. */
+  orgHref?: string | null;
+  /** The organization's name above the summary. */
+  showName?: boolean;
+  bare?: boolean;
   className?: string;
 }) {
   const { images, fail, check } = useImages(p);
@@ -299,19 +299,21 @@ function FullCard({
   const sources = (p.sources ?? []).filter(isHttpsUrl);
   const links = (p.links ?? []).filter((l) => isHttpsUrl(l.url));
   const name = organization?.name;
+  const place = orgPlace(organization, p);
+  const addressUrl = addressMapsUrl(p, organization);
 
   return (
     <article
       data-testid="org-profile"
       className={cn(
-        "overflow-hidden rounded-xl border border-border bg-surface md:rounded-lg",
-        wide && hero && "md:grid md:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] md:items-start",
+        "overflow-hidden bg-surface",
+        bare ? "-mx-4 -mt-4 md:-mx-5" : "rounded-xl border border-border md:rounded-lg",
         className,
       )}
     >
       {hero ? (
-        <div className={cn(wide && "md:sticky md:top-0 md:pb-4")}>
-          <figure className={cn("relative aspect-[16/9] w-full bg-surface-2", wide ? "md:aspect-[4/3]" : "md:aspect-[2/1]")}>
+        <div>
+          <figure className="relative aspect-[16/9] max-h-[180px] w-full bg-surface-2 md:aspect-[2/1] md:max-h-[220px]">
             <RemoteImage
               key={hero.url}
               url={hero.url}
@@ -372,19 +374,21 @@ function FullCard({
                 </span>
               ) : null}
               <h3 className="min-w-0 flex-1 text-[17px] font-semibold leading-snug text-fg [overflow-wrap:anywhere] md:text-base">{name}</h3>
-              {onCollapse ? <CollapseButton onClick={onCollapse} /> : null}
-            </div>
-          ) : onCollapse ? (
-            <div className="flex justify-end">
-              <CollapseButton onClick={onCollapse} />
             </div>
           ) : null}
           <div className="flex flex-wrap gap-1.5">
             {p.kind ? <Chip icon={KindIcon}>{PROFILE_KIND_LABEL[p.kind]}</Chip> : null}
-            {p.location ? <Chip icon={MapPin}>{p.location}</Chip> : null}
+            {place ? (
+              <PlaceLink place={place} className={cn(chipClass, "hover:bg-surface-2/70")} iconClassName="size-3.5 md:size-3" />
+            ) : null}
             {p.dates ? <Chip icon={CalendarDays}>{p.dates}</Chip> : null}
             {p.scale ? <Chip icon={Users}>{p.scale}</Chip> : null}
           </div>
+          {p.address && addressUrl ? (
+            <div className="flex min-w-0">
+              <PlaceLink place={{ label: p.address, mapsUrl: addressUrl }} className="text-[15px] text-muted md:text-sm" />
+            </div>
+          ) : null}
           <p className="text-[15px] leading-relaxed text-fg md:text-sm">{p.summary}</p>
         </div>
 
@@ -400,9 +404,15 @@ function FullCard({
               {p.venues.map((v, i) => (
                 <li key={`${v.name}-${i}`} className="flex items-start gap-3 px-3 py-2">
                   <span className="min-w-0 flex-1">
-                    <span className="block text-[15px] font-medium text-fg md:text-sm">{v.name}</span>
-                    {v.type || v.notes ? (
-                      <span className="block text-[13px] text-muted md:text-xs">{[v.type, v.notes].filter(Boolean).join(" · ")}</span>
+                    <span className="flex min-w-0">
+                      <PlaceLink
+                        place={{ label: v.name, mapsUrl: venueMapsUrl(v, p, organization) ?? "" }}
+                        className="text-[15px] font-medium text-fg md:text-sm"
+                        iconClassName="size-3.5 text-subtle"
+                      />
+                    </span>
+                    {v.type || v.notes || v.address ? (
+                      <span className="block text-[13px] text-muted md:text-xs">{[v.type, v.address, v.notes].filter(Boolean).join(" · ")}</span>
                     ) : null}
                   </span>
                   {capacityLabel(v.capacity) ? (
@@ -491,8 +501,14 @@ function FullCard({
           <div className="flex items-center gap-2">
             <Sparkles className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
             <span className="min-w-0 flex-1 truncate">{researchedLine(p)}</span>
+            {orgHref ? (
+              <Link href={orgHref} className="inline-flex min-h-8 items-center gap-1 text-muted hover:text-fg">
+                <Building2 className="size-3" strokeWidth={1.75} aria-hidden />
+                Organization
+              </Link>
+            ) : null}
             {editHref ? (
-              <Link href={editHref} scroll={false} className="inline-flex items-center gap-1 text-muted hover:text-fg">
+              <Link href={editHref} scroll={false} className="inline-flex min-h-8 items-center gap-1 text-muted hover:text-fg">
                 <Pencil className="size-3" strokeWidth={1.75} aria-hidden />
                 Edit
               </Link>
@@ -519,19 +535,5 @@ function FullCard({
         </footer>
       </div>
     </article>
-  );
-}
-
-function CollapseButton({ onClick }: { onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-expanded
-      className="inline-flex h-9 shrink-0 items-center gap-0.5 rounded-full px-2 text-[13px] text-muted active:bg-surface-2 md:h-7 md:text-xs md:hover:bg-surface-2"
-    >
-      Less
-      <ChevronDown className="size-4 rotate-180" strokeWidth={2} aria-hidden />
-    </button>
   );
 }

@@ -57,9 +57,15 @@ export const venueSchema = z.object({
   type: optText(120),
   capacity: z.number().int().min(0).max(1_000_000).nullish(),
   notes: optText(500),
+  /** Street address; its Maps link uses it instead of the venue's name. */
+  address: optText(200),
 });
 
+export const MAX_TAGLINE = 120;
+
 export const orgProfileSchema = z.object({
+  /** One line for lists: "Chamber music festival · Kuopio, Finland". */
+  tagline: optText(MAX_TAGLINE),
   summary: text(1500),
   kind: z
     .enum(PROFILE_KINDS)
@@ -68,6 +74,12 @@ export const orgProfileSchema = z.object({
     .optional(),
   programming: optText(2000),
   venues: optList(venueSchema, 20),
+  /** "Kuopio": shown with the country as "Kuopio, Finland", linked to Google Maps. */
+  city: optText(80),
+  country: optText(60),
+  /** Street address, shown as a Google Maps link. */
+  address: optText(200),
+  /** Free-text place (region, area); shown when city and country are missing. */
   location: optText(200),
   dates: optText(300),
   audience: optText(600),
@@ -134,6 +146,116 @@ export function readProfile(value: unknown): OrgProfile | null {
   return parsed.success ? parsed.data : null;
 }
 
+/** The first sentence of a text, cut to `max` characters with an ellipsis. */
+function firstSentence(value: string, max: number): string {
+  const flat = value.replace(/\s+/g, " ").trim();
+  const sentence = /^.+?[.!?](?=\s|$)/.exec(flat)?.[0] ?? flat;
+  if (sentence.length <= max) return sentence.replace(/\.$/, "");
+  const cut = sentence.slice(0, max - 1);
+  const space = cut.lastIndexOf(" ");
+  return `${(space > max * 0.6 ? cut.slice(0, space) : cut).replace(/[\s,;:—–-]+$/, "")}…`;
+}
+
+/** A Google Maps search for `query` (a place or "Name, City, Country"). */
+export function mapsSearchUrl(query: string): string {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+}
+
+/**
+ * A Maps search for the first non-empty parts, joined with ", ". A part
+ * already written in an earlier one (a city inside the address) is left out.
+ */
+export function mapsQueryUrl(parts: (string | null | undefined)[]): string | null {
+  // " kuopionlahdenkatu 23 70100 kuopio ": whole words only, so "Kuopio" is in it but not in "Kuopionlahdenkatu".
+  const words = (v: string) => ` ${v.toLowerCase().replace(/[\s,.;:()/]+/g, " ").trim()} `;
+  const kept: string[] = [];
+  for (const raw of parts) {
+    const part = raw?.replace(/\s+/g, " ").trim();
+    if (part && !kept.some((k) => words(k).includes(words(part)))) kept.push(part);
+  }
+  return kept.length ? mapsSearchUrl(kept.join(", ")) : null;
+}
+
+/** The profile's place as Maps query parts: city + country, else location, else the organization's city. */
+function placeParts(
+  p: Pick<OrgProfile, "city" | "country" | "location"> | null | undefined,
+  organization?: { city?: string | null } | null,
+): (string | undefined)[] {
+  if (p?.city || p?.country) return [p.city, p.country];
+  return [p?.location ?? organization?.city ?? undefined];
+}
+
+/** Maps link of the profile's street address (address, city, country). */
+export function addressMapsUrl(p: OrgProfile, organization?: { city?: string | null } | null): string | null {
+  return p.address ? mapsQueryUrl([p.address, ...placeParts(p, organization)]) : null;
+}
+
+/** Maps link of a venue: its address, else its name, in the profile's city and country. */
+export function venueMapsUrl(v: OrgProfileVenue, p: OrgProfile, organization?: { city?: string | null } | null): string | null {
+  return mapsQueryUrl([v.address ?? v.name, ...placeParts(p, organization)]);
+}
+
+/** Where an organization is: what to show and its Google Maps link. */
+export interface OrgPlace {
+  /** "Kuopio, Finland". */
+  label: string;
+  /** The city (or the label's first part), to spot it in a tagline. */
+  city: string;
+  mapsUrl: string;
+}
+
+/**
+ * "City, Country" from the profile, else the profile's location, else the
+ * organization's city. The Maps link searches "Name, City, Country" (or
+ * "Name, location") so the pin lands on the organization itself.
+ */
+export function orgPlace(
+  organization: { name?: string | null; city?: string | null } | null | undefined,
+  profile?: Pick<OrgProfile, "city" | "country" | "location"> | null,
+): OrgPlace | null {
+  const clean = (v: string | null | undefined) => v?.replace(/\s+/g, " ").trim() || undefined;
+  const name = clean(organization?.name);
+  const city = clean(profile?.city);
+  const country = clean(profile?.country);
+  const label = city || country ? [city, country].filter(Boolean).join(", ") : (clean(profile?.location) ?? clean(organization?.city));
+  if (!label) return null;
+  // A city that already names the country ("Kuopio, Finland") is not repeated.
+  const shown = city && country && city.toLowerCase().endsWith(country.toLowerCase()) ? city : label;
+  return {
+    label: shown,
+    city: city ?? shown.split(",")[0].trim(),
+    mapsUrl: mapsSearchUrl([name, shown].filter(Boolean).join(", ")),
+  };
+}
+
+/**
+ * The profile in one line, as its two parts: what they are ("Chamber music
+ * festival") and where (the place, linked to Maps). `lead` is the tagline
+ * (a trailing " · Kuopio, Finland" dropped, the place is shown on its own),
+ * else the kind when the place is known ("Festival"), else the summary's
+ * first sentence.
+ */
+export function profileTaglineParts(
+  p: OrgProfile,
+  organization?: { name?: string | null; city?: string | null } | null,
+): { lead: string; place: OrgPlace | null } {
+  const place = orgPlace(organization, p);
+  if (p.tagline) {
+    const at = p.tagline.lastIndexOf(" · ");
+    const tail = at > 0 ? p.tagline.slice(at + 3).toLowerCase() : "";
+    const sameplace = place && tail && (tail.includes(place.city.toLowerCase()) || place.label.toLowerCase().includes(tail));
+    return { lead: sameplace ? p.tagline.slice(0, at).trim() : p.tagline, place };
+  }
+  if (p.kind && p.kind !== "other" && place) return { lead: PROFILE_KIND_LABEL[p.kind], place };
+  return { lead: firstSentence(p.summary, MAX_TAGLINE), place };
+}
+
+/** The tagline as plain text: "Chamber music festival · Kuopio, Finland". */
+export function profileTagline(p: OrgProfile, organization?: { name?: string | null; city?: string | null } | null): string {
+  const { lead, place } = profileTaglineParts(p, organization);
+  return place ? `${lead} · ${place.label}` : lead;
+}
+
 /** "summary: Too big" style message for the first issue of a failed parse. */
 export function profileIssue(error: z.ZodError): string {
   const issue = error.issues[0];
@@ -173,6 +295,10 @@ export function parseVenueLines(value: string): OrgProfileVenue[] {
     const venue: OrgProfileVenue = { name: name ?? line };
     const notes: string[] = [];
     for (const p of rest) {
+      if (p.startsWith("@")) {
+        venue.address = p.slice(1).trim() || undefined;
+        continue;
+      }
       const capacity = capacityOf(p);
       if (capacity !== null && venue.capacity == null) venue.capacity = capacity;
       else if (!venue.type) venue.type = p;
@@ -184,7 +310,7 @@ export function parseVenueLines(value: string): OrgProfileVenue[] {
 }
 
 export function venueLine(v: OrgProfileVenue): string {
-  return [v.name, v.type, v.capacity != null ? String(v.capacity) : null, v.notes].filter(Boolean).join(" — ");
+  return [v.name, v.type, v.capacity != null ? String(v.capacity) : null, v.notes, v.address ? `@ ${v.address}` : null].filter(Boolean).join(" — ");
 }
 
 /** "https://… — caption" per line. Non-https lines are reported, not kept. */
@@ -227,7 +353,11 @@ export function hostOf(url: string): string {
 export function profileFormValues(p: OrgProfile | null) {
   return {
     kind: p?.kind ?? "",
+    tagline: p?.tagline ?? "",
     summary: p?.summary ?? "",
+    city: p?.city ?? "",
+    country: p?.country ?? "",
+    address: p?.address ?? "",
     location: p?.location ?? "",
     dates: p?.dates ?? "",
     scale: p?.scale ?? "",

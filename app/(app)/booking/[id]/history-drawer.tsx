@@ -4,14 +4,14 @@ import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { LiveTimeline } from "@/components/booking/activity-timeline";
 import { PhoneActions } from "@/components/booking/phone-actions";
-import { OrgProfileCard } from "@/components/organizations/profile-card";
+import { OrgProfileLine } from "@/components/organizations/profile-card";
 import { Sheet } from "@/components/ui/sheet";
 import { formatPhone } from "@/lib/booking/phone";
 import { isFollowUpDue } from "@/lib/booking/timing";
 import type { SheetRow } from "@/lib/booking/types";
 import { goalLabel, nextActionLabel, stageLabel } from "@/lib/constants";
 import { DateCell, KindCell, NextActionCell, ReturningCell, StageCell, TextCell } from "./cells";
-import { PrepareEmailButton, RowBadges, rowSubject, stageOptions, venueName, type EmailSuggestion, type RowContext } from "./row-meta";
+import { PrepareEmailButton, RowBadges, RowPlace, rowSubject, stageOptions, venueName, type EmailSuggestion, type RowContext } from "./row-meta";
 
 /**
  * A row's History: Call / WhatsApp (logged right after the tap), Prepare
@@ -78,13 +78,15 @@ export function HistoryDrawer({
         ) : null}
 
         {row.organization?.profile ? (
-          <OrgProfileCard
+          <OrgProfileLine
             profile={row.organization.profile}
             organization={row.organization}
-            showName={false}
+            className="-my-1"
             editHref={`/organizations/${row.organization.id}?profile=edit`}
           />
-        ) : null}
+        ) : (
+          <RowPlace row={row} block className="-my-1 text-[15px] text-muted md:text-sm" />
+        )}
 
         <details className="group rounded-xl border border-border bg-surface md:rounded-lg" open={!c?.phone && !c?.whatsapp}>
           <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-4 text-[15px] font-medium active:bg-surface-2 md:min-h-9 md:px-3 md:text-sm [&::-webkit-details-marker]:hidden">
