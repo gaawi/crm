@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { LiveTimeline } from "@/components/booking/activity-timeline";
 import { PhoneActions } from "@/components/booking/phone-actions";
+import { OrgProfileCard } from "@/components/organizations/profile-card";
 import { Sheet } from "@/components/ui/sheet";
 import { formatPhone } from "@/lib/booking/phone";
 import { isFollowUpDue } from "@/lib/booking/timing";
@@ -14,7 +15,7 @@ import { PrepareEmailButton, RowBadges, rowSubject, stageOptions, venueName, typ
 
 /**
  * A row's History: Call / WhatsApp (logged right after the tap), Prepare
- * email, the row's details, and its timeline (calls, notes, status changes
+ * email, the organization's profile, the row's details, and its timeline (calls, notes, status changes
  * and the emails synced from Gmail). A right-hand panel on desktop, a
  * full-screen sheet on phones. Everything saves by itself.
  */
@@ -74,6 +75,15 @@ export function HistoryDrawer({
             </span>
             <ChevronRight className="size-4 shrink-0 text-subtle" strokeWidth={2} aria-hidden />
           </Link>
+        ) : null}
+
+        {row.organization?.profile ? (
+          <OrgProfileCard
+            profile={row.organization.profile}
+            organization={row.organization}
+            showName={false}
+            editHref={`/organizations/${row.organization.id}?profile=edit`}
+          />
         ) : null}
 
         <details className="group rounded-xl border border-border bg-surface md:rounded-lg" open={!c?.phone && !c?.whatsapp}>

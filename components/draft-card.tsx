@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useClaudeEnabled } from "@/components/features";
 import { useEffect, useState, useTransition } from "react";
 import { Check, FileText, Loader2, Pencil, Send, Sparkles, Trash2 } from "lucide-react";
+import { OrgProfileCard } from "@/components/organizations/profile-card";
 import { AccountBadge, Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/field";
@@ -112,6 +113,15 @@ export function DraftCard({
       </header>
 
       <div className="flex flex-col gap-3 px-4 py-3">
+        {draft.organization ? (
+          <OrgProfileCard
+            compact
+            expandable
+            profile={draft.organization.profile}
+            organization={draft.organization}
+            editHref={`/organizations/${draft.organization.id}?profile=edit`}
+          />
+        ) : null}
         {draft.assistantReason ? (
           <p className="text-sm text-muted">
             <span className="font-medium text-fg">Why: </span>

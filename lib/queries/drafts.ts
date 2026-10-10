@@ -2,6 +2,7 @@ import "server-only";
 import { sql } from "@/lib/db";
 import type { DraftOrigin, DraftPurpose, DraftStatus, EmailDraft } from "@/lib/types";
 import { clampLimit } from "@/lib/queries/shared";
+import { readProfile } from "@/lib/organizations/profile";
 
 /**
  * The approval queue (email_drafts). This module only reads and writes rows;
@@ -20,14 +21,24 @@ const draftColumns = () => sql`
   d.opportunity_id, d.campaign_id, d.reply_to_message_id, rm.subject as reply_to_subject,
   d.purpose, d.origin, d.status,
   d.to_emails as "to", d.cc_emails as cc, d.subject, d.body_text as body, d.rationale, d.assistant_reason, d.revision_request, d.postponed_until::text as postponed_until, d.revisions,
-  d.gmail_draft_id, d.gmail_thread_id, d.error, d.created_at, d.updated_at, d.sent_at
+  d.gmail_draft_id, d.gmail_thread_id, d.error, d.created_at, d.updated_at, d.sent_at,
+  case when dorg.id is null then null
+       else json_build_object('id', dorg.id, 'name', dorg.name, 'website', dorg.website, 'city', dorg.city, 'profile', dorg.profile) end as organization
 `;
 
 const draftJoins = () => sql`
   join gmail_accounts a on a.id = d.account_id
   left join contacts c on c.id = d.contact_id
   left join messages rm on rm.id = d.reply_to_message_id
+  left join organizations dorg on dorg.profile is not null and dorg.id = coalesce(
+    c.organization_id, (select dop.organization_id from opportunities dop where dop.id = d.opportunity_id))
 `;
+
+/** Keep the organization only with a valid profile (the card shows it). */
+function withProfile(draft: EmailDraft): EmailDraft {
+  const profile = readProfile(draft.organization?.profile);
+  return { ...draft, organization: draft.organization && profile ? { ...draft.organization, profile } : null };
+}
 
 /**
  * Open proposals first (newest first), or a given set of statuses.
@@ -47,7 +58,7 @@ export async function listDrafts(
     (oneCampaign
       ? (["proposed", "queued", "revising", "sending", "sent", "discarded", "failed"] satisfies DraftStatus[])
       : (["proposed", "queued", "revising", "sending", "failed"] satisfies DraftStatus[]));
-  return sql<EmailDraft[]>`
+  const rows = await sql<EmailDraft[]>`
     select ${draftColumns()}
       from email_drafts d
       ${draftJoins()}
@@ -57,12 +68,13 @@ export async function listDrafts(
      order by ${oneCampaign ? sql`d.created_at, d.id` : sql`(d.status = 'failed') desc, d.created_at desc`}
      limit ${clampLimit(options.limit, oneCampaign ? 500 : 100, 500)}
   `;
+  return rows.map(withProfile);
 }
 
 export async function getDraft(id: string): Promise<EmailDraft | null> {
   if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
   const [row] = await sql<EmailDraft[]>`select ${draftColumns()} from email_drafts d ${draftJoins()} where d.id = ${id}`;
-  return row ?? null;
+  return row ? withProfile(row) : null;
 }
 
 /**

@@ -2,7 +2,8 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { cache, type ReactNode } from "react";
-import { Ellipsis, ExternalLink, Pencil, Plus, Trash2, UserPlus } from "lucide-react";
+import { Ellipsis, ExternalLink, Pencil, Plus, Sparkles, Trash2, UserPlus } from "lucide-react";
+import { OrgProfileCard } from "@/components/organizations/profile-card";
 import { PhoneActions } from "@/components/booking/phone-actions";
 import { ContactRow, RowList } from "@/components/contact-row";
 import { EmailTimeline } from "@/components/email-timeline";
@@ -15,6 +16,7 @@ import { ORGANIZATION_KINDS } from "@/lib/constants";
 import { formatDate, formatRelative, todayIn } from "@/lib/dates";
 import { env } from "@/lib/env";
 import { listOpportunities } from "@/lib/queries/opportunities";
+import { getOrganizationProfile } from "@/lib/queries/org-profiles";
 import { getOrganization, getOrganizationContacts, getOrganizationHistory } from "@/lib/queries/organizations";
 import { getOwnAddresses } from "@/lib/queries/stats";
 import type { Organization } from "@/lib/types";
@@ -29,6 +31,7 @@ import { Segmented } from "../../_components/segmented";
 import { BackLink, FormActions, GroupAction, GroupTitle, SearchInput, menuItemClass, menuItemDangerClass } from "../../_components/ui";
 import { hrefWith, oneOf, param } from "../../_lib/url";
 import { deleteOrganizationAction, updateOrganizationAction } from "../actions";
+import { ProfileForm } from "./profile-form";
 
 const HISTORY_PAGE = 30;
 const TABS = ["people", "email", "goals", "deals", "info"] as const;
@@ -61,6 +64,7 @@ export default async function OrganizationPage({ params, searchParams }: PagePro
   const beforeRaw = param(sp, "before", 40);
   const before = beforeRaw && !Number.isNaN(Date.parse(beforeRaw)) ? new Date(beforeRaw) : undefined;
   const editing = param(sp, "edit") === "1";
+  const editingProfile = param(sp, "profile") === "edit";
 
   if (param(sp, "delete") === "1") {
     return (
@@ -94,12 +98,15 @@ export default async function OrganizationPage({ params, searchParams }: PagePro
     );
   }
 
-  const [people, deals, history, selfEmails] = await Promise.all([
+  const [people, deals, history, selfEmails, stored] = await Promise.all([
     getOrganizationContacts(organization.id),
     listOpportunities({ organizationId: organization.id, includeClosed: true }),
     getOrganizationHistory(organization.id, { limit: HISTORY_PAGE, before, q: q || undefined }),
     getOwnAddresses(),
+    getOrganizationProfile(organization.id),
   ]);
+  const profile = stored?.profile ?? null;
+  const profileEditHref = `${base}?profile=edit`;
   const openDeals = deals.filter((d) => d.stage !== "won" && d.stage !== "lost");
   const olderHref =
     history.length === HISTORY_PAGE
@@ -120,6 +127,10 @@ export default async function OrganizationPage({ params, searchParams }: PagePro
             <Link href={`${base}?tab=info&edit=1`} className={menuItemClass}>
               <Pencil className="size-4 text-muted" strokeWidth={1.75} />
               Edit
+            </Link>
+            <Link href={profileEditHref} className={menuItemClass}>
+              <Sparkles className="size-4 text-muted" strokeWidth={1.75} />
+              {profile ? "Edit profile" : "Add a profile"}
             </Link>
             <Link href={addPersonHref} className={menuItemClass}>
               <UserPlus className="size-4 text-muted" strokeWidth={1.75} />
@@ -166,6 +177,25 @@ export default async function OrganizationPage({ params, searchParams }: PagePro
           </div>
         </div>
       </header>
+
+      {editingProfile ? (
+        <ProfileForm organizationId={organization.id} profile={profile} cancelHref={base} />
+      ) : profile ? (
+        <section aria-label="Profile" className="mb-6">
+          <GroupTitle actions={<GroupAction href={profileEditHref}>Edit profile</GroupAction>}>Profile</GroupTitle>
+          <OrgProfileCard profile={profile} organization={organization} showName={false} wide />
+        </section>
+      ) : (
+        <Link
+          href={profileEditHref}
+          scroll={false}
+          className="mb-6 flex min-h-11 items-center gap-2 rounded-xl border border-dashed border-border px-4 py-2.5 text-[15px] text-muted active:bg-surface-2 md:rounded-lg md:text-sm md:hover:bg-surface-2/60"
+        >
+          <Sparkles className="size-4 shrink-0 text-subtle" strokeWidth={1.75} aria-hidden />
+          <span className="min-w-0 flex-1">No profile yet — who they are, what they program, their venues and why ADAR fits.</span>
+          <span className="shrink-0 font-medium text-fg">Add</span>
+        </Link>
+      )}
 
       <Segmented
         label="Sections"

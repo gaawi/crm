@@ -3,6 +3,8 @@
  * Dates: `Date` for timestamps, 'YYYY-MM-DD' strings for calendar dates.
  */
 
+import type { OrgWithProfile } from "@/lib/organizations/profile";
+
 export type ContactStatus = "new" | "lead" | "active" | "inactive" | "archived";
 export type OpportunityStage = "lead" | "contacted" | "proposal" | "negotiation" | "won" | "lost";
 /**
@@ -312,4 +314,6 @@ export interface EmailDraft {
   createdAt: Date;
   updatedAt: Date;
   sentAt: Date | null;
+  /** The contact's organization (else the goal's) when it has a profile. */
+  organization?: OrgWithProfile | null;
 }

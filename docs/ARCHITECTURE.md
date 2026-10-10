@@ -47,7 +47,7 @@ Detailed specs: `docs/SYNC_SPEC.md` (sync engine), `docs/MAIL_CLIENT_SPEC.md`
 | Approval queue | Claude (chat, contact page, autopilot) proposes emails into `email_drafts` + a real Gmail draft. The owner approves (sent via `drafts.send`, two-tap), edits, or leaves a note and Claude rewrites it. Nothing is ever sent without approval. |
 | Autopilot | Optional, daily: drafts replies for people waiting, due follow-ups and nudges into the queue (max per run, never two open proposals per person). |
 | Claude | Manual streaming tool loop (Opus 5.5 by default, adaptive thinking, explicit effort, server-side refusal fallback). Tools wrap the query layer; `update_contact` needs a tap to confirm; `propose_email` only queues and only to the contact or thread participants; read-only SQL runs in an always-rolled-back READ ONLY transaction on the extended protocol (optionally as a SELECT-only role). Email content is treated as untrusted data. |
-| Browser safety | CSP: only the app's own origin; no remote images anywhere (no tracking pixels, no exfiltration through image links); Claude's Markdown renders without images. HTML email renders in a sandboxed iframe without scripts. |
+| Browser safety | CSP: only the app's own origin, except remote https images on app pages for organization profiles (`<img referrerPolicy="no-referrer">`, hidden when they fail). Mail and the API keep `img-src` without remote hosts, and HTML email stays image-blocked by the sanitizer plus its own iframe CSP (`img-src data:`): no tracking pixels. Claude's Markdown renders without images. HTML email renders in a sandboxed iframe without scripts. |
 | Mobile | iPhone-first PWA: bottom tab bar, large titles, 44 pt targets, 16 px inputs, safe areas, segmented controls, full-screen sheets, swipe actions in Mail; installable to the Home Screen. |
 | Scheduler | Vercel Cron (daily on Hobby; more often on Pro) and/or Supabase pg_cron every 5 minutes (`supabase/optional/scheduler.sql`). |
 
@@ -56,7 +56,9 @@ Detailed specs: `docs/SYNC_SPEC.md` (sync engine), `docs/MAIL_CLIENT_SPEC.md`
 - **gmail_accounts** — mailboxes, encrypted tokens, scopes, aliases, default
   project, sync cursors, leases, watch state, import progress, last error.
 - **organizations** — name, kind (`venue | funder | partner | press | agency |
-  institution | other`), city, domains, website, notes, tags.
+  institution | other`), city, domains, website, notes, tags; `profile` (jsonb,
+  shape in `lib/organizations/profile.ts`) + `profile_updated_at`, written by
+  Claude through `/api/assistant-agent/profiles` or by the owner.
 - **projects** — CreArtBox, ADAR, Personal, Booking, Press, Grants,
   Fundraising, Partners (editable). A project flagged `sheet` is a booking
   sheet (one row per booking deal), with its currency, phone prefix and

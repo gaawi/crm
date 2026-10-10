@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
 import { CalendarClock, Check, ChevronDown, ListTodo, Mail, MessageCircle, MessageSquareText, Pencil, Phone, Send, Trash2, X } from "lucide-react";
 import { CallButton, WhatsAppButton } from "@/components/booking/phone-actions";
+import { OrgProfileCard } from "@/components/organizations/profile-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/field";
@@ -136,6 +137,15 @@ export function AssistantDraftCard({
       </header>
 
       <div className="flex flex-col gap-3 px-4 py-3">
+        {draft.organization ? (
+          <OrgProfileCard
+            compact
+            expandable
+            profile={draft.organization.profile}
+            organization={draft.organization}
+            editHref={`/organizations/${draft.organization.id}?profile=edit`}
+          />
+        ) : null}
         {draft.assistantReason ? (
           <p className="text-sm text-muted">
             <span className="font-medium text-fg">Why: </span>

@@ -6,6 +6,7 @@ import { Archive, CalendarClock, Check, Ellipsis, GitMerge, Plus, Trash2, X } fr
 import { DraftFollowUp } from "@/components/draft-follow-up";
 import { PhoneLink } from "@/components/booking/phone-actions";
 import { EmailTimeline } from "@/components/email-timeline";
+import { OrgProfileCard } from "@/components/organizations/profile-card";
 import { RowList } from "@/components/contact-row";
 import { Badge, ProjectDot, StatusBadge, TagBadge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
@@ -25,6 +26,7 @@ import {
 } from "@/lib/queries/contacts";
 import { listActivities } from "@/lib/queries/activities";
 import { listOpportunities } from "@/lib/queries/opportunities";
+import { getOrganizationWithProfile } from "@/lib/queries/org-profiles";
 import { listOrganizations } from "@/lib/queries/organizations";
 import { listProjects } from "@/lib/queries/projects";
 import { getOwnAddresses } from "@/lib/queries/stats";
@@ -126,7 +128,7 @@ export default async function ContactPage({ params, searchParams }: PageProps<"/
     );
   }
 
-  const [history, activities, selfEmails, deals, duplicates, projects, accounts, organizations] = await Promise.all([
+  const [history, activities, selfEmails, deals, duplicates, projects, accounts, organizations, orgProfile] = await Promise.all([
     getContactHistory(contact.id, { limit: HISTORY_PAGE, before, q: q || undefined }),
     listActivities({ contactId: contact.id, before, limit: ACTIVITY_PAGE }),
     getOwnAddresses(),
@@ -135,6 +137,7 @@ export default async function ContactPage({ params, searchParams }: PageProps<"/
     listProjects(),
     accountsQuery,
     editing ? listOrganizations({ limit: 500 }) : Promise.resolve([]),
+    getOrganizationWithProfile(contact.organization?.id),
   ]);
 
   const openDeals = deals.filter((d) => d.stage !== "won" && d.stage !== "lost");
@@ -154,6 +157,10 @@ export default async function ContactPage({ params, searchParams }: PageProps<"/
   return (
     <>
       <ContactHeader contact={contact} accounts={accounts} timezone={timezone} />
+
+      {orgProfile ? (
+        <OrgProfileCard compact profile={orgProfile.profile} organization={orgProfile} href={`/organizations/${orgProfile.id}`} className="mb-5" />
+      ) : null}
 
       {notice === "merged" ? (
         <div className="mb-5">

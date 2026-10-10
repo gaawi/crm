@@ -10,6 +10,7 @@ import { env } from "@/lib/env";
 import { cleanPhone, createContact, getContactByEmail } from "@/lib/queries/contacts";
 import { checkGoalValues, createOpportunity, parseMoney } from "@/lib/queries/opportunities";
 import { findOrCreateOrganization } from "@/lib/queries/organizations";
+import { readProfile } from "@/lib/organizations/profile";
 import { createProject, updateProject } from "@/lib/queries/projects";
 import type { NextAction, OpportunityKind, OpportunityStage, OrganizationKind } from "@/lib/types";
 import { errorMessage, isValidEmail, normalizeEmail } from "@/lib/utils";
@@ -89,6 +90,7 @@ function toSheetRow(row: RawSheetRow): SheetRow {
     ...row,
     createdAt: iso(row.createdAt)!,
     updatedAt: iso(row.updatedAt)!,
+    organization: row.organization ? { ...row.organization, profile: readProfile(row.organization.profile) } : null,
     contact: row.contact
       ? {
           ...row.contact,
@@ -113,7 +115,7 @@ export async function getSheetRows(projectId: string, options: { ids?: string[] 
   const rows = await sql<RawSheetRow[]>`
     select op.id, op.title, op.kind, op.stage, op.value, op.currency, op.follow_up_at, op.next_action, op.next_step, op.notes, op.event_dates,
            op.sheet_section as section, op.spaces, op.is_returning as "returning", op.created_at, op.updated_at,
-           case when o.id is null then null else json_build_object('id', o.id, 'name', o.name, 'city', o.city, 'website', o.website) end as organization,
+           case when o.id is null then null else json_build_object('id', o.id, 'name', o.name, 'city', o.city, 'website', o.website, 'profile', o.profile) end as organization,
            case when c.id is null then null else json_build_object(
              'id', c.id,
              'name', nullif(btrim(c.name), ''),

@@ -4,6 +4,7 @@
  * ("2026-10-01T14:30:00.000Z"), calendar dates 'YYYY-MM-DD'.
  */
 import type { AccountStatus, ActivityKind, CallOutcome, Direction, NextAction, OpportunityKind, OpportunityStage, TemplateTrigger } from "@/lib/types";
+import type { OrgProfile } from "@/lib/organizations/profile";
 
 export type { ActivityKind, CallOutcome, NextAction, OpportunityKind, TemplateTrigger };
 
@@ -104,7 +105,8 @@ export interface SheetRow {
   returning: boolean;
   createdAt: string;
   updatedAt: string;
-  organization: { id: string; name: string; city: string | null; website: string | null } | null;
+  /** profile: what Claude or the owner wrote about the organization (null = none yet). */
+  organization: { id: string; name: string; city: string | null; website: string | null; profile?: OrgProfile | null } | null;
   contact: SheetRowContact | null;
   /** Latest non-status activity of the row or its contact. */
   lastActivity: SheetRowActivity | null;

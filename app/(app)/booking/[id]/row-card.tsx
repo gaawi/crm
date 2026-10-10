@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { CallButton, WhatsAppButton } from "@/components/booking/phone-actions";
 import { GoalBadge, NextActionIcon } from "@/components/goals";
+import { OrgProfileCard } from "@/components/organizations/profile-card";
 import { StageBadge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/field";
 import { formatPhone } from "@/lib/booking/phone";
@@ -139,6 +140,15 @@ export const RowCard = memo(function RowCard({
             <RowBadges row={row} />
           </div>
           {place ? <p className="mt-0.5 text-[13px] text-muted">{place}</p> : null}
+          {row.organization?.profile && !selectMode ? (
+            <OrgProfileCard
+              compact
+              plain
+              profile={row.organization.profile}
+              onSelect={() => actions.onHistory(row.id)}
+              className="mt-2.5"
+            />
+          ) : null}
 
           <div className="mt-2.5">
             {c ? (
