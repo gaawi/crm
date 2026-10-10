@@ -7,7 +7,7 @@ import { buildAssistantContext } from "@/lib/assistant/context";
  */
 
 export async function GET(request: Request) {
-  const denied = assistantApiGuard(request);
+  const denied = await assistantApiGuard(request);
   if (denied) return denied;
   const context = await buildAssistantContext();
   return Response.json(context, { headers: { "Cache-Control": "no-store" } });

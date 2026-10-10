@@ -11,7 +11,7 @@ import { applyProposals, ProposalError } from "@/lib/assistant/proposals";
 export const maxDuration = 120;
 
 export async function POST(request: Request) {
-  const denied = assistantApiGuard(request);
+  const denied = await assistantApiGuard(request);
   if (denied) return denied;
   let body: unknown;
   try {
