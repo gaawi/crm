@@ -55,6 +55,7 @@ export const INSTRUMENTS: Instrument[] = [
   { key: "tuba", label: "Tuba", family: "brass", aliases: ["tubist", "tubista"] },
   { key: "percussion", label: "Percussion", family: "percussion", aliases: ["percusión", "percussionist", "percusionista", "timpani", "timbales", "marimba", "vibraphone", "vibráfono"] },
   { key: "drums", label: "Drums", family: "percussion", aliases: ["batería", "bateria", "drummer", "baterista", "drum kit"] },
+  { key: "voice", label: "Voice", family: "voice", aliases: ["voz", "vocalist", "vocalista", "singer", "cantante"] },
   { key: "soprano", label: "Soprano", family: "voice", aliases: [] },
   { key: "mezzo-soprano", label: "Mezzo-soprano", family: "voice", aliases: ["mezzo", "mezzosoprano"] },
   { key: "contralto", label: "Contralto / alto", family: "voice", aliases: ["alto"] },

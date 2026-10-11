@@ -11,6 +11,7 @@ describe("musician instruments", () => {
     expect(normalizeInstrument("bass")).toBe("double-bass");
     expect(normalizeInstrument("Mezzo")).toBe("mezzo-soprano");
     expect(normalizeInstrument("pianistas")).toBe("piano");
+    expect(normalizeInstrument("Voz")).toBe("voice");
   });
 
   it("keeps unknown instruments as typed (lower case) and drops empty ones", () => {
@@ -29,7 +30,7 @@ describe("musician instruments", () => {
     expect(instrumentsMatching("cellista")).toEqual(["cello"]);
     expect(instrumentsMatching("necesito")).toEqual([]);
     const voices = instrumentsMatching("voz");
-    expect(voices).toEqual(expect.arrayContaining(["soprano", "mezzo-soprano", "tenor", "baritone", "bass-voice"]));
+    expect(voices).toEqual(expect.arrayContaining(["voice", "soprano", "mezzo-soprano", "tenor", "baritone", "bass-voice"]));
     expect(voices).not.toContain("cello");
     expect(instrumentsMatching("cuerda")).toEqual(expect.arrayContaining(["violin", "viola", "cello", "double-bass"]));
     expect(instrumentsMatching("vio")).toEqual(expect.arrayContaining(["violin", "viola", "cello"]));
