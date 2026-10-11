@@ -89,7 +89,7 @@ export function buildMailboxes(chrome: MailChrome, state: MailListState, options
       count: a.unread,
       active: account === a.id,
       dot: a.dot,
-      hint: a.status === "reauth_required" ? "Reconnect in Settings" : undefined,
+      hint: a.status === "reauth_required" ? "Reconnect in Settings" : a.monitorOnly ? "Monitor only" : undefined,
     })),
   ];
   const labels = chrome.labels.map((l) => ({

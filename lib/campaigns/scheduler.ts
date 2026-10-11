@@ -150,9 +150,10 @@ async function campaignStatus(id: string): Promise<CampaignStatus | null> {
 
 /** The account cannot send: a sentence for the owner, else null. */
 async function accountProblem(accountId: string): Promise<string | null> {
-  const [account] = await sql<{ email: string; status: string; scopes: string[] }[]>`
-    select email, status, scopes from gmail_accounts where id = ${accountId}`;
+  const [account] = await sql<{ email: string; status: string; scopes: string[]; monitorOnly: boolean }[]>`
+    select email, status, scopes, monitor_only from gmail_accounts where id = ${accountId}`;
   if (!account) return "The Gmail account of this mailing is no longer connected.";
+  if (account.monitorOnly) return `${account.email} is monitor-only: Vela never sends from it.`;
   if (account.status !== "active" || !canCompose(account.scopes)) return `Reconnect ${account.email} in Settings to resume sending.`;
   return null;
 }

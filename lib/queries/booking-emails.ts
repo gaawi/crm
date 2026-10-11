@@ -24,11 +24,11 @@ export const PREPARE_MAX_ROWS = 100;
 /** The sheet's send-from account, else the first connected one (active first). */
 async function sendAccountFor(sendAccountId: string | null): Promise<string | null> {
   if (sendAccountId) {
-    const [row] = await sql<{ id: string }[]>`select id from gmail_accounts where id = ${sendAccountId} and status <> 'disconnected'`;
+    const [row] = await sql<{ id: string }[]>`select id from gmail_accounts where id = ${sendAccountId} and status <> 'disconnected' and not monitor_only`;
     if (row) return row.id;
   }
   const [row] = await sql<{ id: string }[]>`
-    select id from gmail_accounts where status <> 'disconnected' order by (status = 'active') desc, created_at limit 1`;
+    select id from gmail_accounts where status <> 'disconnected' and not monitor_only order by (status = 'active') desc, created_at limit 1`;
   return row?.id ?? null;
 }
 

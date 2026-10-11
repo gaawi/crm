@@ -34,6 +34,9 @@ async function mailAccount(accountId: string, need: Need): Promise<GmailAccountR
   const account = await getAccount(accountId);
   if (!account) throw new MailError("Gmail account not found");
   if (account.status !== "active") throw new MailError(`Reconnect ${account.email} in Settings`);
+  if (need !== "read" && account.monitorOnly) {
+    throw new MailError(`${account.email} is monitor-only: Vela never marks, moves, labels or sends anything in it.`);
+  }
   if (need === "modify" && !canModify(account.scopes)) throw new MailError(`Reconnect ${account.email} to allow changes`);
   if (need === "send" && !canCompose(account.scopes)) throw new MailError(`Reconnect ${account.email} to allow sending`);
   return account;
@@ -414,7 +417,8 @@ export async function archiveAllInbox(
   } else {
     accounts = [];
     for (const a of await listAccounts()) {
-      if (a.status === "disconnected") continue;
+      // Monitor-only mailboxes are not in All Inboxes and are never changed.
+      if (a.status === "disconnected" || a.monitorOnly) continue;
       if (a.status === "active" && canModify(a.scopes)) accounts.push(a);
       else result.skipped.push({ accountId: a.id, email: a.email, reason: `Reconnect ${a.email} in Settings to allow changes` });
     }

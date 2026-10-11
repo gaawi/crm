@@ -643,7 +643,7 @@ const proposeEmailTool = tool({
   async run(input) {
     let accountId: string | null = null;
     if (input.account_email) {
-      const [row] = await sql<{ id: string }[]>`select id from gmail_accounts where email = ${input.account_email.toLowerCase()} and status = 'active'`;
+      const [row] = await sql<{ id: string }[]>`select id from gmail_accounts where email = ${input.account_email.toLowerCase()} and status = 'active' and not monitor_only`;
       if (!row) return { error: `Not an active connected account: ${input.account_email}` };
       accountId = row.id;
     }

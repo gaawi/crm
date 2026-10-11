@@ -213,8 +213,9 @@ export async function updateSheetSettings(id: string, patch: SheetSettings): Pro
   if ("sendAccountId" in patch) {
     const accountId = patch.sendAccountId || null;
     if (accountId) {
-      const [account] = await sql`select 1 from gmail_accounts where id = ${accountId}`;
+      const [account] = await sql<{ monitorOnly: boolean }[]>`select monitor_only from gmail_accounts where id = ${accountId}`;
       if (!account) throw new Error("That Gmail account is not connected.");
+      if (account.monitorOnly) throw new Error("That mailbox is monitor-only: Vela never sends from it.");
     }
     values.sendAccountId = accountId;
   }
@@ -231,7 +232,7 @@ export async function updateSheetSettings(id: string, patch: SheetSettings): Pro
 export async function listSendAccounts(): Promise<SendAccount[]> {
   return sql<SendAccount[]>`
     select id, email, display_name, status from gmail_accounts
-     where status <> 'disconnected'
+     where status <> 'disconnected' and not monitor_only
      order by (status = 'active') desc, created_at
   `;
 }

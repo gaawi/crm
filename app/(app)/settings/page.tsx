@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { Plus, RefreshCw } from "lucide-react";
+import { Eye, Plus, RefreshCw } from "lucide-react";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
@@ -23,6 +23,7 @@ import {
   saveAutopilot,
   saveProfile,
   setDefaultProject,
+  setMonitorOnly,
   syncNow,
 } from "./actions";
 import { ImportPump } from "./import-pump";
@@ -130,6 +131,11 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="min-w-0 truncate text-[15px] font-medium md:text-sm">{account.email}</span>
                     <StatusLabel account={account} />
+                    {account.monitorOnly ? (
+                      <Badge className="bg-sky-50 text-sky-700 dark:bg-sky-950 dark:text-sky-300">
+                        <Eye className="size-3" aria-hidden /> Monitor only
+                      </Badge>
+                    ) : null}
                     {account.status === "active" ? (
                       <Badge className={cn(account.pushActive ? "" : "text-subtle")}>{account.pushActive ? "Live sync" : "Periodic sync"}</Badge>
                     ) : null}
@@ -145,6 +151,29 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
                       </span>
                     ) : null}
                   </div>
+
+                  <form
+                    action={setMonitorOnly.bind(null, account.id, !account.monitorOnly)}
+                    className="flex flex-col gap-2 rounded-lg bg-surface-2 p-3 md:flex-row md:items-center md:justify-between"
+                  >
+                    <p className="text-[13px] text-muted md:text-xs">
+                      {account.monitorOnly ? (
+                        <>
+                          <span className="font-medium text-fg">Monitor only.</span> Its emails are imported and show in contacts, history and
+                          search, but Vela never changes this mailbox: nothing is marked as read, archived, labelled, drafted or sent. Its owner
+                          finds everything exactly as they left it. Not shown in All Inboxes.
+                        </>
+                      ) : (
+                        <>
+                          Someone else&apos;s mailbox (e.g. a partner who also does booking)? Make it <span className="font-medium text-fg">monitor only</span>:
+                          Vela keeps watching it but never marks, moves, drafts or sends anything in it.
+                        </>
+                      )}
+                    </p>
+                    <SubmitButton variant="secondary" className="shrink-0" pendingLabel="Saving…">
+                      {account.monitorOnly ? "Allow changes again" : "Monitor only"}
+                    </SubmitButton>
+                  </form>
 
                   <form action={setDefaultProject.bind(null, account.id)} className="flex items-end gap-2">
                     <Field label="People from this mailbox join" className="flex-1">

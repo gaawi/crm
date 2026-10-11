@@ -45,7 +45,11 @@ export default async function MailPage({ searchParams }: PageProps<"/mail">) {
   const label = state.view === "label" ? chrome.labels.find((l) => l.id === state.label && (!state.account || l.accountId === state.account)) : null;
   const title = listTitle(state, label?.name);
   const clearHref = mailListHref({ account: state.account });
-  const subtitle = state.q ? `“${state.q}”` : chrome.account && state.view === "inbox" ? chrome.account.email : null;
+  const subtitle = state.q
+    ? `“${state.q}”`
+    : chrome.account && state.view === "inbox"
+      ? `${chrome.account.email}${chrome.account.monitorOnly ? " · monitor only" : ""}`
+      : null;
 
   const drafts = state.view === "drafts" && !state.q;
   const [page, draftList] = await Promise.all([
@@ -77,7 +81,7 @@ export default async function MailPage({ searchParams }: PageProps<"/mail">) {
   const accountDots = Object.fromEntries(chrome.accounts.map((a) => [a.id, a.dot]));
   // "Archive all": the Inbox only (not search results, not other views or labels).
   const archiveAll: ArchiveAllScope | null =
-    state.view === "inbox" && !state.q && chrome.accounts.length
+    state.view === "inbox" && !state.q && chrome.accounts.length && !chrome.account?.monitorOnly
       ? {
           accountId: state.account,
           tab: state.tab,

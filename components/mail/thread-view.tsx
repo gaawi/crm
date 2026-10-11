@@ -12,6 +12,7 @@ import {
   ChevronLeft,
   Download,
   Ellipsis,
+  Eye,
   ExternalLink,
   FileText,
   Forward,
@@ -54,8 +55,11 @@ export function ThreadView({
   userLabels,
   now,
   notice,
+  readOnly = false,
 }: {
   notice?: string | null;
+  /** A monitor-only mailbox: Vela shows it but never changes it (no actions, no replies from it). */
+  readOnly?: boolean;
   thread: ThreadViewData;
   backHref: string;
   backLabel: string;
@@ -115,7 +119,9 @@ export function ThreadView({
   }
 
   const reply = (kind: "reply" | "reply_all" | "forward", message: ThreadMessageView = latest) =>
-    compose(composeFor(kind, thread, message, own, timezone));
+    readOnly
+      ? toast({ tone: "error", message: `${thread.accountEmail} is monitor-only: Vela never writes from it. Write from your own account on the contact.` })
+      : compose(composeFor(kind, thread, message, own, timezone));
   const canReplyAll = latest ? hasReplyAll(latest, own) : false;
 
   useShortcuts({
@@ -181,6 +187,18 @@ export function ThreadView({
             <span className="truncate">{backLabel}</span>
           </Link>
           <span className="flex-1" />
+          {readOnly ? (
+            <a
+              href={thread.gmailUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Open in Gmail"
+              className="flex size-11 items-center justify-center rounded-full text-blue-600 active:opacity-50 dark:text-blue-400"
+            >
+              <ExternalLink className="size-[22px]" />
+            </a>
+          ) : (
+            <>
           {inTrash ? (
             <BarButton label="Restore" onClick={() => void restore()}>
               <Undo2 className="size-[22px]" />
@@ -223,6 +241,8 @@ export function ThreadView({
             <div className="my-1 border-t border-border" />
             {labelMenu}
           </Dropdown>
+            </>
+          )}
         </div>
       </div>
 
@@ -232,6 +252,12 @@ export function ThreadView({
           <ArrowLeft className="size-4" />
         </ToolLink>
         <span className="mx-1 h-5 w-px bg-border" />
+        {readOnly ? (
+          <span className="inline-flex items-center gap-1.5 px-2 text-xs text-muted">
+            <Eye className="size-4" /> Monitor only
+          </span>
+        ) : (
+          <>
         {inTrash ? (
           <Tool label="Restore" onClick={() => void restore()}>
             <Undo2 className="size-4" />
@@ -259,6 +285,8 @@ export function ThreadView({
         <Tool label={starred ? "Remove star (s)" : "Star (s)"} onClick={() => void toggleStar()}>
           <Star className={cn("size-4", starred && "fill-amber-400 text-amber-400")} />
         </Tool>
+          </>
+        )}
         <span className="flex-1" />
         <a
           href={thread.gmailUrl}
@@ -269,6 +297,16 @@ export function ThreadView({
           Open in Gmail <ExternalLink className="size-3.5" />
         </a>
       </div>
+
+      {readOnly ? (
+        <p role="status" className="mx-4 mt-3 flex items-start gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-[13px] text-sky-900 dark:border-sky-900 dark:bg-sky-950 dark:text-sky-200 md:mx-6 md:text-xs">
+          <Eye className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+          <span>
+            {thread.accountEmail} is monitor-only: Vela shows it but never changes it. Opening it did not mark it as read, and nothing can be
+            archived, labelled or sent from it.
+          </span>
+        </p>
+      ) : null}
 
       {notice ? (
         <p role="status" className="mx-4 mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[13px] text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200 md:mx-6 md:text-xs">
@@ -319,7 +357,7 @@ export function ThreadView({
         )}
       </div>
 
-      {latest ? (
+      {latest && !readOnly ? (
         <div className="grid grid-cols-3 gap-2 px-4 py-5 md:flex md:flex-wrap md:px-6">
           <ReplyButton onClick={() => reply("reply")} icon={Reply}>
             Reply

@@ -17,6 +17,8 @@ export interface MailAccountInfo {
   unread: number;
   /** Has Google tokens (demo or disconnected accounts do not): only then is Gmail called live. */
   live: boolean;
+  /** Watched only: never changed by Vela, not in All Inboxes. */
+  monitorOnly: boolean;
 }
 
 export interface MailLabelInfo extends UserLabel {
@@ -40,7 +42,8 @@ export async function loadMailChrome(state: Pick<MailListState, "account">): Pro
   const records = (await listAccounts()).filter((a) => a.status !== "disconnected");
   const account = records.find((a) => a.id === state.account) ?? null;
   const liveIds = records.filter((a) => a.status === "active" && a.refreshTokenEnc).map((a) => a.id);
-  const scopeIds = account ? liveIds.filter((id) => id === account.id) : liveIds;
+  const monitorIds = new Set(records.filter((a) => a.monitorOnly).map((a) => a.id));
+  const scopeIds = account ? liveIds.filter((id) => id === account.id) : liveIds.filter((id) => !monitorIds.has(id));
   const [all, filtered, labelCounts, labels] = await Promise.all([
     getMailCounts(),
     account ? getMailCounts(account.id) : null,
@@ -56,6 +59,7 @@ export async function loadMailChrome(state: Pick<MailListState, "account">): Pro
     dot: dots.get(a.id) ?? accountDot(0),
     unread: all.byAccount[a.id] ?? 0,
     live: liveIds.includes(a.id),
+    monitorOnly: a.monitorOnly,
   }));
   return {
     accounts,

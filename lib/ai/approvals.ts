@@ -49,7 +49,7 @@ async function allowedRecipients(contactId: string | null, replyToMessageId: str
 async function pickAccount(contactId: string | null, replyToMessageId: string | null): Promise<string> {
   if (replyToMessageId) {
     const [row] = await sql<{ accountId: string }[]>`
-      select m.account_id from messages m join gmail_accounts a on a.id = m.account_id and a.status = 'active'
+      select m.account_id from messages m join gmail_accounts a on a.id = m.account_id and a.status = 'active' and not a.monitor_only
        where m.id = ${replyToMessageId}`;
     if (row) return row.accountId;
   }
@@ -59,13 +59,13 @@ async function pickAccount(contactId: string | null, replyToMessageId: string | 
         from contact_emails ce
         join message_participants mp on mp.email = ce.email
         join messages m on m.id = mp.message_id
-        join gmail_accounts a on a.id = m.account_id and a.status = 'active'
+        join gmail_accounts a on a.id = m.account_id and a.status = 'active' and not a.monitor_only
        where ce.contact_id = ${contactId}
        order by m.sent_at desc limit 1`;
     if (row) return row.accountId;
   }
-  const [row] = await sql<{ id: string }[]>`select id from gmail_accounts where status = 'active' order by created_at limit 1`;
-  if (!row) throw new DraftError("Connect a Gmail account first.");
+  const [row] = await sql<{ id: string }[]>`select id from gmail_accounts where status = 'active' and not monitor_only order by created_at limit 1`;
+  if (!row) throw new DraftError("Connect a Gmail account first (monitor-only mailboxes never send).");
   return row.id;
 }
 

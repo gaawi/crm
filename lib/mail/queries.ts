@@ -103,6 +103,9 @@ function and(parts: Fragment[]): Fragment {
 type Scope = "default" | "trash" | "anywhere";
 
 /** Which messages of a thread are shown at all. */
+/** Monitor-only mailboxes are left out of All Inboxes (they stay in their own inbox, search, Sent…). */
+const notMonitorOnly = () => sql`m.account_id not in (select id from gmail_accounts where monitor_only)`;
+
 function visible(scope: Scope): Fragment {
   if (scope === "trash") return sql`m.label_ids @> '{TRASH}'`;
   if (scope === "anywhere") return sql`not (m.label_ids @> '{DELETED}')`;
@@ -219,7 +222,11 @@ export async function listThreads(params: ThreadListParams): Promise<ThreadPage>
   const cursor = decodeCursor(params.cursor);
   const { parts, scope } = viewConditions(params);
   const shown = visible(scope);
-  const account = params.accountId ? sql`m.account_id = ${params.accountId}` : sql`true`;
+  const account = params.accountId
+    ? sql`m.account_id = ${params.accountId}`
+    : params.view === "inbox" && !params.q?.trim()
+      ? notMonitorOnly()
+      : sql`true`;
   const matches = and([shown, account, ...parts]);
 
   const rows = await sql<ThreadRow[]>`
@@ -317,7 +324,7 @@ export interface MailCounts {
 
 /** Unread counts for the sidebar and tabs (optionally for one account). */
 export async function getMailCounts(accountId?: string | null): Promise<MailCounts> {
-  const account = accountId ? sql`and m.account_id = ${accountId}` : sql``;
+  const account = accountId ? sql`and m.account_id = ${accountId}` : sql`and ${notMonitorOnly()}`;
   const [inboxRows, labelRows] = await Promise.all([
     sql<{ accountId: string; primary: number; promotions: number; social: number; updates: number; forums: number }[]>`
       select m.account_id,
@@ -362,7 +369,7 @@ export async function countInboxThreads(params: { accountId?: string | null; cat
   const [row] = await sql<{ count: number }[]>`
     select count(distinct (m.account_id, m.gmail_thread_id))::int as count
       from messages m
-      join gmail_accounts a on a.id = m.account_id and a.status = 'active'
+      join gmail_accounts a on a.id = m.account_id and a.status = 'active' ${params.accountId ? sql`` : sql`and not a.monitor_only`}
      where m.label_ids @> '{INBOX}' and not (m.label_ids && '{TRASH,SPAM,DELETED}')
        ${params.category ? sql`and ${categoryCondition(params.category)}` : sql``}
        ${params.accountId ? sql`and m.account_id = ${params.accountId}` : sql``}

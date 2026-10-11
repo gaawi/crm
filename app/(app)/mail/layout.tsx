@@ -20,7 +20,7 @@ export default async function MailLayout({ children }: LayoutProps<"/mail">) {
   // Only what the client needs (never tokens); colors follow the account order everywhere.
   const options = accounts
     .filter((a) => a.status !== "disconnected")
-    .flatMap((a, index) => (a.status === "active" ? [{ id: a.id, email: a.email, displayName: a.displayName, dot: accountDot(index) }] : []));
+    .flatMap((a, index) => (a.status === "active" ? [{ id: a.id, email: a.email, displayName: a.displayName, dot: accountDot(index), monitorOnly: a.monitorOnly }] : []));
 
   return (
     <MailProvider accounts={options} timezone={env.timezone} ownAddresses={[...own]}>

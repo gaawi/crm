@@ -60,7 +60,16 @@ export interface GmailClientOptions {
   retryBaseMs?: number;
   /** Pacing for all requests of this instance (default 4/s; tests set Infinity). */
   maxRequestsPerSecond?: number;
+  /**
+   * Called before every request that could change the mailbox (anything but a
+   * GET, users.watch and users.stop); throws to refuse it. Monitor-only
+   * accounts use it so Vela never marks, moves, drafts or sends in them.
+   */
+  assertWritable?: () => Promise<void>;
 }
+
+/** POSTs that only manage push notifications and change nothing in the mailbox. */
+const READ_ONLY_POSTS = new Set(["watch", "stop"]);
 
 const BASE_URL = "https://gmail.googleapis.com/gmail/v1/users/me/";
 const REQUEST_TIMEOUT_MS = 30_000;
@@ -126,6 +135,7 @@ export class GmailClient {
   private readonly maxRetries: number;
   private readonly retryBaseMs: number;
   private readonly pacer: Pacer;
+  private readonly assertWritable?: () => Promise<void>;
 
   constructor(options: GmailClientOptions) {
     this.getAccessToken = options.getAccessToken;
@@ -135,6 +145,7 @@ export class GmailClient {
     this.maxRetries = Math.max(0, Math.floor(options.maxRetries ?? DEFAULT_MAX_RETRIES));
     this.retryBaseMs = Math.max(0, options.retryBaseMs ?? DEFAULT_RETRY_BASE_MS);
     this.pacer = new Pacer(options.maxRequestsPerSecond ?? DEFAULT_MAX_REQUESTS_PER_SECOND);
+    this.assertWritable = options.assertWritable;
   }
 
   getProfile(): Promise<GmailProfile> {
@@ -358,6 +369,7 @@ export class GmailClient {
   /* ---------------------------------------------------------------------- */
 
   private async request<T>(method: "GET" | "POST" | "PUT" | "DELETE", path: string, options: RequestOptions = {}): Promise<T> {
+    if (this.assertWritable && method !== "GET" && !READ_ONLY_POSTS.has(path)) await this.assertWritable();
     const url = buildUrl(path, options.query);
     const idempotent = options.idempotent ?? method === "GET";
     const body = options.body === undefined ? undefined : JSON.stringify(options.body);

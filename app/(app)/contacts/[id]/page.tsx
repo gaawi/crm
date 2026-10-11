@@ -100,7 +100,7 @@ export default async function ContactPage({ params, searchParams }: PageProps<"/
   const base = `/contacts/${contact.id}`;
 
   const accountsQuery = sql<{ id: string; email: string }[]>`
-    select id, email from gmail_accounts where status = 'active' order by created_at
+    select id, email from gmail_accounts where status = 'active' and not monitor_only order by created_at
   `;
 
   if (merging || deleting) {

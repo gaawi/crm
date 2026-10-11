@@ -273,6 +273,8 @@ export interface GmailAccountView {
   pushActive: boolean;
   lastError: string | null;
   lastErrorAt: Date | null;
+  /** Watched only: Vela never changes anything in this mailbox (no read marks, archive, drafts, sending). */
+  monitorOnly: boolean;
   messageCount: number;
   createdAt: Date;
 }

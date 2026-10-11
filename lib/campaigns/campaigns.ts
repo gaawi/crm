@@ -239,8 +239,10 @@ export async function startCampaign(id: string, settings: Partial<CampaignSettin
   await sql.begin(async (tx) => {
     const row = await lockCampaign(tx, id);
     if (row.status === "running") throw new CampaignError("This mailing is already sending.");
-    const [account] = await tx<{ email: string; status: string }[]>`select email, status from gmail_accounts where id = ${row.accountId}`;
+    const [account] = await tx<{ email: string; status: string; monitorOnly: boolean }[]>`
+      select email, status, monitor_only from gmail_accounts where id = ${row.accountId}`;
     if (!account || account.status !== "active") throw new CampaignError(`Reconnect ${account?.email ?? "the Gmail account"} in Settings first.`);
+    if (account.monitorOnly) throw new CampaignError(`${account.email} is monitor-only: Vela never sends from it.`);
     const current = await tx<CampaignSettings[]>`
       select per_hour, daily_cap, window_start::int, window_end::int, weekdays_only, timezone from email_campaigns where id = ${id}`;
     const checked = validateCampaignSettings(settings, current[0] ?? DEFAULT_CAMPAIGN_SETTINGS);
@@ -307,8 +309,10 @@ export async function resumeCampaign(id: string): Promise<Campaign> {
   await sql.begin(async (tx) => {
     const row = await lockCampaign(tx, id);
     if (row.status !== "paused") throw new CampaignError("This mailing is not paused.");
-    const [account] = await tx<{ email: string; status: string }[]>`select email, status from gmail_accounts where id = ${row.accountId}`;
+    const [account] = await tx<{ email: string; status: string; monitorOnly: boolean }[]>`
+      select email, status, monitor_only from gmail_accounts where id = ${row.accountId}`;
     if (!account || account.status !== "active") throw new CampaignError(`Reconnect ${account?.email ?? "the Gmail account"} in Settings first.`);
+    if (account.monitorOnly) throw new CampaignError(`${account.email} is monitor-only: Vela never sends from it.`);
     const [{ waiting }] = await tx<{ waiting: number }[]>`
       select count(*)::int as waiting from email_drafts where campaign_id = ${id} and status = 'queued'`;
     await tx`

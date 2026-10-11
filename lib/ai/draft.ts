@@ -86,7 +86,7 @@ export async function draftFollowUp(
     listOpportunities({ contactId }),
     getOwnAddresses(),
     sql<{ id: string; email: string; displayName: string | null }[]>`
-      select id, email, display_name from gmail_accounts where status = 'active' order by created_at`,
+      select id, email, display_name from gmail_accounts where status = 'active' and not monitor_only order by created_at`,
     getSettings("profile"),
   ]);
   const purpose: DraftPurpose =

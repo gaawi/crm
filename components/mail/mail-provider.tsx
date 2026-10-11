@@ -23,6 +23,8 @@ export interface MailAccountOption {
   displayName: string | null;
   /** Tailwind class of the account's color dot. */
   dot: string;
+  /** Watched only: never changed and never sent from. */
+  monitorOnly: boolean;
 }
 
 export interface ComposeInit {
@@ -141,11 +143,13 @@ export function MailProvider({
     (init: ComposeInit = {}) => {
       if (dirtyRef.current && !window.confirm("Discard the message you are writing?")) return;
       dirtyRef.current = false;
-      const fallback = accounts[0]?.id ?? "";
+      // Monitor-only mailboxes never send.
+      const writable = accounts.filter((a) => !a.monitorOnly);
+      const fallback = writable[0]?.id ?? "";
       setComposeState({
         id: nextId++,
         kind: init.kind ?? "new",
-        accountId: init.accountId && accounts.some((a) => a.id === init.accountId) ? init.accountId : fallback,
+        accountId: init.accountId && writable.some((a) => a.id === init.accountId) ? init.accountId : fallback,
         threadId: init.threadId ?? null,
         replyToGmailMessageId: init.replyToGmailMessageId ?? null,
         to: init.to ?? [],
@@ -163,6 +167,11 @@ export function MailProvider({
   const act = useCallback(
     async (targets: ThreadTarget[], action: ThreadAction, options: ActOptions = {}) => {
       if (!targets.length) return false;
+      const watched = accounts.find((a) => a.monitorOnly && targets.some((t) => t.accountId === a.id));
+      if (watched) {
+        toast({ tone: "error", message: `${watched.email} is monitor-only: Vela never changes anything in it.` });
+        return false;
+      }
       const patch = patchFor(action, Boolean(options.hide));
       const keys = new Set(targets.map((t) => t.key));
       setOverrides((prev) => {
@@ -224,7 +233,7 @@ export function MailProvider({
       }
       return true;
     },
-    [router, toast],
+    [accounts, router, toast],
   );
 
   useEffect(() => {

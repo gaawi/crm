@@ -75,6 +75,21 @@ export async function setDefaultProject(id: string, formData: FormData): Promise
   refresh();
 }
 
+/**
+ * Monitor only: Vela keeps importing the mailbox but never changes anything in
+ * it (no read marks, archive, labels, drafts or sending). Turning it on also
+ * stops the campaigns (projects) that would send from it.
+ */
+export async function setMonitorOnly(id: string, on: boolean): Promise<void> {
+  await requireSession();
+  const accountIdValue = accountId(id);
+  await sql.begin(async (tx) => {
+    await tx`update gmail_accounts set monitor_only = ${on} where id = ${accountIdValue}`;
+    if (on) await tx`update projects set send_account_id = null where send_account_id = ${accountIdValue}`;
+  });
+  refresh();
+}
+
 export async function saveProfile(formData: FormData): Promise<void> {
   await requireSession();
   await saveSettings("profile", {

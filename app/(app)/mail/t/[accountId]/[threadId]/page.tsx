@@ -141,8 +141,9 @@ export default async function ThreadPage({ params, searchParams }: PageProps<"/m
   if (!thread) thread = await fromStored(account, threadId);
   if (!thread) notFound();
 
-  // Opening a thread marks it read in Gmail and in the database, after the response is sent.
-  if (live && thread.messages.some((m) => m.unread)) {
+  // Opening a thread marks it read in Gmail and in the database, after the response is sent
+  // (never in a monitor-only mailbox: its owner must find it exactly as they left it).
+  if (live && !account.monitorOnly && thread.messages.some((m) => m.unread)) {
     after(async () => {
       try {
         await applyThreadAction(accountId, threadId, "read");
@@ -179,6 +180,7 @@ export default async function ThreadPage({ params, searchParams }: PageProps<"/m
               userLabels={labels}
               now={requestTime()}
               notice={notice}
+              readOnly={account.monitorOnly}
             />
           </div>
           <aside className="border-t border-border bg-bg px-4 pb-[calc(env(safe-area-inset-bottom)+6rem)] pt-6 md:px-6 md:pb-8 xl:overflow-y-auto xl:border-l xl:border-t-0 xl:px-4 xl:pt-4" aria-label="Contact in Vela">

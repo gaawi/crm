@@ -3,7 +3,7 @@ import { sql } from "@/lib/db";
 import { env } from "@/lib/env";
 import { decryptSecret, encryptSecret } from "@/lib/crypto";
 import { getOwnAddresses } from "@/lib/queries/stats";
-import { GmailClient, type GmailClientOptions } from "@/lib/gmail/client";
+import { GmailApiError, GmailClient, type GmailClientOptions } from "@/lib/gmail/client";
 import { OAuthError, refreshAccessToken, revokeToken, type OAuthTokens } from "@/lib/gmail/oauth";
 import { buildBackfillQuery } from "@/lib/gmail/parse";
 import type { GmailSendAs } from "@/lib/gmail/types";
@@ -39,6 +39,8 @@ export interface GmailAccountRecord {
   backfillLockedUntil: Date | null;
   lastError: string | null;
   lastErrorAt: Date | null;
+  /** Watched only: Vela never changes anything in this mailbox. */
+  monitorOnly: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -55,7 +57,7 @@ export async function listAccountViews(): Promise<GmailAccountView[]> {
              and (a.backfill_locked_until is null or a.backfill_locked_until < now())) as backfill_stalled,
            a.last_synced_at, a.watch_expires_at,
            (${pushConfigured} and a.status = 'active' and a.watch_expires_at > now()) as push_active,
-           a.last_error, a.last_error_at,
+           a.last_error, a.last_error_at, a.monitor_only,
            (select count(*)::int from messages m where m.account_id = a.id) as message_count,
            a.created_at
       from gmail_accounts a
@@ -358,7 +360,28 @@ export function gmailClientFor(accountId: string, fetchImpl?: typeof fetch, opti
     return promise;
   };
 
-  return new GmailClient({ ...clientDefaults, ...options, getAccessToken: getToken, fetch: fetchImpl });
+  // Monitor-only mailboxes are never changed: every write is refused here,
+  // whatever code path asks for it (read once per client, on the first write).
+  let writable: Promise<void> | null = null;
+  const assertWritable = (): Promise<void> => {
+    writable ??= sql<{ email: string; monitorOnly: boolean }[]>`
+      select email, monitor_only from gmail_accounts where id = ${accountId}`.then(([row]) => {
+      if (row?.monitorOnly) throw new MonitorOnlyError(row.email);
+    });
+    return writable;
+  };
+
+  return new GmailClient({ ...clientDefaults, ...options, getAccessToken: getToken, fetch: fetchImpl, assertWritable });
+}
+
+/** A write (mark read, archive, label, draft, send…) was asked of a monitor-only mailbox. */
+export class MonitorOnlyError extends GmailApiError {
+  readonly email: string;
+  constructor(email: string) {
+    super(403, `${email} is monitor-only: Vela never changes anything in this mailbox.`, "monitorOnly");
+    this.name = "MonitorOnlyError";
+    this.email = email;
+  }
 }
 
 /** Client for a token that is not stored yet (the OAuth callback). */

@@ -88,7 +88,7 @@ export async function applyProposals(raw: unknown): Promise<ProposalsResult> {
 
   const [sheet] = await sql<{ id: string; active: boolean; archived: boolean; sendAccountId: string | null }[]>`
     select p.id, p.assistant_active as active, p.archived,
-           (select a.id from gmail_accounts a where a.id = p.send_account_id and a.status = 'active') as send_account_id
+           (select a.id from gmail_accounts a where a.id = p.send_account_id and a.status = 'active' and not a.monitor_only) as send_account_id
       from projects p where p.id = ${input.projectId} and p.sheet`;
   if (!sheet) throw new ProposalError("Campaign not found.", 404);
   if (!sheet.active || sheet.archived) throw new ProposalError("The assistant is paused for this campaign.", 409);

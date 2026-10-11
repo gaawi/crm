@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useClaudeEnabled } from "@/components/features";
-import { startTransition, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { celebrateSend, flourishOrigin } from "@/components/brand/send-flourish";
 import { VelaLoader } from "@/components/brand/vela-logo";
 import { ChevronDown, Loader2, Maximize2, Minimize2, Minus, Send, Sparkles, Trash2, X } from "lucide-react";
@@ -69,7 +69,9 @@ export function Composer({
 }) {
   const claude = useClaudeEnabled();
   const router = useRouter();
-  const { accounts, toast } = useMail();
+  const { accounts: mailAccounts, toast } = useMail();
+  // Monitor-only mailboxes never send.
+  const accounts = useMemo(() => mailAccounts.filter((a) => !a.monitorOnly), [mailAccounts]);
   const phone = useIsPhone();
   const viewport = useVisualViewport();
 
