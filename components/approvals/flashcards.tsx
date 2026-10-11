@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { CalendarClock, Check, ChevronLeft, ChevronRight, MessageSquareText, Pencil, Sparkles, Trash2, X } from "lucide-react";
+import { CalendarClock, Check, ChevronLeft, ChevronRight, Info, Mail, MessageSquareText, Pencil, Sparkles, Trash2, X } from "lucide-react";
 import { PostponeForm } from "@/components/assistant/review";
 import { VelaLoader } from "@/components/brand/vela-logo";
 import { celebrateSend, flourishOrigin } from "@/components/brand/send-flourish";
@@ -17,6 +17,8 @@ import { ASSISTANT_REVIEW_TIMES } from "@/lib/assistant/types";
 import { formatRelative } from "@/lib/dates";
 import type { EmailDraft } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { CardBack } from "./card-back";
+import { loadCardInfo, type CardInfo } from "./card-info";
 
 const PURPOSE: Record<EmailDraft["purpose"], string> = {
   reply: "Reply",
@@ -46,6 +48,10 @@ export function Flashcards({ drafts, timezone, today, startId }: { drafts: Email
   const [armed, setArmed] = useState(false);
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [pending, startTransition] = useTransition();
+  // The back of the card (contact card, goal, latest emails), loaded the first time it is turned over.
+  const [flipped, setFlipped] = useState(false);
+  const [turning, setTurning] = useState(false);
+  const [infos, setInfos] = useState<Record<string, CardInfo | { error: string }>>({});
 
   useEffect(() => {
     if (!armed) return;
@@ -58,6 +64,7 @@ export function Flashcards({ drafts, timezone, today, startId }: { drafts: Email
       if (!pile.length) return;
       const next = pile[(index + delta + pile.length) % pile.length];
       setCurrentId(next.id);
+      setFlipped(false);
       setPanel(null);
       setArmed(false);
       setMessage(null);
@@ -71,6 +78,7 @@ export function Flashcards({ drafts, timezone, today, startId }: { drafts: Email
     const at = pile.findIndex((d) => d.id === id);
     const next = pile[at + 1] ?? pile[at - 1] ?? null;
     setCurrentId(next?.id ?? null);
+    setFlipped(false);
     setDone((prev) => ({ ...prev, [id]: label }));
     setPanel(null);
     setArmed(false);
@@ -85,6 +93,24 @@ export function Flashcards({ drafts, timezone, today, startId }: { drafts: Email
       else setMessage({ tone: "error", text: r.error ?? "Something went wrong." });
     });
 
+  /** Turn the card over: a quick half-turn, swap faces, half-turn back. */
+  const flip = useCallback(() => {
+    if (!draft) return;
+    const id = draft.id;
+    if (!flipped && !infos[id]) {
+      void loadCardInfo(id).then((r) => setInfos((prev) => ({ ...prev, [id]: r.ok ? r.info : { error: r.error } })));
+    }
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      setFlipped((f) => !f);
+      return;
+    }
+    setTurning(true);
+    setTimeout(() => {
+      setFlipped((f) => !f);
+      setTurning(false);
+    }, 140);
+  }, [draft, flipped, infos]);
+
   // Keyboard: ← → move, Escape closes a panel.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -93,10 +119,11 @@ export function Flashcards({ drafts, timezone, today, startId }: { drafts: Email
       if (typing || panel) return;
       if (e.key === "ArrowRight") go(1);
       if (e.key === "ArrowLeft") go(-1);
+      if (e.key === "i") flip();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [go, panel]);
+  }, [go, panel, flip]);
 
   // Horizontal swipe on the card (vertical scrolling stays native).
   const touch = useRef<{ x: number; y: number } | null>(null);
@@ -178,10 +205,19 @@ export function Flashcards({ drafts, timezone, today, startId }: { drafts: Email
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
-        style={dx ? { transform: `translateX(${dx}px) rotate(${dx / 40}deg)`, transition: "none" } : undefined}
-        className="mt-2 min-w-0 rounded-2xl border border-border bg-surface shadow-sm transition-transform duration-200 [overflow-wrap:anywhere]"
+        style={
+          dx
+            ? { transform: `translateX(${dx}px) rotate(${dx / 40}deg)`, transition: "none" }
+            : { transform: turning ? "perspective(1200px) rotateY(90deg)" : "perspective(1200px) rotateY(0deg)" }
+        }
+        className="mt-2 min-w-0 rounded-2xl border border-border bg-surface shadow-sm transition-transform duration-150 ease-in-out [overflow-wrap:anywhere]"
       >
-        <header className="flex items-start gap-3 border-b border-border px-4 pb-3 pt-3.5">
+        <header
+          className="flex cursor-pointer items-start gap-3 border-b border-border px-4 pb-3 pt-3.5"
+          onClick={(e) => {
+            if (!(e.target as HTMLElement).closest("a, button")) flip();
+          }}
+        >
           {draft.contact ? <ContactAvatar contact={draft.contact} size="md" /> : null}
           <div className="min-w-0 flex-1">
             <div className="flex items-baseline gap-2">
@@ -195,6 +231,16 @@ export function Flashcards({ drafts, timezone, today, startId }: { drafts: Email
                 )}
               </span>
               <span className="shrink-0 text-[11px] uppercase tracking-wide text-subtle">{PURPOSE[draft.purpose]}</span>
+              <button
+                type="button"
+                onClick={flip}
+                aria-pressed={flipped}
+                title={flipped ? "Back to the email (i)" : "Contact card (i)"}
+                className="-my-1 -mr-1.5 inline-flex h-8 shrink-0 items-center gap-1 rounded-full bg-surface-2 px-2.5 text-[12px] font-medium text-fg/80 active:opacity-70"
+              >
+                {flipped ? <Mail className="size-3.5" aria-hidden /> : <Info className="size-3.5" aria-hidden />}
+                {flipped ? "Email" : "Info"}
+              </button>
             </div>
             {org ? (
               <p className="truncate text-[12px] text-muted">
@@ -209,22 +255,31 @@ export function Flashcards({ drafts, timezone, today, startId }: { drafts: Email
           </div>
         </header>
 
+        {flipped ? (
+          (() => {
+            const info = infos[draft.id];
+            if (!info) return <p className="px-4 py-6 text-center text-[13px] text-muted">Loading the contact card…</p>;
+            if ("error" in info) return <p className="px-4 py-6 text-center text-[13px] text-danger">{info.error}</p>;
+            return <CardBack draft={draft} info={info} timezone={timezone} />;
+          })()
+        ) : (
         <div className="flex flex-col gap-2 px-4 py-3">
-          {reason ? (
-            <p className="rounded-md bg-surface-2 px-2.5 py-1.5 text-[12px] leading-snug text-muted">
-              <Sparkles className="mr-1 inline size-3 align-[-1px]" aria-hidden />
-              {reason}
+            {reason ? (
+              <p className="rounded-md bg-surface-2 px-2.5 py-1.5 text-[12px] leading-snug text-muted">
+                <Sparkles className="mr-1 inline size-3 align-[-1px]" aria-hidden />
+                {reason}
+              </p>
+            ) : null}
+            {draft.error ? <p className="rounded-md bg-warning/10 px-2.5 py-1.5 text-[12px] text-warning">{draft.error}</p> : null}
+            <p className="text-[11.5px] leading-snug text-subtle">
+              To {draft.to.join(", ")}
+              {draft.cc.length ? ` · Cc ${draft.cc.join(", ")}` : ""}
+              {draft.replyToSubject ? ` · in reply to “${draft.replyToSubject}”` : ""}
             </p>
-          ) : null}
-          {draft.error ? <p className="rounded-md bg-warning/10 px-2.5 py-1.5 text-[12px] text-warning">{draft.error}</p> : null}
-          <p className="text-[11.5px] leading-snug text-subtle">
-            To {draft.to.join(", ")}
-            {draft.cc.length ? ` · Cc ${draft.cc.join(", ")}` : ""}
-            {draft.replyToSubject ? ` · in reply to “${draft.replyToSubject}”` : ""}
-          </p>
-          <h2 className="text-[15px] font-semibold leading-snug">{draft.subject || "(no subject)"}</h2>
-          <div className="whitespace-pre-wrap text-[13px] leading-[1.45] text-fg md:text-[13.5px]">{draft.body}</div>
-        </div>
+            <h2 className="text-[15px] font-semibold leading-snug">{draft.subject || "(no subject)"}</h2>
+            <div className="whitespace-pre-wrap text-[13px] leading-[1.45] text-fg md:text-[13.5px]">{draft.body}</div>
+          </div>
+        )}
       </article>
 
       {/* Room for the action bar */}
