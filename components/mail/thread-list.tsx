@@ -30,6 +30,7 @@ import type { ThreadSummary } from "@/lib/mail/queries";
 import { cn } from "@/lib/utils";
 import { useArchiveAll, type ArchiveAllScope } from "./archive-all";
 import { useMail, type ThreadTarget } from "./mail-provider";
+import { MailAvatar } from "./mail-avatar";
 import { SwipeRow } from "./swipe-row";
 import { useShortcuts } from "./use-shortcuts";
 
@@ -309,16 +310,26 @@ export function ThreadList({
       <div ref={listRef} className="md:min-h-0 md:flex-1 md:overflow-y-auto" role="list" aria-label="Conversations">
         {/* Phone: Gmail-iOS style bundles at the top of Primary */}
         {categoryRows.length ? (
-          <ul className="border-b border-border bg-surface md:hidden">
+          <ul className="md:hidden">
             {categoryRows.map((t) => (
               <li key={t.tab}>
-                <Link href={t.href} className="flex min-h-[52px] items-center gap-3 px-4 active:bg-surface-2">
-                  <span className="flex size-8 items-center justify-center rounded-full bg-surface-2 text-muted">
-                    <CategoryIcon tab={t.tab} />
+                <Link href={t.href} className="flex min-h-[60px] items-center gap-4 px-4 active:bg-surface-2">
+                  <span className="flex size-11 items-center justify-center text-muted">
+                    <CategoryIcon tab={t.tab} className="size-6" />
                   </span>
                   <span className="flex-1 text-[17px] font-semibold">{t.label}</span>
-                  <span className="rounded-full bg-blue-600 px-2 text-[13px] font-semibold leading-6 text-white">{t.unread} new</span>
-                  <ChevronRight className="size-5 text-subtle" />
+                  <span
+                    className={cn(
+                      "rounded-full px-2.5 text-[13px] font-semibold leading-6",
+                      t.tab === "promotions"
+                        ? "bg-[#c4eed0] text-[#0d652d] dark:bg-[#0d652d] dark:text-[#c4eed0]"
+                        : t.tab === "social"
+                          ? "bg-[#d3e3fd] text-[#0842a0] dark:bg-[#0842a0] dark:text-[#d3e3fd]"
+                          : "bg-[#ffe2c6] text-[#7a3d00] dark:bg-[#7a3d00] dark:text-[#ffe2c6]",
+                    )}
+                  >
+                    {t.unread} new
+                  </span>
                 </Link>
               </li>
             ))}
@@ -458,27 +469,38 @@ export function ThreadList({
                       : { label: "Trash", icon: Trash2, tone: "bg-red-600", removes: hides("trash"), run: () => void run([r], "trash") }
                 }
               >
-                <Link href={href(r)} className="flex gap-2 pl-2 active:bg-surface-2" draggable={false}>
-                  <span className="flex w-4 shrink-0 justify-center pt-[19px]">
-                    {r.unread ? <span className="size-2.5 rounded-full bg-blue-500" aria-label="Unread" /> : null}
-                  </span>
-                  <span className="min-w-0 flex-1 border-b border-border py-2.5 pr-4">
-                    <span className="flex items-center gap-1.5">
-                      <span className="min-w-0 flex-1 truncate text-[17px] font-semibold text-fg">
-                        {toContact ? `To: ${toContact.displayName}` : senders.parts.map((p) => p.text).join(senders.parts.length > 1 ? ", " : "").replace(", .., ", " .. ")}
-                        {senders.count ? <span className="ml-1 text-[15px] font-normal text-subtle">{senders.count}</span> : null}
+                <div className="relative">
+                  <Link href={href(r)} className="flex gap-4 px-4 py-3 active:bg-surface-2" draggable={false}>
+                    <PhoneAvatar row={r} />
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-baseline gap-2">
+                        <span className={cn("min-w-0 flex-1 truncate text-[17px] leading-6", r.unread ? "font-semibold text-fg" : "text-fg/85")}>
+                          {toContact ? `To: ${toContact.displayName}` : senders.parts.map((p) => p.text).join(senders.parts.length > 1 ? ", " : "").replace(", .., ", " .. ")}
+                          {senders.count ? <span className="ml-1.5 text-[13px] font-normal text-muted">{senders.count}</span> : null}
+                        </span>
+                        <span className={cn("shrink-0 text-[13px] tabular-nums", r.unread ? "font-semibold text-fg" : "text-muted")}>
+                          {formatListDate(date, timezone, nowDate)}
+                        </span>
                       </span>
-                      {r.hasAttachments ? <Paperclip className="size-3.5 shrink-0 text-subtle" /> : null}
-                      <span className="shrink-0 text-[15px] tabular-nums text-subtle">{formatListDate(date, timezone, nowDate, "ios")}</span>
-                      <ChevronRight className="-mr-1 size-4 shrink-0 text-subtle/70" strokeWidth={2.25} />
+                      <span className={cn("block truncate text-[15px] leading-[22px]", r.unread ? "font-semibold text-fg" : "text-fg/85")}>
+                        {r.subject?.trim() || "(no subject)"}
+                      </span>
+                      <span className="flex items-center gap-1.5 pr-9">
+                        {r.hasAttachments ? <Paperclip className="size-3.5 shrink-0 text-muted" aria-label="Has attachments" /> : null}
+                        <span className="min-w-0 flex-1 truncate text-[15px] leading-[22px] text-muted">{r.snippet || " "}</span>
+                      </span>
                     </span>
-                    <span className="flex items-center gap-1.5">
-                      <span className="min-w-0 flex-1 truncate text-[15px] text-fg">{r.subject?.trim() || "(no subject)"}</span>
-                      {r.starred ? <Star className="size-3.5 shrink-0 fill-amber-400 text-amber-400" aria-label="Starred" /> : null}
-                    </span>
-                    <span className="line-clamp-2 text-[15px] leading-snug text-muted">{r.snippet || " "}</span>
-                  </span>
-                </Link>
+                  </Link>
+                  <button
+                    type="button"
+                    aria-label={r.starred ? "Unstar" : "Star"}
+                    aria-pressed={r.starred}
+                    onClick={() => void run([r], r.starred ? "unstar" : "star")}
+                    className="absolute bottom-1 right-1.5 inline-flex size-11 items-center justify-center rounded-full text-muted active:bg-surface-2"
+                  >
+                    <Star className={cn("size-[22px]", r.starred && "fill-amber-400 text-amber-400")} strokeWidth={1.5} />
+                  </button>
+                </div>
               </SwipeRow>
             </div>
           );
@@ -505,6 +527,22 @@ export function ThreadList({
       {archiver.dialog}
     </div>
   );
+}
+
+/** Gmail iOS: the contact's photo, else the latest other sender's (or my) first letter in a colored circle. */
+function PhoneAvatar({ row }: { row: ThreadSummary }) {
+  const other = [...row.senders].reverse().find((s) => !s.outbound);
+  if (row.contact) {
+    return (
+      <MailAvatar
+        name={row.contact.displayName}
+        colorKey={other?.email ?? row.contact.displayName}
+        photoSrc={row.contact.hasPhoto ? `/api/contact-photo/${row.contact.id}` : null}
+      />
+    );
+  }
+  const name = other ? other.name || other.email || "?" : row.accountEmail;
+  return <MailAvatar name={name} colorKey={other?.email ?? row.accountEmail} />;
 }
 
 function Senders({ parts }: { parts: SenderPart[] }) {

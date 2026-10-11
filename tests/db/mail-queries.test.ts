@@ -128,7 +128,7 @@ describe.skipIf(process.env.SKIP_DB_TESTS === "1")("listThreads", () => {
     await sql`insert into contact_emails (email, contact_id, is_primary) values ('anna@venue.test', ${c.id}, true)`;
     await msg({ account: a, id: "c1", at: "2026-09-01T10:00:00Z" });
     const { threads } = await listThreads({ view: "inbox" });
-    expect(threads[0].contact).toEqual({ id: c.id, displayName: "Anna Lee", status: "active" });
+    expect(threads[0].contact).toEqual({ id: c.id, displayName: "Anna Lee", status: "active", hasPhoto: false });
   });
 });
 

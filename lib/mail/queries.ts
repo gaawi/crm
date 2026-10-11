@@ -47,7 +47,7 @@ export interface ThreadSummary {
   /** Sender of every visible message, oldest first. */
   senders: ThreadSender[];
   /** CRM contact for the conversation (latest external sender, else recipient). */
-  contact: { id: string; displayName: string; status: ContactStatus } | null;
+  contact: { id: string; displayName: string; status: ContactStatus; hasPhoto?: boolean } | null;
 }
 
 export interface ThreadPage {
@@ -272,7 +272,8 @@ export async function listThreads(params: ThreadListParams): Promise<ThreadPage>
              select json_build_object(
                       'id', c.id,
                       'displayName', coalesce(nullif(btrim(c.name), ''), ce.email),
-                      'status', c.status)
+                      'status', c.status,
+                      'hasPhoto', c.photo_url is not null)
                from messages m
                join message_participants mp on mp.message_id = m.id and mp.role in ('from', 'to', 'cc')
                join contact_emails ce on ce.email = mp.email

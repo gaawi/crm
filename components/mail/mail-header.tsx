@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, type ComponentType } from "react";
 import { createPortal } from "react-dom";
-import { Archive, ChevronLeft, ChevronRight, CircleEllipsis, Loader2, Search, X } from "lucide-react";
+import { Archive, ChevronRight, CircleEllipsis, Loader2, Menu, Search, X } from "lucide-react";
+import { VelaMark } from "@/components/brand/vela-logo";
 import { TAB_TITLES } from "@/lib/mail/params";
 import { cn } from "@/lib/utils";
 import { useArchiveAll, type ArchiveAllScope } from "./archive-all";
+import { MailAvatar } from "./mail-avatar";
 import { MAILBOX_ICONS, type MailboxEntry, type MailboxGroups } from "./mailboxes";
 
 const OPERATOR_HINT = "Search mail — from: to: subject: has:attachment is:unread label: after:";
@@ -42,9 +44,9 @@ export function DesktopSearch({ q, account, clearHref }: { q: string; account: s
 }
 
 /**
- * iPhone Mail's list header: "‹ Mailboxes" bar (the title shrinks into it on
- * scroll) with the list's "…" menu (Archive all, in the Inbox), a large
- * title, the search field, and the Mailboxes sheet.
+ * Gmail for iPhone's list header: a pill search bar pinned at the top (☰
+ * opens the Mailboxes sheet, the avatar on the right switches accounts), then
+ * the mailbox name in small type with the "…" menu (Archive all, in the Inbox).
  */
 export function PhoneMailHeader({
   title,
@@ -66,84 +68,74 @@ export function PhoneMailHeader({
 }) {
   const [sheet, setSheet] = useState(false);
   const archiver = useArchiveAll(archiveAll);
-  const [collapsed, setCollapsed] = useState(false);
-  const titleRef = useRef<HTMLHeadingElement>(null);
-
-  useEffect(() => {
-    const el = titleRef.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(([entry]) => setCollapsed(!entry.isIntersecting), { rootMargin: "-52px 0px 0px 0px" });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
+  const current = groups.accounts.find((e) => e.active && e.key !== "all-accounts") ?? null;
 
   return (
-    // display: contents so the sticky bar sticks for the whole list, not just this wrapper.
+    // display: contents so the sticky search bar sticks for the whole list, not just this wrapper.
     <div className="contents md:hidden">
-      <div
-        className={cn(
-          "sticky top-0 z-20 pt-[env(safe-area-inset-top)] transition-colors md:hidden",
-          collapsed ? "border-b border-border bg-bg/85 backdrop-blur-xl" : "border-b border-transparent bg-bg",
-        )}
-      >
-        <div className="grid h-11 grid-cols-[1fr_auto_1fr] items-center px-2">
+      <div className="sticky top-0 z-20 bg-surface px-3 pb-1 pt-[calc(env(safe-area-inset-top)+0.5rem)] md:hidden">
+        <form action="/mail" role="search" className="flex h-14 items-center gap-1 rounded-full bg-surface-2 pl-1 pr-1.5">
           <button
             type="button"
             onClick={() => setSheet(true)}
-            className="flex h-11 items-center justify-self-start pr-2 text-[17px] text-blue-600 active:opacity-50 dark:text-blue-400"
+            aria-label="Mailboxes"
+            className="flex size-12 shrink-0 items-center justify-center rounded-full text-fg/80 active:bg-border"
           >
-            <ChevronLeft className="size-7" strokeWidth={2} />
-            Mailboxes
+            <Menu className="size-6" strokeWidth={1.75} />
           </button>
-          <span className={cn("max-w-[10rem] truncate text-[17px] font-semibold transition-opacity", collapsed ? "opacity-100" : "opacity-0")}>
-            {title}
-          </span>
-          {archiveAll || archiver.running ? (
-            <ListMenu
-              items={[
-                {
-                  label: archiver.running ? "Archiving…" : "Archive all",
-                  detail: archiveAll ? `${TAB_TITLES[archiveAll.tab]} · ${archiveAll.accountLabel}` : null,
-                  icon: archiver.running ? Spinner : Archive,
-                  run: archiver.start,
-                },
-              ]}
-            />
-          ) : (
-            <span />
-          )}
-        </div>
-      </div>
-
-      <div className="px-4 pb-2 md:hidden">
-        <h1 ref={titleRef} className="text-[34px] font-bold leading-tight tracking-tight">
-          {title}
-        </h1>
-        {subtitle ? <p className="-mt-0.5 truncate text-[15px] text-muted">{subtitle}</p> : null}
-        <form action="/mail" role="search" className="mt-2 flex items-center gap-3">
-          <div className="relative min-w-0 flex-1">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-[18px] -translate-y-1/2 text-subtle" strokeWidth={2} />
-            <input
-              name="q"
-              type="search"
-              enterKeyHint="search"
-              defaultValue={q}
-              key={q}
-              placeholder="Search"
-              aria-label="Search mail"
-              autoComplete="off"
-              autoCorrect="off"
-              autoCapitalize="none"
-              className="h-10 w-full rounded-[10px] bg-surface-2 pl-9 pr-3 text-[17px] text-fg placeholder:text-subtle focus:outline-none"
-            />
-          </div>
+          <input
+            name="q"
+            type="search"
+            enterKeyHint="search"
+            defaultValue={q}
+            key={q}
+            placeholder="Search in mail"
+            aria-label="Search mail"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="none"
+            className="h-12 min-w-0 flex-1 bg-transparent px-1 text-[17px] text-fg placeholder:text-muted focus:outline-none [&::-webkit-search-cancel-button]:hidden"
+          />
           {account ? <input type="hidden" name="account" value={account} /> : null}
           {q ? (
-            <Link href={clearHref} className="shrink-0 text-[17px] text-blue-600 dark:text-blue-400">
-              Cancel
+            <Link href={clearHref} aria-label="Clear search" className="flex size-10 shrink-0 items-center justify-center rounded-full text-muted active:bg-border">
+              <X className="size-5" />
             </Link>
           ) : null}
+          <button
+            type="button"
+            onClick={() => setSheet(true)}
+            aria-label={current ? `Account: ${current.label}` : "All inboxes — switch account"}
+            className="flex size-11 shrink-0 items-center justify-center rounded-full active:opacity-70"
+          >
+            {current ? (
+              <MailAvatar name={current.label} className="size-9 text-[17px]" />
+            ) : (
+              <span className="flex size-9 items-center justify-center rounded-full bg-surface ring-1 ring-border">
+                <VelaMark size={22} />
+              </span>
+            )}
+          </button>
         </form>
+      </div>
+
+      <div className="flex min-h-10 items-center gap-2 pl-4 pr-2 pt-2 md:hidden">
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate text-[15px] font-medium tracking-wide text-muted">{title}</h1>
+          {subtitle ? <p className="truncate text-[13px] text-subtle">{subtitle}</p> : null}
+        </div>
+        {archiveAll || archiver.running ? (
+          <ListMenu
+            items={[
+              {
+                label: archiver.running ? "Archiving…" : "Archive all",
+                detail: archiveAll ? `${TAB_TITLES[archiveAll.tab]} · ${archiveAll.accountLabel}` : null,
+                icon: archiver.running ? Spinner : Archive,
+                run: archiver.start,
+              },
+            ]}
+          />
+        ) : null}
       </div>
 
       {sheet ? <MailboxesSheet groups={groups} onClose={() => setSheet(false)} /> : null}
@@ -209,7 +201,7 @@ function ListMenu({ items }: { items: ListMenuItem[] }) {
         aria-label="More actions"
         aria-haspopup="menu"
         aria-expanded={open}
-        className="flex size-11 items-center justify-center justify-self-end text-blue-600 active:opacity-50 dark:text-blue-400"
+        className="flex size-11 items-center justify-center justify-self-end rounded-full text-muted active:bg-surface-2"
       >
         <CircleEllipsis className="size-[26px]" strokeWidth={1.75} />
       </button>

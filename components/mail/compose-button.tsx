@@ -24,7 +24,7 @@ export function ComposeButton({ account, className, labelClassName }: { account:
   );
 }
 
-/** Floating Compose button above the phone tab bar (iPhone Mail's compose, Gmail's FAB). */
+/** Floating Compose button above the phone tab bar, like Gmail for iPhone. */
 export function ComposeFab({ account }: { account: string | null }) {
   const { compose } = useMail();
   return (
@@ -32,9 +32,9 @@ export function ComposeFab({ account }: { account: string | null }) {
       type="button"
       onClick={() => compose({ accountId: account })}
       aria-label="Compose"
-      className="fixed bottom-[calc(env(safe-area-inset-bottom)+4.5rem)] right-4 z-20 flex h-14 items-center gap-2 rounded-2xl bg-blue-600 pl-4 pr-5 text-[17px] font-semibold text-white shadow-lg shadow-blue-900/25 active:scale-95 active:opacity-90 md:hidden"
+      className="fixed bottom-[calc(env(safe-area-inset-bottom)+4.75rem)] right-4 z-20 flex h-14 items-center gap-3 rounded-2xl bg-[#c2e7ff] pl-5 pr-6 text-[17px] font-medium text-[#001d35] shadow-[0_2px_6px_rgba(0,0,0,0.2)] active:scale-95 active:opacity-90 dark:bg-[#0b57d0] dark:text-white md:hidden"
     >
-      <Pencil className="size-5" strokeWidth={2} />
+      <Pencil className="size-[22px]" strokeWidth={1.75} />
       Compose
     </button>
   );

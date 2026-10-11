@@ -93,7 +93,7 @@ export default async function MailPage({ searchParams }: PageProps<"/mail">) {
   return (
     <div className="md:flex md:h-dvh">
       <MailSidebar groups={groups} variant="list" account={state.account} />
-      <section className="flex min-w-0 flex-1 flex-col pb-[calc(env(safe-area-inset-bottom)+6rem)] md:pb-0" aria-label={title}>
+      <section className="flex min-w-0 flex-1 flex-col pb-[calc(env(safe-area-inset-bottom)+6rem)] max-md:min-h-dvh max-md:bg-surface md:pb-0" aria-label={title}>
         <PhoneMailHeader
           title={title}
           subtitle={subtitle}
