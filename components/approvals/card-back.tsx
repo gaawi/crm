@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowDownLeft, ArrowUpRight, ExternalLink, Mail, MessageCircle, Music, Phone, StickyNote, Target } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, ExternalLink, Mail, MessageCircle, Music, Phone, Search, StickyNote, Target } from "lucide-react";
 import { ContactAvatar } from "@/components/contact-avatar";
 import { OrgProfileCard } from "@/components/organizations/profile-card";
 import { ProjectDot, StatusBadge, TagBadge } from "@/components/ui/badge";
 import { formatPhone, telHref, whatsappUrl } from "@/lib/booking/phone";
+import { CARD_FIELD_LABEL } from "@/lib/contacts/card";
 import { formatDate, formatRelative } from "@/lib/dates";
 import type { EmailDraft } from "@/lib/types";
 import type { CardInfo } from "./card-info";
@@ -53,7 +54,7 @@ export function CardBack({ draft, info, timezone }: { draft: EmailDraft; info: C
           </div>
         </section>
       ) : (
-        <p className="text-muted">To {draft.to.join(", ")} — not linked to a contact yet.</p>
+        <p className="text-muted">To {draft.to.join(", ")}, not linked to a contact yet.</p>
       )}
 
       {c ? (
@@ -99,7 +100,7 @@ export function CardBack({ draft, info, timezone }: { draft: EmailDraft; info: C
           {g.nextAction || g.nextStep ? (
             <p className="mt-1">
               <span className="text-subtle">Next: </span>
-              {[g.nextAction, g.nextStep].filter(Boolean).join(" — ")}
+              {[g.nextAction, g.nextStep].filter(Boolean).join(": ")}
               {g.followUpAt ? <span className="text-subtle"> · {formatDate(new Date(`${g.followUpAt}T12:00:00Z`), timezone)}</span> : null}
             </p>
           ) : null}
@@ -129,6 +130,25 @@ export function CardBack({ draft, info, timezone }: { draft: EmailDraft; info: C
         <section className="flex items-start gap-2">
           <StickyNote className="mt-0.5 size-3.5 shrink-0 text-subtle" aria-hidden />
           <p className="prose-plain line-clamp-6 text-muted">{c.notes}</p>
+        </section>
+      ) : null}
+
+      {c ? (
+        <section className="flex items-start gap-2 text-[12px] text-subtle">
+          <Search className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+          <p>
+            {c.researchedAt ? `Card filled ${formatRelative(new Date(c.researchedAt), timezone)}` : "Card not researched yet"}
+            {c.researchSources.length ? " from " : ""}
+            {c.researchSources.slice(0, 4).map((url, i) => (
+              <span key={url}>
+                {i ? ", " : ""}
+                <a href={url} target="_blank" rel="noopener noreferrer" className="underline-offset-2 hover:underline">
+                  {hostOf(url)}
+                </a>
+              </span>
+            ))}
+            {c.cardMissing.length ? `. Missing: ${c.cardMissing.map((f) => CARD_FIELD_LABEL[f]).join(", ")}.` : "."}
+          </p>
         </section>
       ) : null}
 
@@ -178,4 +198,12 @@ export function CardBack({ draft, info, timezone }: { draft: EmailDraft; info: C
       ) : null}
     </div>
   );
+}
+
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
 }

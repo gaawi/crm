@@ -1,6 +1,8 @@
 "use server";
 
 import { requireSession } from "@/lib/auth";
+import { cardMissing, type CardField } from "@/lib/contacts/card";
+import { sql } from "@/lib/db";
 import { goalLabel, nextActionLabel, OPPORTUNITY_STAGES } from "@/lib/constants";
 import { instrumentLabel, rosterLabel } from "@/lib/musicians/instruments";
 import { listActivities } from "@/lib/queries/activities";
@@ -35,6 +37,10 @@ export interface CardInfo {
     lastContactedAt: string | null;
     messageCount: number;
     projects: { id: string; name: string; color: string }[];
+    /** When Claude filled the card, from which pages, and what it still lacks. */
+    researchedAt: string | null;
+    researchSources: string[];
+    cardMissing: CardField[];
   } | null;
   goal: {
     id: string;
@@ -59,12 +65,17 @@ export async function loadCardInfo(draftId: string): Promise<{ ok: true; info: C
   const draft = await getDraft(draftId);
   if (!draft) return { ok: false, error: "This email is no longer waiting for approval." };
   const contactId = draft.contact?.id ?? null;
-  const [contact, goal, history, activities, musician] = await Promise.all([
+  const [contact, goal, history, activities, musician, research] = await Promise.all([
     contactId ? getContact(contactId) : null,
     draft.opportunityId ? getOpportunity(draft.opportunityId) : null,
     contactId ? getContactHistory(contactId, { limit: 5, includeAutomated: false }) : [],
     contactId ? listActivities({ contactId, limit: 4 }) : [],
     contactId ? getMusicianProfile(contactId) : null,
+    contactId
+      ? sql<{ researchedAt: Date | null; researchSources: string[]; organizationHasProfile: boolean }[]>`
+          select c.researched_at, c.research_sources, (o.profile is not null) as organization_has_profile
+            from contacts c left join organizations o on o.id = c.organization_id where c.id = ${contactId}`.then((r) => r[0] ?? null)
+      : null,
   ]);
   const iso = (d: Date | string | null | undefined) => (d ? new Date(d).toISOString() : null);
   return {
@@ -89,6 +100,16 @@ export async function loadCardInfo(draftId: string): Promise<{ ok: true; info: C
             lastContactedAt: iso(contact.lastContactedAt),
             messageCount: contact.messageCount,
             projects: contact.projects.map((p) => ({ id: p.id, name: p.name, color: p.color })),
+            researchedAt: iso(research?.researchedAt),
+            researchSources: research?.researchSources ?? [],
+            cardMissing: cardMissing({
+              name: contact.name,
+              role: contact.role,
+              organizationId: contact.organization?.id ?? null,
+              organizationHasProfile: research?.organizationHasProfile ?? false,
+              phone: contact.phone,
+              photoUrl: contact.photoUrl ?? null,
+            }),
           }
         : null,
       goal: goal

@@ -1,4 +1,5 @@
 import "server-only";
+import { cardMissing, type CardField } from "@/lib/contacts/card";
 import { sql } from "@/lib/db";
 import { todayIn } from "@/lib/dates";
 import { env } from "@/lib/env";
@@ -36,7 +37,18 @@ interface SheetRowCtx {
   eventDates: string | null;
   section: string | null;
   organization: { name: string; city: string | null } | null;
-  contact: { id: string; name: string | null; email: string | null; phone: string | null; whatsapp: string | null } | null;
+  contact: {
+    id: string;
+    name: string | null;
+    email: string | null;
+    phone: string | null;
+    whatsapp: string | null;
+    role: string | null;
+    /** When the card was filled (POST /api/assistant-agent/contacts); null = fill it before proposing an email. */
+    researchedAt: string | null;
+    /** What the card still lacks ("role", "phone", "organizationProfile"…). */
+    cardMissing: CardField[];
+  } | null;
   emails: { direction: string; date: string; subject: string | null; snippet: string | null }[];
   activities: { kind: string; outcome: string | null; date: string; note: string | null }[];
   openDraft: { id: string; status: string } | null;
@@ -83,7 +95,14 @@ export async function buildAssistantContext(now: Date = new Date()): Promise<Ass
   const projects: AssistantContext["projects"] = [];
   for (const sheet of sheets) {
     const rows = await sql<
-      (Omit<SheetRowCtx, "emails" | "activities"> & {
+      (Omit<SheetRowCtx, "emails" | "activities" | "contact"> & {
+        contact:
+          | (Omit<NonNullable<SheetRowCtx["contact"]>, "cardMissing"> & {
+              organizationId: string | null;
+              organizationHasProfile: boolean;
+              photoUrl: string | null;
+            })
+          | null;
         emails: { direction: string; date: string; subject: string | null; snippet: string | null }[] | null;
         activities: { kind: string; outcome: string | null; date: string; note: string | null }[] | null;
       })[]
@@ -92,7 +111,9 @@ export async function buildAssistantContext(now: Date = new Date()): Promise<Ass
              op.follow_up_at::text as follow_up_at, op.notes, op.event_dates, op.sheet_section as section,
              case when o.id is null then null else json_build_object('name', o.name, 'city', o.city) end as organization,
              case when c.id is null then null else json_build_object(
-               'id', c.id, 'name', nullif(btrim(c.name), ''), 'email', e.email, 'phone', c.phone, 'whatsapp', c.whatsapp) end as contact,
+               'id', c.id, 'name', nullif(btrim(c.name), ''), 'email', e.email, 'phone', c.phone, 'whatsapp', c.whatsapp,
+               'role', nullif(btrim(c.role), ''), 'researchedAt', c.researched_at, 'organizationId', c.organization_id,
+               'organizationHasProfile', co.profile is not null, 'photoUrl', c.photo_url) end as contact,
              em.emails, ac.activities,
              (select json_build_object('id', d.id, 'status', d.status) from email_drafts d
                where (d.opportunity_id = op.id or (c.id is not null and d.contact_id = c.id))
@@ -101,6 +122,7 @@ export async function buildAssistantContext(now: Date = new Date()): Promise<Ass
         from opportunities op
         left join organizations o on o.id = op.organization_id
         left join contacts c on c.id = op.contact_id
+        left join organizations co on co.id = c.organization_id
         left join lateral (
           select ce.email from contact_emails ce where ce.contact_id = c.id order by ce.is_primary desc, ce.created_at limit 1
         ) e on true
@@ -177,6 +199,18 @@ export async function buildAssistantContext(now: Date = new Date()): Promise<Ass
       truncatedRows: rows.length > MAX_ROWS,
       rows: rows.slice(0, MAX_ROWS).map((r) => ({
         ...r,
+        contact: r.contact
+          ? {
+              id: r.contact.id,
+              name: r.contact.name,
+              email: r.contact.email,
+              phone: r.contact.phone,
+              whatsapp: r.contact.whatsapp,
+              role: r.contact.role,
+              researchedAt: iso(r.contact.researchedAt),
+              cardMissing: cardMissing(r.contact),
+            }
+          : null,
         nextStep: clip(r.nextStep, 300),
         notes: clip(r.notes, 500),
         eventDates: clip(r.eventDates, 200),

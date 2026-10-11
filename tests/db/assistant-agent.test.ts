@@ -32,6 +32,7 @@ vi.mock("@/lib/sync/drafts", async () => {
 import { sql } from "@/lib/db";
 import { GET as contextRoute } from "@/app/api/assistant-agent/context/route";
 import { POST as proposalsRoute } from "@/app/api/assistant-agent/proposals/route";
+import { GET as contactsRoute, POST as contactsPost } from "@/app/api/assistant-agent/contacts/route";
 import { postponeDraft, requestDraftChanges } from "@/lib/assistant/drafts";
 import { addSheetRow, createSheet } from "@/lib/queries/booking";
 import { getDraft } from "@/lib/queries/drafts";
@@ -58,7 +59,13 @@ describe("campaign assistant API", () => {
     );
   }
 
-  async function seed(rows = 2, active = true) {
+  /** Contact cards filled, as the routine does before writing (otherwise its emails are skipped). */
+  async function fillCards() {
+    await sql`update contacts set researched_at = now()`;
+    await sql`update organizations set profile = '{"summary": "A venue."}'::jsonb`;
+  }
+
+  async function seed(rows = 2, active = true, cards = true) {
     await insertAccount("me@example.com");
     const projectId = await createSheet({ name: "Gira 2027", currency: "EUR" });
     await sql`update projects set assistant_active = ${active}, assistant_brief = 'Book 10 dates in autumn' where id = ${projectId}`;
@@ -66,6 +73,7 @@ describe("campaign assistant API", () => {
     for (let i = 0; i < rows; i++) {
       ids.push(await addSheetRow({ projectId, organization: `Venue ${i}`, email: `booker${i}@venue${i}.org`, contactName: `Booker ${i}`, phone: "+34600000000" }));
     }
+    if (cards) await fillCards();
     return { projectId, ids };
   }
 
@@ -179,6 +187,60 @@ describe("campaign assistant API", () => {
       const [reply, fresh] = await Promise.all(body.created.emails.map((e: { draftId: string }) => getDraft(e.draftId)));
       expect(reply).toMatchObject({ replyToMessageId: latest, accountId });
       expect(fresh?.replyToMessageId).toBeNull();
+    });
+
+    it("fills the contact card before any email: empty fields only, with sources", async () => {
+      const { projectId, ids } = await seed(1, true, false);
+      const contacts = (path = "") => contactsRoute(new Request(`${URL_BASE}/contacts?projectId=${projectId}${path}`, { headers: { authorization: `Bearer ${TOKEN}` } }));
+      const cards = (body: unknown) =>
+        contactsPost(
+          new Request(`${URL_BASE}/contacts`, {
+            method: "POST",
+            headers: { "content-type": "application/json", authorization: `Bearer ${TOKEN}` },
+            body: JSON.stringify(body),
+          }),
+        );
+
+      // Not filled yet: the email waits.
+      const first = await (await post({ projectId, emails: [email(ids[0])] })).json();
+      expect(first.created.emails).toHaveLength(0);
+      expect(first.skipped[0].reason).toMatch(/Fill the contact card first/);
+      const listed = await (await contacts("&unresearched=1")).json();
+      expect(listed.contacts).toHaveLength(1);
+      expect(listed.contacts[0]).toMatchObject({ researchedAt: null, cardMissing: ["role", "organizationProfile", "photo"] });
+
+      // Facts need their source.
+      const unsourced = await (await cards({ contacts: [{ email: "booker0@venue0.org", role: "Artistic director" }] })).json();
+      expect(unsourced.results[0]).toMatchObject({ ok: false, error: expect.stringMatching(/^sources/) });
+
+      await sql`update contacts set notes = 'Met in Bilbao'`;
+      const filled = await (
+        await cards({
+          contacts: [
+            {
+              email: "booker0@venue0.org",
+              name: "Someone Else",
+              role: "Artistic director",
+              phone: "+34 611 222 333",
+              notes: "Programs early music — mostly Baroque.",
+              sources: ["https://venue0.org/team"],
+            },
+          ],
+        })
+      ).json();
+      expect(filled.results[0]).toMatchObject({ ok: true, filled: ["role", "notes"], kept: ["name", "phone"] });
+      const [c] = await sql<{ name: string; role: string; phone: string; notes: string; researchSources: string[] }[]>`
+        select name, role, phone, notes, research_sources from contacts`;
+      expect(c).toMatchObject({ name: "Booker 0", role: "Artistic director", phone: "+34600000000", researchSources: ["https://venue0.org/team"] });
+      expect(c.notes).toBe("Met in Bilbao\n\nPrograms early music, mostly Baroque.");
+
+      // The organization still has no profile.
+      const second = await (await post({ projectId, emails: [email(ids[0])] })).json();
+      expect(second.skipped[0].reason).toMatch(/organization's profile first/);
+      await sql`update organizations set profile = '{"summary": "A venue."}'::jsonb`;
+      const third = await (await post({ projectId, emails: [email(ids[0])] })).json();
+      expect(third.created.emails).toHaveLength(1);
+      expect((await (await contacts("&unresearched=1")).json()).contacts).toHaveLength(0);
     });
 
     it("caps new emails at 10 per campaign per call", async () => {

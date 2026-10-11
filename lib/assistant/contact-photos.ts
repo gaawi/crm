@@ -2,6 +2,7 @@ import "server-only";
 import { z } from "zod";
 import { httpsUrlIssue, normalizeHttpsUrl } from "@/lib/contacts/photo";
 import { contactExists, contactIdForEmail, listCampaignContacts, setContactPhoto } from "@/lib/queries/contact-photos";
+import { cardMissing } from "@/lib/contacts/card";
 import { isValidEmail } from "@/lib/utils";
 
 /**
@@ -98,9 +99,9 @@ export async function applyContactPhotos(body: unknown): Promise<ApplyPhotosResu
   return { ok: true, updated, failed: results.length - updated, results };
 }
 
-export async function listContactsForProject(projectId: string | null, missingPhotoOnly: boolean) {
+export async function listContactsForProject(projectId: string | null, missingPhotoOnly: boolean, unresearchedOnly = false) {
   if (!projectId || !z.guid().safeParse(projectId).success) throw new ContactPhotosError("Pass ?projectId=<uuid> (a campaign).", 400);
-  const list = await listCampaignContacts(projectId, { missingPhotoOnly });
+  const list = await listCampaignContacts(projectId, { missingPhotoOnly, unresearchedOnly });
   if (!list) throw new ContactPhotosError("Project not found.", 404);
   return {
     projectId: list.project.id,
@@ -115,6 +116,13 @@ export async function listContactsForProject(projectId: string | null, missingPh
       organization: c.organization,
       photoUrl: c.photoUrl,
       photoSource: c.photoSource,
+      phone: c.phone,
+      whatsapp: c.whatsapp,
+      notes: c.notes,
+      organizationHasProfile: c.organizationHasProfile,
+      researchedAt: c.researchedAt ? new Date(c.researchedAt).toISOString() : null,
+      researchSources: c.researchSources,
+      cardMissing: cardMissing({ ...c, organizationId: c.organization?.id ?? null }),
       opportunityIds: c.opportunityIds,
     })),
   };

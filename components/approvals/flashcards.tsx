@@ -31,6 +31,9 @@ const PURPOSE: Record<EmailDraft["purpose"], string> = {
   other: "Email",
 };
 
+/** How long a card takes to slide out (and the next one to slide in). */
+const SLIDE_MS = 200;
+
 type Panel = null | "edit" | "revise" | "changes" | "postpone";
 
 /** A card of the pile: one email, or a whole mailing (bulk send) approved at once. */
@@ -91,10 +94,14 @@ export function Flashcards({
 
   // Full screen: the page behind does not scroll.
   useEffect(() => {
-    const previous = document.documentElement.style.overflow;
-    document.documentElement.style.overflow = "hidden";
+    const root = document.documentElement.style;
+    const previous = { overflow: root.overflow, overscrollBehaviorX: root.overscrollBehaviorX };
+    root.overflow = "hidden";
+    // A sideways swipe moves cards; it never goes back in the browser history.
+    root.overscrollBehaviorX = "none";
     return () => {
-      document.documentElement.style.overflow = previous;
+      root.overflow = previous.overflow;
+      root.overscrollBehaviorX = previous.overscrollBehaviorX;
     };
   }, []);
 
@@ -180,40 +187,116 @@ export function Flashcards({
     }, 140);
   }, [item, flipped, infos]);
 
+  // Swipe like a normal pager: the card follows the finger sideways, then
+  // slides out and the next one slides in (or springs back on a short drag).
+  // Vertical scrolling stays native; the direction is decided on the first move.
+  const [shift, setShift] = useState<{ x: number; animate: boolean }>({ x: 0, animate: false });
+  const gesture = useRef<{ x0: number; y0: number; axis: "x" | "y" | null; lastX: number; lastT: number; v: number } | null>(null);
+  const sliding = useRef(false);
+  /** When the last horizontal drag ended: the click that follows it does not flip the card. */
+  const swipedAt = useRef(0);
+
+  const slide = (delta: number) => {
+    if (sliding.current) return;
+    if (pile.length < 2 || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      setShift({ x: 0, animate: true });
+      if (pile.length > 1) go(delta);
+      return;
+    }
+    sliding.current = true;
+    const w = (cardRef.current?.offsetWidth ?? window.innerWidth) + 32;
+    setShift({ x: delta > 0 ? -w : w, animate: true });
+    setTimeout(() => {
+      go(delta);
+      // The next card starts off-screen on the other side, then slides in.
+      setShift({ x: delta > 0 ? w : -w, animate: false });
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          setShift({ x: 0, animate: true });
+          sliding.current = false;
+        }),
+      );
+    }, SLIDE_MS);
+  };
+  // Listeners below always call the latest slide().
+  const slideRef = useRef(slide);
+  useEffect(() => {
+    slideRef.current = slide;
+  });
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    if (panel || sliding.current || e.touches.length > 1) return;
+    const t = e.touches[0];
+    gesture.current = { x0: t.clientX, y0: t.clientY, axis: null, lastX: t.clientX, lastT: e.timeStamp, v: 0 };
+  };
+  const onTouchMove = (e: React.TouchEvent) => {
+    const g = gesture.current;
+    if (!g) return;
+    const t = e.touches[0];
+    const x = t.clientX - g.x0;
+    const y = t.clientY - g.y0;
+    if (!g.axis) {
+      if (Math.hypot(x, y) < 8) return;
+      g.axis = Math.abs(x) > Math.abs(y) ? "x" : "y";
+    }
+    if (g.axis !== "x") return;
+    const dt = e.timeStamp - g.lastT;
+    if (dt > 0) g.v = (t.clientX - g.lastX) / dt;
+    g.lastX = t.clientX;
+    g.lastT = e.timeStamp;
+    // Alone in the pile: it resists and comes back.
+    setShift({ x: pile.length < 2 ? x / 3 : x, animate: false });
+  };
+  const onTouchEnd = () => {
+    const g = gesture.current;
+    gesture.current = null;
+    if (!g || g.axis !== "x") return;
+    swipedAt.current = Date.now();
+    const x = shift.x;
+    const width = cardRef.current?.offsetWidth ?? window.innerWidth;
+    const flick = Math.abs(g.v) > 0.45 && Math.abs(x) > 24 && Math.sign(g.v) === Math.sign(x);
+    if (Math.abs(x) > width * 0.28 || flick) slide(x < 0 ? 1 : -1);
+    else setShift({ x: 0, animate: true });
+  };
+
+  // Trackpad: a sideways two-finger swipe moves one card (and never navigates the browser back).
+  const wheel = useRef({ sum: 0, lockedUntil: 0 });
+  useEffect(() => {
+    const el = cardRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
+      e.preventDefault();
+      const w = wheel.current;
+      const now = Date.now();
+      if (now < w.lockedUntil) {
+        w.lockedUntil = now + 250; // the rest of the same gesture (momentum)
+        return;
+      }
+      w.sum += e.deltaX;
+      if (Math.abs(w.sum) > 60) {
+        slideRef.current(w.sum > 0 ? 1 : -1);
+        w.sum = 0;
+        w.lockedUntil = now + 250;
+      }
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [item?.id]);
+
   // Keyboard: ← → move, Escape closes a panel.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const typing = e.target instanceof HTMLElement && (e.target.closest("input, textarea, select") || e.target.isContentEditable);
       if (e.key === "Escape" && panel) setPanel(null);
       if (typing || panel) return;
-      if (e.key === "ArrowRight") go(1);
-      if (e.key === "ArrowLeft") go(-1);
+      if (e.key === "ArrowRight") slideRef.current(1);
+      if (e.key === "ArrowLeft") slideRef.current(-1);
       if (e.key === "i") flip();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [go, panel, flip]);
-
-  // Horizontal swipe on the card (vertical scrolling stays native).
-  const touch = useRef<{ x: number; y: number } | null>(null);
-  const swiped = useRef(false);
-  const [dx, setDx] = useState(0);
-  const onTouchStart = (e: React.TouchEvent) => {
-    if (panel) return;
-    touch.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-  };
-  const onTouchMove = (e: React.TouchEvent) => {
-    if (!touch.current) return;
-    const x = e.touches[0].clientX - touch.current.x;
-    const y = e.touches[0].clientY - touch.current.y;
-    if (Math.abs(x) > Math.abs(y) * 1.4) setDx(x);
-  };
-  const onTouchEnd = () => {
-    swiped.current = Math.abs(dx) > 10;
-    if (Math.abs(dx) > 80) go(dx < 0 ? 1 : -1);
-    setDx(0);
-    touch.current = null;
-  };
+  }, [panel, flip]);
 
   if (!item) {
     const count = Object.keys(done).length;
@@ -258,7 +341,7 @@ export function Flashcards({
           <span className="flex-1" />
           <button
             type="button"
-            onClick={() => go(-1)}
+            onClick={() => slide(-1)}
             aria-label="Previous email"
             className="hidden size-8 items-center justify-center rounded-full text-muted hover:bg-surface-2 md:flex"
           >
@@ -266,7 +349,7 @@ export function Flashcards({
           </button>
           <button
             type="button"
-            onClick={() => go(1)}
+            onClick={() => slide(1)}
             aria-label="Next email"
             className="hidden size-8 items-center justify-center rounded-full text-muted hover:bg-surface-2 md:flex"
           >
@@ -291,10 +374,7 @@ export function Flashcards({
           ref={cardRef}
           onClick={(e) => {
             // Tap anywhere on the card to turn it over (not on links or buttons, not after a swipe or while selecting text).
-            if (swiped.current) {
-              swiped.current = false;
-              return;
-            }
+            if (Date.now() - swipedAt.current < 400) return;
             if ((e.target as HTMLElement).closest("a, button, input, textarea, select, label, [role=dialog]")) return;
             if (window.getSelection()?.toString()) return;
             flip();
@@ -302,17 +382,15 @@ export function Flashcards({
           onTouchStart={onTouchStart}
           onTouchMove={onTouchMove}
           onTouchEnd={onTouchEnd}
-          style={
-            dx
-              ? {
-                  transform: `translateX(${dx}px) rotate(${dx / 40}deg)`,
-                  transition: "none",
-                }
-              : {
-                  transform: turning ? "perspective(1200px) rotateY(90deg)" : "perspective(1200px) rotateY(0deg)",
-                }
-          }
-          className="min-h-0 min-w-0 flex-1 cursor-pointer overflow-y-auto overscroll-contain rounded-2xl border border-border bg-surface shadow-sm transition-transform duration-150 ease-in-out [overflow-wrap:anywhere]"
+          onTouchCancel={() => {
+            gesture.current = null;
+            setShift({ x: 0, animate: true });
+          }}
+          style={{
+            transform: `translateX(${shift.x}px) perspective(1200px) rotateY(${turning ? 90 : 0}deg)`,
+            transition: shift.animate ? `transform ${SLIDE_MS}ms cubic-bezier(0.2, 0.8, 0.2, 1)` : shift.x ? "none" : "transform 150ms ease-in-out",
+          }}
+          className="min-h-0 min-w-0 flex-1 cursor-pointer touch-pan-y overflow-y-auto overscroll-contain rounded-2xl border border-border bg-surface shadow-sm [overflow-wrap:anywhere]"
         >
           {mailing ? <MailingFace mailing={mailing} flipped={flipped} /> : null}
           {draft ? (

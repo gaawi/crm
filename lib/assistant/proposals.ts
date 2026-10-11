@@ -173,6 +173,21 @@ export async function applyProposals(raw: unknown): Promise<ProposalsResult> {
       result.skipped.push({ type: "email", ref: row.id, reason: "An email for this row is already waiting (open or postponed)." });
       continue;
     }
+    // The card comes first: who they are (role, organization and its profile…) is filled, then the email is written.
+    const [card] = await sql<{ researched: boolean; profileMissing: boolean }[]>`
+      select c.researched_at is not null as researched, (o.id is not null and o.profile is null) as profile_missing
+        from contacts c left join organizations o on o.id = c.organization_id
+       where c.id = ${row.contactId}`;
+    if (!card?.researched || card.profileMissing) {
+      result.skipped.push({
+        type: "email",
+        ref: row.id,
+        reason: !card?.researched
+          ? "Fill the contact card first (POST /api/assistant-agent/contacts), then propose the email."
+          : "Write the organization's profile first (POST /api/assistant-agent/profiles), then propose the email.",
+      });
+      continue;
+    }
     seen.add(row.id);
     seen.add(row.contactId);
     try {

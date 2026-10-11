@@ -41,6 +41,13 @@ export interface CampaignContact {
   organization: { id: string; name: string; website: string | null } | null;
   photoUrl: string | null;
   photoSource: string | null;
+  phone: string | null;
+  whatsapp: string | null;
+  notes: string | null;
+  /** When Claude last filled the card (POST /api/assistant-agent/contacts), and from which pages. */
+  researchedAt: Date | null;
+  researchSources: string[];
+  organizationHasProfile: boolean;
   /** The campaign's rows (goals) with this person. */
   opportunityIds: string[];
 }
@@ -51,7 +58,7 @@ export interface CampaignContact {
  */
 export async function listCampaignContacts(
   projectId: string,
-  options: { missingPhotoOnly?: boolean } = {},
+  options: { missingPhotoOnly?: boolean; unresearchedOnly?: boolean } = {},
 ): Promise<{ project: { id: string; name: string; sheet: boolean }; contacts: CampaignContact[] } | null> {
   if (!ID.test(projectId)) return null;
   const [project] = await sql<{ id: string; name: string; sheet: boolean }[]>`select id, name, sheet from projects where id = ${projectId}`;
@@ -70,6 +77,12 @@ export async function listCampaignContacts(
            case when o.id is null then null else json_build_object('id', o.id, 'name', o.name, 'website', o.website) end as organization,
            c.photo_url,
            c.photo_source,
+           c.phone,
+           c.whatsapp,
+           c.notes,
+           c.researched_at,
+           c.research_sources,
+           (o.profile is not null) as organization_has_profile,
            coalesce((select array_agg(op.id::text order by op.created_at) from opportunities op
                       where op.project_id = ${projectId} and op.contact_id = c.id), '{}') as opportunity_ids
       from members m
@@ -81,6 +94,7 @@ export async function listCampaignContacts(
       ) e on true
      where c.status <> 'archived'
        ${options.missingPhotoOnly ? sql`and c.photo_url is null` : sql``}
+       ${options.unresearchedOnly ? sql`and c.researched_at is null` : sql``}
      order by lower(coalesce(o.name, '')), lower(coalesce(nullif(btrim(c.name), ''), e.emails[1], ''))`;
   return { project, contacts };
 }
