@@ -70,6 +70,26 @@ export const INSTRUMENTS: Instrument[] = [
 
 const BY_KEY = new Map(INSTRUMENTS.map((i) => [i.key, i]));
 
+/** Families in the order the instrument filter lists them. */
+export const FAMILIES: { value: InstrumentFamily; label: string }[] = [
+  { value: "strings", label: "Strings" },
+  { value: "keyboards", label: "Keyboards" },
+  { value: "winds", label: "Woodwinds" },
+  { value: "brass", label: "Brass" },
+  { value: "percussion", label: "Percussion" },
+  { value: "plucked", label: "Plucked strings" },
+  { value: "voice", label: "Voices" },
+  { value: "other", label: "Composers, conductors & more" },
+];
+
+/** Instruments in use grouped by family (families with none left out), most common first inside each. */
+export function groupByFamily<T extends { instrument: string; count: number }>(counts: T[]): { family: InstrumentFamily; label: string; items: T[]; musicians: number }[] {
+  return FAMILIES.map((f) => {
+    const items = counts.filter((c) => instrumentFamily(c.instrument) === f.value);
+    return { family: f.value, label: f.label, items, musicians: items.reduce((n, c) => n + c.count, 0) };
+  }).filter((g) => g.items.length > 0);
+}
+
 /** Lower case, no accents, single spaces: "Violonchelo " → "violonchelo". */
 export function fold(text: string): string {
   return text

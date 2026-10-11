@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { instrumentLabel, instrumentsMatching, normalizeInstrument, parseInstruments } from "@/lib/musicians/instruments";
+import { groupByFamily, instrumentLabel, instrumentsMatching, normalizeInstrument, parseInstruments } from "@/lib/musicians/instruments";
 
 describe("musician instruments", () => {
   it("stores Spanish and English names, player nouns included, as one key", () => {
@@ -36,5 +36,20 @@ describe("musician instruments", () => {
     expect(instrumentsMatching("vio")).toEqual(expect.arrayContaining(["violin", "viola", "cello"]));
     expect(instrumentsMatching("nyck", ["nyckelharpa"])).toEqual(["nyckelharpa"]);
     expect(instrumentsMatching("")).toEqual([]);
+  });
+
+  it("groups the instruments in use by family for the filter", () => {
+    const groups = groupByFamily([
+      { instrument: "violin", count: 18 },
+      { instrument: "cello", count: 14 },
+      { instrument: "voice", count: 9 },
+      { instrument: "composer", count: 7 },
+      { instrument: "birbynė", count: 1 },
+    ]);
+    expect(groups.map((g) => [g.family, g.items.map((i) => i.instrument)])).toEqual([
+      ["strings", ["violin", "cello"]],
+      ["voice", ["voice"]],
+      ["other", ["composer", "birbynė"]],
+    ]);
   });
 });

@@ -55,6 +55,8 @@ describe("musicians roster", () => {
     expect((await listMusicians({ q: "new york" })).map((m) => m.contact.id)).toEqual([ben]);
     expect((await listMusicians({ instrument: "piano" })).map((m) => m.contact.id)).toEqual([ben]);
     expect((await listMusicians({ playedWithUs: true })).map((m) => m.contact.id)).toEqual([ana]);
+    expect((await listMusicians({ instrumentsAny: ["violin", "cello"] })).map((m) => m.contact.id)).toEqual([ana]);
+    expect((await listMusicians({ instrumentsAny: ["soprano", "piano"] })).map((m) => m.contact.displayName).sort()).toEqual(["Ben Pianist", "Eva Soprano"]);
     expect((await listMusicians({ roster: "not_now" })).map((m) => m.contact.displayName)).toEqual(["Eva Soprano"]);
 
     const all = await listMusicians({ withRating: true });

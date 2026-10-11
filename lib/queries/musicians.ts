@@ -131,6 +131,8 @@ export interface MusicianFilters {
   q?: string;
   /** Exact instrument key. */
   instrument?: string;
+  /** Any of these instrument keys (a family: every string instrument…). */
+  instrumentsAny?: string[];
   roster?: RosterStatus;
   playedWithUs?: boolean;
   withRating?: boolean;
@@ -172,6 +174,7 @@ export async function listMusicians(filters: MusicianFilters = {}): Promise<Musi
       ) g on true
      where c.status <> 'archived'
        ${filters.instrument ? sql`and ${filters.instrument} = any(mp.instruments)` : sql``}
+       ${filters.instrumentsAny ? sql`and mp.instruments && ${filters.instrumentsAny}::text[]` : sql``}
        ${filters.roster ? sql`and mp.roster = ${filters.roster}` : sql``}
        ${filters.playedWithUs === true ? sql`and coalesce(g.count, 0) > 0` : filters.playedWithUs === false ? sql`and coalesce(g.count, 0) = 0` : sql``}
        ${

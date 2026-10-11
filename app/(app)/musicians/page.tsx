@@ -6,7 +6,17 @@ import { Badge } from "@/components/ui/badge";
 import { EmptyState, PageHeader } from "@/components/ui/layout";
 import { env } from "@/lib/env";
 import { formatDate, formatRelative } from "@/lib/dates";
-import { instrumentLabel, instrumentsMatching, ROSTER_STATUSES, type RosterStatus } from "@/lib/musicians/instruments";
+import {
+  FAMILIES,
+  groupByFamily,
+  instrumentFamily,
+  instrumentLabel,
+  instrumentsMatching,
+  ROSTER_STATUSES,
+  type InstrumentFamily,
+  type RosterStatus,
+} from "@/lib/musicians/instruments";
+import { Select } from "@/components/ui/field";
 import { instrumentCounts, listMusicians, type MusicianRow } from "@/lib/queries/musicians";
 import { cn } from "@/lib/utils";
 import { RosterBadge, Stars } from "@/components/musicians/badges";
@@ -31,20 +41,28 @@ export default async function MusiciansPage({ searchParams }: PageProps<"/musici
   // The private rating is folded away unless asked for (?ratings=1).
   const showRatings = param(sp, "ratings") === "1";
 
-  const [musicians, counts] = await Promise.all([
+  // ?instrument=cello, or a whole family: ?instrument=family:strings
+  const familyParam = instrument.startsWith("family:") ? instrument.slice(7) : "";
+  const family = FAMILIES.some((f) => f.value === familyParam) ? (familyParam as InstrumentFamily) : null;
+  const counts = await instrumentCounts();
+  const familyKeys = family ? counts.map((c) => c.instrument).filter((i) => instrumentFamily(i) === family) : [];
+
+  const [musicians] = await Promise.all([
     listMusicians({
       q: q || undefined,
-      instrument: instrument || undefined,
+      instrument: family ? undefined : instrument || undefined,
+      instrumentsAny: family ? (familyKeys.length ? familyKeys : ["-"]) : undefined,
       roster,
       playedWithUs: played === "yes" ? true : played === "no" ? false : undefined,
       withRating: showRatings,
     }),
-    instrumentCounts(),
   ]);
+  const groups = groupByFamily(counts);
   const current = { q, instrument, roster: roster ?? "", played, ratings: showRatings ? "1" : "" };
   const href = (patch: Partial<typeof current>) => hrefWith("/musicians", { ...current, ...patch });
   const understood = q ? instrumentsMatching(q, counts.map((c) => c.instrument)) : [];
   const filtered = Boolean(q || instrument || roster || played);
+  const familyLabel = family ? FAMILIES.find((f) => f.value === family)?.label : null;
 
   return (
     <>
@@ -58,19 +76,42 @@ export default async function MusiciansPage({ searchParams }: PageProps<"/musici
         description="Who plays what, who has played with us, and who is in our roster."
       />
 
-      <FilterForm action="/musicians" className="mb-3 flex items-center gap-2" role="search" aria-label="Find a musician">
+      <FilterForm action="/musicians" className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center" role="search" aria-label="Find a musician">
         <SearchInput
           name="q"
           defaultValue={q}
           placeholder="Instrument or name — “cellista”, “soprano”, “piano Madrid”…"
           aria-label="Search musicians by instrument, name or city"
-          className="flex-1"
+          className="min-w-0 flex-1"
         />
-        {instrument ? <input type="hidden" name="instrument" value={instrument} /> : null}
+        {counts.length ? (
+          <Select name="instrument" defaultValue={instrument} key={instrument} aria-label="Filter by instrument" className="sm:w-60">
+            <option value="">All instruments</option>
+            {groups.map((g) => (
+              <optgroup key={g.family} label={g.label}>
+                {g.items.length > 1 ? <option value={`family:${g.family}`}>All {g.label.toLowerCase()}</option> : null}
+                {g.items.map((c) => (
+                  <option key={c.instrument} value={c.instrument}>
+                    {instrumentLabel(c.instrument)} ({c.count})
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </Select>
+        ) : null}
         {roster ? <input type="hidden" name="roster" value={roster} /> : null}
         {played ? <input type="hidden" name="played" value={played} /> : null}
         {showRatings ? <input type="hidden" name="ratings" value="1" /> : null}
       </FilterForm>
+
+      {familyLabel ? (
+        <p className="mb-3 px-4 text-[13px] text-subtle md:px-0 md:text-xs">
+          {familyLabel}: {familyKeys.map(instrumentLabel).join(", ") || "none yet"} ·{" "}
+          <Link href={href({ instrument: "" })} className="text-muted underline-offset-2 hover:underline">
+            All instruments
+          </Link>
+        </p>
+      ) : null}
 
       {q && understood.length ? (
         <p className="mb-3 px-4 text-[13px] text-subtle md:px-0 md:text-xs">
@@ -79,7 +120,7 @@ export default async function MusiciansPage({ searchParams }: PageProps<"/musici
       ) : null}
 
       {counts.length ? (
-        <div className="-mx-4 mb-3 flex gap-1.5 overflow-x-auto px-4 pb-1 md:mx-0 md:flex-wrap md:overflow-visible md:px-0" aria-label="Instruments">
+        <div className="mb-3 hidden flex-wrap gap-1.5 md:flex" aria-label="Instruments">
           {counts.map((c) => {
             const on = c.instrument === instrument;
             return (
@@ -133,7 +174,13 @@ export default async function MusiciansPage({ searchParams }: PageProps<"/musici
       {musicians.length ? (
         <ul className="mb-6 divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface md:rounded-lg">
           {musicians.map((m) => (
-            <MusicianItem key={m.contact.id} m={m} showRatings={showRatings} timezone={env.timezone} highlight={instrument ? [instrument] : understood} />
+            <MusicianItem
+              key={m.contact.id}
+              m={m}
+              showRatings={showRatings}
+              timezone={env.timezone}
+              highlight={family ? familyKeys : instrument ? [instrument] : understood}
+            />
           ))}
         </ul>
       ) : (
@@ -160,7 +207,7 @@ function MusicianItem({ m, showRatings, timezone, highlight }: { m: MusicianRow;
   const sub = [m.basedIn, c.organization?.name].filter(Boolean).join(" · ");
   return (
     <li className="relative flex items-start gap-3 px-4 py-3 active:bg-surface-2 md:active:bg-transparent">
-      <ContactAvatar contact={c} />
+      <ContactAvatar contact={c} size="md" />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <Link
