@@ -18,8 +18,9 @@ import { formatRelative } from "@/lib/dates";
 import type { EmailDraft } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { CardBack } from "./card-back";
-import { loadCardInfo, type CardInfo } from "./card-info";
+import { loadCardInfo, loadDraftThread, type CardInfo, type DraftThread } from "./card-info";
 import { MailingFace, type MailingCardData } from "./mailing-card";
+import { DraftConversation } from "./thread-face";
 import { discardCampaignAction, startCampaignAction } from "@/app/(app)/approvals/actions";
 
 const PURPOSE: Record<EmailDraft["purpose"], string> = {
@@ -82,6 +83,9 @@ export function Flashcards({
   const [flipped, setFlipped] = useState(false);
   const [turning, setTurning] = useState(false);
   const [infos, setInfos] = useState<Record<string, CardInfo | { error: string }>>({});
+  // The conversation on the front, loaded for the card on screen and the next one.
+  const [threads, setThreads] = useState<Record<string, DraftThread | { error: string }>>({});
+  const asked = useRef(new Set<string>());
   const cardRef = useRef<HTMLElement>(null);
   const toTop = () => cardRef.current?.scrollTo({ top: 0 });
 
@@ -93,6 +97,17 @@ export function Flashcards({
       document.documentElement.style.overflow = previous;
     };
   }, []);
+
+  useEffect(() => {
+    if (index < 0) return;
+    for (const next of [pile[index], pile[index + 1]]) {
+      if (next?.kind !== "draft" || asked.current.has(next.id)) continue;
+      asked.current.add(next.id);
+      void loadDraftThread(next.id)
+        .then((r) => setThreads((prev) => ({ ...prev, [next.id]: r.ok ? r.thread : { error: r.error } })))
+        .catch(() => setThreads((prev) => ({ ...prev, [next.id]: { error: "Couldn't load the conversation." } })));
+    }
+  }, [pile, index]);
 
   // Notices ("Sent.", "Sent to the assistant.") fade by themselves; errors stay.
   useEffect(() => {
@@ -359,13 +374,7 @@ export function Flashcards({
                     </p>
                   ) : null}
                   {draft.error ? <p className="rounded-md bg-warning/10 px-2.5 py-1.5 text-[12px] text-warning">{draft.error}</p> : null}
-                  <p className="text-[11.5px] leading-snug text-subtle">
-                    To {draft.to.join(", ")}
-                    {draft.cc.length ? ` · Cc ${draft.cc.join(", ")}` : ""}
-                    {draft.replyToSubject ? ` · in reply to “${draft.replyToSubject}”` : ""}
-                  </p>
-                  <h2 className="text-[15px] font-semibold leading-snug">{draft.subject || "(no subject)"}</h2>
-                  <div className="whitespace-pre-wrap text-[13px] leading-[1.45] text-fg md:text-[13.5px]">{draft.body}</div>
+                  <DraftConversation draft={draft} thread={threads[draft.id]} timezone={timezone} />
                 </div>
               )}
             </>

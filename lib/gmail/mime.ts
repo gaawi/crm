@@ -9,7 +9,7 @@ const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 /** CR/LF (header injection) and other control characters become spaces; whitespace collapsed. */
-function cleanHeaderText(value: string | null | undefined): string {
+export function cleanHeaderText(value: string | null | undefined): string {
   if (value === null || value === undefined) return "";
   // eslint-disable-next-line no-control-regex
   return String(value).replace(/[\u0000-\u001F\u007F]+/g, " ").replace(/\s+/g, " ").trim();

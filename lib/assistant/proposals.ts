@@ -5,6 +5,7 @@ import { DraftError, proposeEmail } from "@/lib/ai/approvals";
 import { applyDraftRevision } from "@/lib/assistant/drafts";
 import { ASSISTANT_ACTION_KINDS, MAX_EMAILS_PER_CALL } from "@/lib/assistant/types";
 import { OPEN_DRAFT_STATUSES } from "@/lib/queries/assistant";
+import { cleanHeaderText } from "@/lib/gmail/mime";
 import { errorMessage } from "@/lib/utils";
 
 /**
@@ -81,6 +82,44 @@ interface RowInfo {
   orgName: string | null;
 }
 
+/** "RE: Fwd: Hola  mundo" → "hola mundo": the subject a thread is known by. */
+export function threadSubject(subject: string | null): string {
+  let text = cleanHeaderText(subject).toLowerCase();
+  for (;;) {
+    const next = text.replace(/^(?:re|aw|réf|ref|sv|antw|rif|fwd?|fw|tr|wg)\s*(?:\[\d+\])?\s*:\s*/i, "");
+    if (next === text) break;
+    text = next;
+  }
+  return text.replace(/\s+/g, " ").trim();
+}
+
+/**
+ * The conversation an assistant email continues: the latest message with the
+ * contact whose subject is the same once "Re:"/"Fwd:" are stripped. Mail of
+ * the campaign's send account comes first (Gmail can only thread a reply in
+ * its own mailbox); otherwise any account, and the reply then goes out from
+ * that account when it can send (not monitor-only), so the thread stays one.
+ */
+async function threadToContinue(contactId: string, subject: string, sendAccountId: string | null): Promise<{ messageId: string; accountId: string | null } | null> {
+  const wanted = threadSubject(subject);
+  if (!wanted) return null;
+  const messages = await sql<{ id: string; subject: string | null; accountId: string; writable: boolean }[]>`
+    select distinct on (m.sent_at, m.id) m.id, m.subject, m.account_id, (a.status = 'active' and not a.monitor_only) as writable
+      from contact_emails ce
+      join message_participants mp on mp.email = ce.email
+      join messages m on m.id = mp.message_id
+      join gmail_accounts a on a.id = m.account_id
+     where ce.contact_id = ${contactId}
+     order by m.sent_at desc, m.id
+     limit 200`;
+  const matching = messages.filter((m) => threadSubject(m.subject) === wanted);
+  const own = matching.find((m) => m.accountId === sendAccountId);
+  if (own) return { messageId: own.id, accountId: sendAccountId };
+  const elsewhere = matching[0];
+  if (!elsewhere) return null;
+  return { messageId: elsewhere.id, accountId: elsewhere.writable ? elsewhere.accountId : sendAccountId };
+}
+
 export async function applyProposals(raw: unknown): Promise<ProposalsResult> {
   const parsed = proposalsSchema.safeParse(raw);
   if (!parsed.success) throw new ProposalError(`Invalid request: ${parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`, 400);
@@ -137,9 +176,11 @@ export async function applyProposals(raw: unknown): Promise<ProposalsResult> {
     seen.add(row.id);
     seen.add(row.contactId);
     try {
+      const thread = await threadToContinue(row.contactId, email.subject, sheet.sendAccountId);
       const draft = await proposeEmail({
         contactId: row.contactId,
-        accountId: sheet.sendAccountId,
+        accountId: thread ? thread.accountId : sheet.sendAccountId,
+        replyToMessageId: thread?.messageId ?? null,
         subject: email.subject,
         body: email.body,
         opportunityId: row.id,

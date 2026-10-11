@@ -151,6 +151,36 @@ describe("campaign assistant API", () => {
       expect(lastRun).not.toBeNull();
     });
 
+    it("replies in the contact's thread when the subject continues one", async () => {
+      const { projectId, ids } = await seed(2);
+      const [{ id: accountId }] = await sql<{ id: string }[]>`select id from gmail_accounts where email = 'me@example.com'`;
+      const message = async (gmailId: string, from: string, to: string, subject: string, sentAt: string) => {
+        const [row] = await sql<{ id: string }[]>`
+          insert into messages (account_id, gmail_message_id, gmail_thread_id, rfc822_message_id, direction, from_email, subject, snippet, sent_at)
+          values (${accountId}, ${gmailId}, ${`t-${gmailId}`}, ${`<${gmailId}@test>`}, ${from === "me@example.com" ? "outbound" : "inbound"}, ${from}, ${subject}, ${subject}, ${sentAt})
+          returning id`;
+        await sql`insert into message_participants (message_id, role, email) values (${row.id}, 'from', ${from}), (${row.id}, 'to', ${to})`;
+        return row.id;
+      };
+      await message("m1", "me@example.com", "booker0@venue0.org", "European collaboration", "2026-09-01T10:00:00Z");
+      const latest = await message("m2", "booker0@venue0.org", "me@example.com", "RE: European  collaboration", "2026-09-03T10:00:00Z");
+      await message("m3", "booker0@venue0.org", "me@example.com", "Something else", "2026-09-05T10:00:00Z");
+      await message("m4", "booker1@venue1.org", "me@example.com", "Hello", "2026-09-05T10:00:00Z");
+
+      const body = await (
+        await post({
+          projectId,
+          emails: [
+            { ...email(ids[0]), subject: "Re: European collaboration" },
+            { ...email(ids[1]), subject: "Autumn dates" },
+          ],
+        })
+      ).json();
+      const [reply, fresh] = await Promise.all(body.created.emails.map((e: { draftId: string }) => getDraft(e.draftId)));
+      expect(reply).toMatchObject({ replyToMessageId: latest, accountId });
+      expect(fresh?.replyToMessageId).toBeNull();
+    });
+
     it("caps new emails at 10 per campaign per call", async () => {
       const { projectId, ids } = await seed(12);
       const body = await (await post({ projectId, emails: ids.map((id, i) => email(id, i)) })).json();
