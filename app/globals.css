@@ -20,8 +20,9 @@
   --warning: #b45309;
   --success: #15803d;
   --ring: #a1a1aa;
-  /* Vela's indigo (logo, loader, send animation). */
-  --brand: #3b4cca;
+  /* Vela's blue (logo, loader, send animation) and the wordmark's navy. */
+  --brand: #1a4aec;
+  --brand-ink: #0b1433;
   color-scheme: light;
 }
 
@@ -41,7 +42,8 @@
     --warning: #fbbf24;
     --success: #4ade80;
     --ring: #52525b;
-    --brand: #8b97f0;
+    --brand: #6f8cff;
+    --brand-ink: #f4f4f5;
     color-scheme: dark;
   }
 }
@@ -62,6 +64,7 @@
   --color-success: var(--success);
   --color-ring: var(--ring);
   --color-brand: var(--brand);
+  --color-brand-ink: var(--brand-ink);
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
@@ -179,45 +182,35 @@ body {
 }
 
 /*
- * Vela loader: the sail rocks gently on its wave while its staff lines fill
- * in and out. Still with reduced motion.
+ * Vela loader: the sail rocks gently on its wave while the wave rolls.
+ * Still with reduced motion.
  */
 @keyframes vela-rock {
   0%,
   100% {
-    transform: rotate(-4deg);
+    transform: rotate(-5deg);
   }
   50% {
-    transform: rotate(3deg);
-  }
-}
-@keyframes vela-staff {
-  0%,
-  100% {
-    stroke-width: 1.1px;
-  }
-  50% {
-    stroke-width: 0.35px;
+    transform: rotate(4deg);
   }
 }
 @keyframes vela-wave {
   0%,
   100% {
-    transform: translateX(-0.6px);
+    transform: translateX(-0.8px) skewX(-4deg);
   }
   50% {
-    transform: translateX(0.6px);
+    transform: translateX(0.8px) skewX(4deg);
   }
 }
 .vela-rock .vela-sail {
   transform-box: view-box;
-  transform-origin: 11.6px 24.4px;
+  transform-origin: 18px 22px;
   animation: vela-rock 1.6s ease-in-out infinite;
 }
-.vela-rock .vela-staff {
-  animation: vela-staff 1.6s ease-in-out infinite;
-}
 .vela-rock .vela-wave {
+  transform-box: view-box;
+  transform-origin: 16px 24px;
   animation: vela-wave 1.6s ease-in-out infinite;
 }
 
@@ -261,7 +254,6 @@ body {
 }
 @media (prefers-reduced-motion: reduce) {
   .vela-rock .vela-sail,
-  .vela-rock .vela-staff,
   .vela-rock .vela-wave {
     animation: none;
   }

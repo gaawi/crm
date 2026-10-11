@@ -14,7 +14,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
       <div className="w-full max-w-xs">
         <div className="mb-8 flex flex-col items-center gap-3 text-center">
           <VelaMark size={56} tile />
-          <h1 className="text-2xl font-medium tracking-[0.04em] text-fg">Vela</h1>
+          <h1 className="text-2xl font-semibold tracking-[0.01em] text-brand-ink">Vela</h1>
         </div>
         <LoginForm next={typeof next === "string" ? next : "/"} />
       </div>
