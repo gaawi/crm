@@ -207,7 +207,7 @@ function MusicianItem({ m, showRatings, timezone, highlight }: { m: MusicianRow;
   const sub = [m.basedIn, c.organization?.name].filter(Boolean).join(" · ");
   return (
     <li className="relative flex items-start gap-3 px-4 py-3 active:bg-surface-2 md:active:bg-transparent">
-      <ContactAvatar contact={c} size="md" />
+      <ContactAvatar contact={c} size="md" zoomable />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <Link

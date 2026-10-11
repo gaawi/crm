@@ -46,7 +46,7 @@ export function ContactRow({
 
   return (
     <li className="group relative flex min-h-[60px] items-center gap-3 px-4 py-2.5 active:bg-surface-2 md:min-h-0 md:active:bg-transparent">
-      <ContactAvatar contact={contact} />
+      <ContactAvatar contact={contact} zoomable />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <Link

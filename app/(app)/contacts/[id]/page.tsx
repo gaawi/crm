@@ -383,7 +383,7 @@ function ContactHeader({
 
       <div className="flex flex-col items-center gap-3 text-center md:flex-row md:gap-4 md:text-left">
         <div className="flex shrink-0 flex-col items-center">
-          <ContactAvatar contact={contact} size="lg" />
+          <ContactAvatar contact={contact} size="lg" zoomable photoSource={contact.photoSource} />
           {editingPhoto ? null : (
             <Link
               href={`${base}?edit=photo`}

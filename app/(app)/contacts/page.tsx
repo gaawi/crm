@@ -346,7 +346,7 @@ function ContactListRow({
 
   return (
     <li className="relative flex min-h-[60px] items-center gap-3 px-4 py-2.5 active:bg-surface-2 md:min-h-0 md:hover:bg-surface-2/40 md:active:bg-surface-2/40">
-      <ContactAvatar contact={c} />
+      <ContactAvatar contact={c} zoomable />
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-1.5">
           <Link
