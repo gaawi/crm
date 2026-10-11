@@ -124,7 +124,7 @@ export function CampaignPanel({
   const dirty = (Object.keys(edits) as (keyof FormValues)[]).some((k) => edits[k] !== base[k]);
   const checked = validateCampaignSettings(parse(values), settingsOf(c));
   const settings = checked.ok ? checked.settings : settingsOf(c);
-  const nameError = !values.name.trim() ? "Give the campaign a name." : null;
+  const nameError = !values.name.trim() ? "Give the mailing a name." : null;
   const formError = checked.ok ? nameError : checked.error;
 
   const size = campaignSize(c.counts);
@@ -282,7 +282,7 @@ export function CampaignPanel({
           }}
           className="flex flex-col gap-4 rounded-xl border border-border bg-surface p-4 md:gap-3 md:rounded-lg"
         >
-          <Field label="Campaign name" htmlFor={`${formId}-name`}>
+          <Field label="Mailing name" htmlFor={`${formId}-name`}>
             <Input id={`${formId}-name`} value={values.name} maxLength={200} onChange={(e) => set("name", e.target.value)} />
           </Field>
           <div className="grid grid-cols-2 gap-3">
@@ -312,7 +312,7 @@ export function CampaignPanel({
           <p className="-mt-2 text-xs text-subtle md:-mt-1.5">
             {gapHint(toInt(values.perHour))}
             {toInt(values.dailyCap) > ACCOUNT_DAILY_SEND_CAP
-              ? ` Gmail safety limit: at most ${ACCOUNT_DAILY_SEND_CAP} campaign emails a day from one account.`
+              ? ` Gmail safety limit: at most ${ACCOUNT_DAILY_SEND_CAP} mailing emails a day from one account.`
               : checked.ok && dailyCapBinds(checked.settings)
                 ? ` The daily maximum stops it at ${checked.settings.dailyCap} a day.`
                 : ""}
@@ -379,7 +379,7 @@ export function CampaignPanel({
 
       {/* Actions: the primary one sits above the tab bar on phones. */}
       {primary || secondary.length ? (
-        <section aria-label="Campaign actions" className="flex flex-col gap-2 md:flex-row md:flex-wrap md:items-center">
+        <section aria-label="Mailing actions" className="flex flex-col gap-2 md:flex-row md:flex-wrap md:items-center">
           {primary ? (
             <div className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+53px)] z-30 border-t border-border bg-bg/90 px-4 py-2 backdrop-blur-xl md:static md:z-auto md:border-0 md:bg-transparent md:p-0 md:backdrop-blur-none">
               {primary}
@@ -436,7 +436,7 @@ export function CampaignPanel({
       <Sheet
         open={confirm === "discard"}
         onClose={() => setConfirm(null)}
-        title="Discard this campaign?"
+        title="Discard this mailing?"
         primary={{
           label: "Discard",
           onClick: () => run("discard", () => discardCampaignAction(c.id), undefined, () => router.push("/approvals")),
@@ -497,7 +497,7 @@ function StatusBlock({
       <section className="rounded-xl border border-amber-200 bg-amber-50/60 p-4 dark:border-amber-900 dark:bg-amber-950/30 md:rounded-lg">
         <p className="text-[13px] font-medium uppercase tracking-wide text-amber-800 md:text-xs dark:text-amber-300">Waiting for your approval</p>
         <p className="mt-1.5 text-[17px] leading-snug text-fg md:text-[15px]">{plan}</p>
-        <p className="mt-2 text-[13px] text-muted md:text-xs">Nothing has been sent. Nothing is sent until you approve the campaign.</p>
+        <p className="mt-2 text-[13px] text-muted md:text-xs">Nothing has been sent. Nothing is sent until you approve the mailing.</p>
       </section>
     );
   }

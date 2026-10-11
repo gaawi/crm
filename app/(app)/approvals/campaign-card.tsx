@@ -38,7 +38,7 @@ export function CampaignCard({ campaign: c, held, now }: { campaign: CampaignSum
 
   return (
     <Link
-      href={`/approvals/campaigns/${c.id}`}
+      href={`/approvals/mailings/${c.id}`}
       className="group block overflow-hidden rounded-xl border border-border bg-surface active:bg-surface-2 md:rounded-lg md:hover:border-border-strong"
     >
       <div className="flex items-start gap-3 px-4 py-3">

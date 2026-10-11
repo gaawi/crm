@@ -135,7 +135,7 @@ export function BulkBar({
               if (
                 count > 1 &&
                 !window.confirm(
-                  `Prepare ${count} emails with ${what}? They go to Approvals as one campaign; nothing is sent until you approve it there, and then they go out a few at a time.`,
+                  `Prepare ${count} emails with ${what}? They go to Approvals as one mailing; nothing is sent until you approve it there, and then they go out a few at a time.`,
                 )
               )
                 return;

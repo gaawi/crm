@@ -37,11 +37,11 @@ export default async function ApprovalsPage() {
   // Waiting for the owner's approval: prepared, or cancelled / done with emails left to approve.
   const waitingCampaigns = campaigns.filter((c) => c.status !== "running" && c.status !== "paused" && c.remaining > 0).length;
 
-  const waiting = [waitingCampaigns ? plural(waitingCampaigns, "campaign") : "", open.length ? plural(open.length, "email") : ""].filter(Boolean);
+  const waiting = [waitingCampaigns ? plural(waitingCampaigns, "mailing") : "", open.length ? plural(open.length, "email") : ""].filter(Boolean);
   const description = waiting.length
     ? `${waiting.join(" and ")} prepared for you, waiting for your approval. Nothing is sent until you approve.`
     : campaigns.length
-      ? "Campaigns you approved are sent a few at a time. Nothing else is waiting for you."
+      ? "Mailings you approved are sent a few at a time. Nothing else is waiting for you."
       : "Emails prepared for you land here. Nothing is sent until you approve.";
 
   return (
@@ -49,8 +49,8 @@ export default async function ApprovalsPage() {
       <PageHeader title="Approvals" description={description} actions={env.claudeEnabled ? <PrepareDraftsButton /> : null} />
 
       {campaigns.length ? (
-        <section className="mb-8" aria-label="Campaigns">
-          <SectionTitle count={campaigns.length}>Campaigns</SectionTitle>
+        <section className="mb-8" aria-label="Mailings">
+          <SectionTitle count={campaigns.length}>Mailings</SectionTitle>
           <div className="flex flex-col gap-3">
             {campaigns.map((c) => (
               <CampaignCard key={c.id} campaign={c} held={held[c.id] ?? 0} now={now} />
@@ -99,13 +99,13 @@ export default async function ApprovalsPage() {
       ) : null}
 
       {past.length ? (
-        <section className="mt-10" aria-label="Past campaigns">
-          <SectionTitle>Past campaigns</SectionTitle>
+        <section className="mt-10" aria-label="Past mailings">
+          <SectionTitle>Past mailings</SectionTitle>
           <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface md:rounded-lg">
             {past.map((c) => (
               <li key={c.id}>
                 <Link
-                  href={`/approvals/campaigns/${c.id}`}
+                  href={`/approvals/mailings/${c.id}`}
                   className="flex min-h-[52px] items-center gap-3 px-4 py-2 text-sm active:bg-surface-2 md:min-h-0 md:py-2.5 md:hover:bg-surface-2/60"
                 >
                   <span className="min-w-0 flex-1">

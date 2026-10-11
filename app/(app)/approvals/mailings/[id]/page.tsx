@@ -17,7 +17,7 @@ import { CampaignStatusBadge, CountList } from "../../campaign-ui";
 import { CampaignEmails } from "./campaign-emails";
 import { CampaignPanel } from "./campaign-panel";
 
-export const metadata: Metadata = { title: "Campaign" };
+export const metadata: Metadata = { title: "Mailing" };
 
 type Tab = "attention" | "send" | "sent" | "discarded";
 
@@ -46,7 +46,7 @@ function timeZoneOptions(current: string, owner: string): { value: string; label
  * sending"), progress while it sends, and its emails — what needs you (held
  * back, failed), what is still to send, what went out.
  */
-export default async function CampaignPage({ params, searchParams }: PageProps<"/approvals/campaigns/[id]">) {
+export default async function CampaignPage({ params, searchParams }: PageProps<"/approvals/mailings/[id]">) {
   const { id } = await params;
   const sp = await searchParams;
   await recoverStaleDrafts();
@@ -102,7 +102,7 @@ export default async function CampaignPage({ params, searchParams }: PageProps<"
           />
         </div>
 
-        <section aria-label="Emails in this campaign">
+        <section aria-label="Emails in this mailing">
           <GroupTitle>
             Emails · {campaignSize(campaign.counts)}
           </GroupTitle>
@@ -112,7 +112,7 @@ export default async function CampaignPage({ params, searchParams }: PageProps<"
               className="mb-3"
               equal={false}
               segments={visibleTabs.map((t) => ({
-                href: `/approvals/campaigns/${campaign.id}?show=${t.value}`,
+                href: `/approvals/mailings/${campaign.id}?show=${t.value}`,
                 label: t.label,
                 active: t.value === tab,
                 count: groups[t.value].length,
@@ -128,7 +128,7 @@ export default async function CampaignPage({ params, searchParams }: PageProps<"
             <CampaignEmails key={tab} drafts={shown} timezone={timezone} defaultOpen={tab === "attention"} />
           ) : (
             <EmptyState title={tab === "send" ? "Nothing left to send" : "No emails here"}>
-              {tab === "send" ? "Every email of this campaign was sent, set aside or discarded." : null}
+              {tab === "send" ? "Every email of this mailing was sent, set aside or discarded." : null}
             </EmptyState>
           )}
         </section>

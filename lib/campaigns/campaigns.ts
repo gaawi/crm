@@ -173,7 +173,7 @@ export async function createCampaign(input: {
   draftIds: string[];
   settings?: Partial<CampaignSettings>;
 }): Promise<string> {
-  const name = input.name.replace(/\s+/g, " ").trim().slice(0, 200) || "Campaign";
+  const name = input.name.replace(/\s+/g, " ").trim().slice(0, 200) || "Mailing";
   const checked = validateCampaignSettings(input.settings ?? {});
   if (!checked.ok) throw new CampaignError(checked.error);
   const s = checked.settings;
@@ -213,16 +213,16 @@ function settingsValues(s: CampaignSettings) {
 }
 
 async function lockCampaign(tx: Tx, id: string) {
-  if (!ID.test(id)) throw new CampaignError("Campaign not found.");
+  if (!ID.test(id)) throw new CampaignError("Mailing not found.");
   const [row] = await tx<{ id: string; status: CampaignStatus; accountId: string; name: string }[]>`
     select id, status, account_id, name from email_campaigns where id = ${id} for update`;
-  if (!row) throw new CampaignError("Campaign not found.");
+  if (!row) throw new CampaignError("Mailing not found.");
   return row;
 }
 
 async function readCampaign(id: string): Promise<Campaign> {
   const campaign = await getCampaign(id);
-  if (!campaign) throw new CampaignError("Campaign not found.");
+  if (!campaign) throw new CampaignError("Mailing not found.");
   return campaign;
 }
 
@@ -238,7 +238,7 @@ async function readCampaign(id: string): Promise<Campaign> {
 export async function startCampaign(id: string, settings: Partial<CampaignSettings> = {}): Promise<Campaign> {
   await sql.begin(async (tx) => {
     const row = await lockCampaign(tx, id);
-    if (row.status === "running") throw new CampaignError("This campaign is already sending.");
+    if (row.status === "running") throw new CampaignError("This mailing is already sending.");
     const [account] = await tx<{ email: string; status: string }[]>`select email, status from gmail_accounts where id = ${row.accountId}`;
     if (!account || account.status !== "active") throw new CampaignError(`Reconnect ${account?.email ?? "the Gmail account"} in Settings first.`);
     const current = await tx<CampaignSettings[]>`
@@ -258,7 +258,7 @@ export async function startCampaign(id: string, settings: Partial<CampaignSettin
       throw new CampaignError(
         held
           ? "Only held-back emails are left. Check each conversation, then use “Queue again” or “Send now” on it."
-          : "There are no emails to send in this campaign.",
+          : "There are no emails to send in this mailing.",
       );
     }
     await tx`
@@ -280,7 +280,7 @@ export async function updateCampaignSettings(id: string, settings: Partial<Campa
     const checked = validateCampaignSettings(rest, current[0]);
     if (!checked.ok) throw new CampaignError(checked.error);
     const clean = name?.replace(/\s+/g, " ").trim().slice(0, 200);
-    if (name !== undefined && !clean) throw new CampaignError("Give the campaign a name.");
+    if (name !== undefined && !clean) throw new CampaignError("Give the mailing a name.");
     await tx`
       update email_campaigns set ${tx({ ...settingsValues(checked.settings), ...(clean ? { name: clean } : {}) })}
        where id = ${row.id}`;
@@ -292,7 +292,7 @@ export async function updateCampaignSettings(id: string, settings: Partial<Campa
 export async function pauseCampaign(id: string): Promise<Campaign> {
   await sql.begin(async (tx) => {
     const row = await lockCampaign(tx, id);
-    if (row.status !== "running") throw new CampaignError("This campaign is not sending.");
+    if (row.status !== "running") throw new CampaignError("This mailing is not sending.");
     await tx`update email_campaigns set status = 'paused' where id = ${id}`;
   });
   return readCampaign(id);
@@ -306,7 +306,7 @@ export async function pauseCampaign(id: string): Promise<Campaign> {
 export async function resumeCampaign(id: string): Promise<Campaign> {
   await sql.begin(async (tx) => {
     const row = await lockCampaign(tx, id);
-    if (row.status !== "paused") throw new CampaignError("This campaign is not paused.");
+    if (row.status !== "paused") throw new CampaignError("This mailing is not paused.");
     const [account] = await tx<{ email: string; status: string }[]>`select email, status from gmail_accounts where id = ${row.accountId}`;
     if (!account || account.status !== "active") throw new CampaignError(`Reconnect ${account?.email ?? "the Gmail account"} in Settings first.`);
     const [{ waiting }] = await tx<{ waiting: number }[]>`
@@ -372,14 +372,14 @@ export async function requeueHeldDraft(draftId: string): Promise<{ campaignId: s
   if (!ID.test(draftId)) throw new CampaignError("Email not found.");
   const [found] = await sql<{ campaignId: string | null }[]>`select campaign_id from email_drafts where id = ${draftId}`;
   if (!found) throw new CampaignError("Email not found.");
-  if (!found.campaignId) throw new CampaignError("This email is not part of a campaign.");
+  if (!found.campaignId) throw new CampaignError("This email is not part of a mailing.");
   const campaignId = found.campaignId;
   return sql.begin(async (tx) => {
     // Campaign first, then the email: the same order as startCampaign / cancelCampaign.
     const campaign = await lockCampaign(tx, campaignId);
     const [draft] = await tx<{ campaignId: string | null; status: DraftStatus; error: string | null }[]>`
       select campaign_id, status, error from email_drafts where id = ${draftId} for update`;
-    if (!draft || draft.campaignId !== campaignId) throw new CampaignError("This email is no longer part of the campaign.");
+    if (!draft || draft.campaignId !== campaignId) throw new CampaignError("This email is no longer part of the mailing.");
     if (draft.status !== "proposed" || !draft.error?.startsWith(HELD_BACK_PREFIX)) throw new CampaignError("This email is not held back any more.");
     const queued = campaign.status === "running" || campaign.status === "paused";
     await tx`

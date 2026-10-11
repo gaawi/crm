@@ -27,7 +27,7 @@ function RequeueBar({ draftId }: { draftId: string }) {
   return (
     <div className="flex flex-col gap-2 border-x border-border bg-amber-50/60 px-4 py-3 dark:bg-amber-950/30 md:flex-row md:items-center md:gap-3 md:py-2">
       <p className="min-w-0 flex-1 text-[13px] text-muted md:text-xs">
-        Checked the conversation and it should still go out? Queue it again: it is sent with the campaign, unless they get in touch again.
+        Checked the conversation and it should still go out? Queue it again: it is sent with the mailing, unless they get in touch again.
         {error ? <span className="mt-1 block text-danger">{error}</span> : null}
       </p>
       <Button

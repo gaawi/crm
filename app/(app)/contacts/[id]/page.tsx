@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { cache, type ReactNode } from "react";
-import { Archive, CalendarClock, Check, Ellipsis, GitMerge, Plus, Trash2, X } from "lucide-react";
+import { Archive, CalendarClock, Check, Ellipsis, GitMerge, Music, Plus, Trash2, X } from "lucide-react";
 import { ContactAvatar } from "@/components/contact-avatar";
 import { DraftFollowUp } from "@/components/draft-follow-up";
 import { PhoneLink } from "@/components/booking/phone-actions";
@@ -27,6 +27,7 @@ import {
 } from "@/lib/queries/contacts";
 import { listActivities } from "@/lib/queries/activities";
 import { listOpportunities } from "@/lib/queries/opportunities";
+import { getMusicianProfile, listGigs, type MusicianProfile } from "@/lib/queries/musicians";
 import { getOrganizationWithProfile } from "@/lib/queries/org-profiles";
 import { listOrganizations } from "@/lib/queries/organizations";
 import { listProjects } from "@/lib/queries/projects";
@@ -61,6 +62,8 @@ import { ContactActions } from "./contact-actions";
 import { activityExtra, activityMatches } from "./history-activity";
 import { AddGoalButton } from "../../_components/add-goal";
 import { GoalRow } from "../../_components/goal-row";
+import { MusicianSection } from "./musician-section";
+import { instrumentLabel } from "@/lib/musicians/instruments";
 
 const HISTORY_PAGE = 30;
 /** Calls / notes loaded per history page (only those within the page's emails are shown). */
@@ -90,6 +93,7 @@ export default async function ContactPage({ params, searchParams }: PageProps<"/
   const beforeRaw = param(sp, "before", 40);
   const before = beforeRaw && !Number.isNaN(Date.parse(beforeRaw)) ? new Date(beforeRaw) : undefined;
   const editing = param(sp, "edit") === "profile";
+  const editingMusician = param(sp, "edit") === "musician";
   const merging = param(sp, "merge") === "1";
   const deleting = param(sp, "delete") === "1";
   const notice = param(sp, "notice");
@@ -131,7 +135,7 @@ export default async function ContactPage({ params, searchParams }: PageProps<"/
     );
   }
 
-  const [history, activities, selfEmails, deals, duplicates, projects, accounts, organizations, orgProfile] = await Promise.all([
+  const [history, activities, selfEmails, deals, duplicates, projects, accounts, organizations, orgProfile, musician, gigs] = await Promise.all([
     getContactHistory(contact.id, { limit: HISTORY_PAGE, before, q: q || undefined }),
     listActivities({ contactId: contact.id, before, limit: ACTIVITY_PAGE }),
     getOwnAddresses(),
@@ -141,6 +145,9 @@ export default async function ContactPage({ params, searchParams }: PageProps<"/
     accountsQuery,
     editing ? listOrganizations({ limit: 500 }) : Promise.resolve([]),
     getOrganizationWithProfile(contact.organization?.id),
+    // The private rating is only on this page (folded away) and never given to Claude.
+    getMusicianProfile(contact.id, { withRating: true }),
+    listGigs(contact.id),
   ]);
 
   const openDeals = deals.filter((d) => d.stage !== "won" && d.stage !== "lost");
@@ -159,7 +166,13 @@ export default async function ContactPage({ params, searchParams }: PageProps<"/
 
   return (
     <>
-      <ContactHeader contact={contact} accounts={accounts} timezone={timezone} editingPhoto={param(sp, "edit") === "photo"} />
+      <ContactHeader
+        contact={contact}
+        accounts={accounts}
+        timezone={timezone}
+        editingPhoto={param(sp, "edit") === "photo"}
+        musician={musician}
+      />
 
       {orgProfile ? (
         <OrgProfileLine
@@ -242,6 +255,14 @@ export default async function ContactPage({ params, searchParams }: PageProps<"/
             ) : (
               <ProfileSection contact={contact} editHref={`${base}?tab=details&edit=profile`} />
             )}
+            <MusicianSection
+              contact={contact}
+              profile={musician}
+              gigs={gigs}
+              projects={projects}
+              editing={editingMusician}
+              timezone={timezone}
+            />
             <EmailsSection contact={contact} />
             <ProjectsSection contact={contact} projects={projects} />
             <ActivitySection contact={contact} timezone={timezone} />
@@ -327,11 +348,13 @@ function ContactHeader({
   accounts,
   timezone,
   editingPhoto,
+  musician,
 }: {
   contact: Contact;
   accounts: { id: string; email: string }[];
   timezone: string;
   editingPhoto: boolean;
+  musician: MusicianProfile | null;
 }) {
   const base = `/contacts/${contact.id}`;
   return (
@@ -387,6 +410,14 @@ function ContactHeader({
           ) : null}
           <div className="mt-2 flex max-w-full flex-wrap items-center justify-center gap-x-2 gap-y-1 md:justify-start">
             <StatusBadge status={contact.status} />
+            {musician ? (
+              <Link href={`${base}?tab=details#musician`} className="active:opacity-60">
+                <Badge className="bg-brand/10 text-brand">
+                  <Music className="size-3" aria-hidden />
+                  {musician.instruments.length ? musician.instruments.slice(0, 3).map(instrumentLabel).join(" · ") : "Musician"}
+                </Badge>
+              </Link>
+            ) : null}
             {contact.primaryEmail && contact.primaryEmail !== contact.displayName ? (
               <a
                 href={`mailto:${contact.primaryEmail}`}

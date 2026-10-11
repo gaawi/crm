@@ -44,19 +44,19 @@ type CampaignOutcome = ActionOutcome<{ campaign: CampaignSummary }>;
 
 function failure(error: unknown): { ok: false; error: string } {
   if (error instanceof CampaignError) return { ok: false, error: error.message };
-  console.error("Campaign action failed:", error);
+  console.error("Mailing action failed:", error);
   return { ok: false, error: errorMessage(error) };
 }
 
 async function withCampaign(campaignId: string, run: (id: string) => Promise<unknown>): Promise<CampaignOutcome> {
   await requireSession();
   const id = idSchema.safeParse(campaignId);
-  if (!id.success) return { ok: false, error: "Campaign not found." };
+  if (!id.success) return { ok: false, error: "Mailing not found." };
   try {
     await run(id.data);
     refresh();
     const campaign = await getCampaignSummary(id.data);
-    return campaign ? { ok: true, campaign } : { ok: false, error: "Campaign not found." };
+    return campaign ? { ok: true, campaign } : { ok: false, error: "Mailing not found." };
   } catch (error) {
     refresh();
     return failure(error);
@@ -72,7 +72,7 @@ export async function campaignAction(campaignId: string): Promise<CampaignOutcom
 export async function campaignDraftsAction(campaignId: string): Promise<ActionOutcome<{ drafts: EmailDraft[] }>> {
   await requireSession();
   const id = idSchema.safeParse(campaignId);
-  if (!id.success) return { ok: false, error: "Campaign not found." };
+  if (!id.success) return { ok: false, error: "Mailing not found." };
   return { ok: true, drafts: await listDrafts({ campaign: id.data }) };
 }
 
@@ -114,7 +114,7 @@ export async function cancelCampaignAction(campaignId: string): Promise<Campaign
 export async function discardCampaignAction(campaignId: string): Promise<ActionOutcome<{ discarded: number }>> {
   await requireSession();
   const id = idSchema.safeParse(campaignId);
-  if (!id.success) return { ok: false, error: "Campaign not found." };
+  if (!id.success) return { ok: false, error: "Mailing not found." };
   try {
     const discarded = await discardCampaign(id.data);
     refresh();

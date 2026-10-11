@@ -110,7 +110,7 @@ export function DraftCard({
         </span>
         <Badge>{PURPOSE_LABEL[draft.purpose]}</Badge>
         {draft.status === "queued" ? (
-          <Badge className="bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300" title="Approved: it goes out with its campaign, a few at a time">
+          <Badge className="bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300" title="Approved: it goes out with its mailing, a few at a time">
             Queued
           </Badge>
         ) : null}

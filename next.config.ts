@@ -40,6 +40,7 @@ const nextConfig: NextConfig = {
     return [
       { source: "/booking", destination: "/campaigns", permanent: true },
       { source: "/booking/:path*", destination: "/campaigns/:path*", permanent: true },
+      { source: "/approvals/campaigns/:id", destination: "/approvals/mailings/:id", permanent: true },
     ];
   },
   async headers() {

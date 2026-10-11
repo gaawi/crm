@@ -11,6 +11,7 @@ import {
   Mail,
   Megaphone,
   Menu,
+  Music,
   Send,
   Settings,
   Sparkles,
@@ -32,6 +33,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/approvals", label: "Approvals", icon: Send },
   { href: "/contacts", label: "Contacts", icon: Users },
   { href: "/organizations", label: "Organizations", icon: Building2 },
+  { href: "/musicians", label: "Musicians", icon: Music },
   { href: "/projects", label: "Projects", icon: FolderKanban },
   { href: "/pipeline", label: "Pipeline", icon: LayoutList },
   { href: "/campaigns", label: "Campaigns", icon: Megaphone },
@@ -49,7 +51,7 @@ const TAB_ITEMS: NavItem[] = [
 ];
 
 /** Routes reached through "More" keep the More tab highlighted. */
-const MORE_ROUTES = ["/more", "/campaigns", "/organizations", "/projects", "/pipeline", "/settings", "/search", "/assistant"];
+const MORE_ROUTES = ["/more", "/campaigns", "/organizations", "/musicians", "/projects", "/pipeline", "/settings", "/search", "/assistant"];
 
 function isActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";

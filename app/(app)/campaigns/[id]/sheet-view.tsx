@@ -181,13 +181,13 @@ export function SheetView({
           message: !prepared.length
             ? "No emails prepared."
             : campaignId
-              ? `${plural(prepared.length, "email")} ready as a campaign — review in Approvals.`
+              ? `${plural(prepared.length, "email")} ready as a mailing — review in Approvals.`
               : `${plural(prepared.length, "email")} ready in Approvals.`,
           detail: [skippedText, campaignId ? "Nothing was sent. Once you approve the campaign, they go out a few at a time." : "Nothing was sent."]
             .filter(Boolean)
             .join(" "),
           link: campaignId
-            ? { label: "Review", href: `/approvals/campaigns/${campaignId}` }
+            ? { label: "Review", href: `/approvals/mailings/${campaignId}` }
             : prepared.length
               ? { label: "Open Approvals", href: "/approvals" }
               : undefined,

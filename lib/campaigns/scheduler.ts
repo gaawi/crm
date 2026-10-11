@@ -103,7 +103,7 @@ export async function runCampaigns(options: RunCampaignsOptions): Promise<RunCam
   // Queued emails can only wait in a running or paused campaign.
   const released = await sql`
     update email_drafts d
-       set status = 'proposed', error = 'Its campaign is no longer sending. Approve it again to send it.'
+       set status = 'proposed', error = 'Its mailing is no longer sending. Approve it again to send it.'
      where d.status = 'queued'
        and (d.campaign_id is null
             or not exists (select 1 from email_campaigns c where c.id = d.campaign_id and c.status in ('running', 'paused')))`;
@@ -152,7 +152,7 @@ async function campaignStatus(id: string): Promise<CampaignStatus | null> {
 async function accountProblem(accountId: string): Promise<string | null> {
   const [account] = await sql<{ email: string; status: string; scopes: string[] }[]>`
     select email, status, scopes from gmail_accounts where id = ${accountId}`;
-  if (!account) return "The Gmail account of this campaign is no longer connected.";
+  if (!account) return "The Gmail account of this mailing is no longer connected.";
   if (account.status !== "active" || !canCompose(account.scopes)) return `Reconnect ${account.email} in Settings to resume sending.`;
   return null;
 }

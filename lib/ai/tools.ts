@@ -21,6 +21,8 @@ import {
   listOrganizations,
 } from "@/lib/queries/organizations";
 import { getProjectByName, listProjects } from "@/lib/queries/projects";
+import { instrumentCounts, listMusicians } from "@/lib/queries/musicians";
+import { instrumentLabel, instrumentsMatching } from "@/lib/musicians/instruments";
 import { DraftError, proposeEmail } from "@/lib/ai/approvals";
 import { readonlyQueriesEnabled, runReadonlyQuery } from "@/lib/ai/readonly-sql";
 import type { Contact, ContactStatus, ContactSummary, EmailMessage, Opportunity, OpportunityStage } from "@/lib/types";
@@ -490,6 +492,51 @@ const findPeopleForProject = tool({
   },
 });
 
+const findMusicians = tool({
+  name: "find_musicians",
+  description:
+    "The musicians roster: who plays an instrument or sings a voice type (any language: 'cello', 'violonchelo', 'cellista', 'soprano', 'voz'), where they are based, whether they are in our roster ('roster' = we'd call them, 'maybe', 'not_now'), and the concerts/projects they played with us. Use it when the owner needs a player (\"I need a cellist for a concert\"). Roster members and people who played with us come first. Private ratings are never included.",
+  mutates: false,
+  inputSchema: z.object({
+    instrument: z.string().max(100).optional().describe("Instrument, voice type or player noun, in English or Spanish"),
+    query: z.string().max(100).optional().describe("Name, city or anything in their notes"),
+    roster: z.enum(["roster", "maybe", "not_now"]).optional(),
+    played_with_us: z.boolean().optional(),
+    limit: z.number().int().min(1).max(100).optional().describe("Default 30"),
+  }),
+  async run(input, ctx) {
+    const known = (await instrumentCounts()).map((r) => r.instrument);
+    const keys = input.instrument ? instrumentsMatching(input.instrument, known) : [];
+    if (input.instrument && !keys.length) {
+      return { musicians: [], note: `No instrument matches "${input.instrument}". Instruments in the roster: ${known.map(instrumentLabel).join(", ") || "none yet"}.` };
+    }
+    const limit = input.limit ?? 30;
+    const lists = await Promise.all(
+      (keys.length ? keys : [undefined]).map((instrument) =>
+        listMusicians({ instrument, q: input.query, roster: input.roster, playedWithUs: input.played_with_us, limit }),
+      ),
+    );
+    const seen = new Set<string>();
+    const musicians = lists
+      .flat()
+      .filter((m) => (seen.has(m.contact.id) ? false : (seen.add(m.contact.id), true)))
+      .slice(0, limit);
+    return {
+      instruments_searched: keys.map(instrumentLabel),
+      musicians: musicians.map((m) => ({
+        ...contactOut(m.contact, ctx.timezone),
+        instruments: m.instruments.map(instrumentLabel),
+        based_in: m.basedIn,
+        website: m.website,
+        roster: m.roster,
+        notes: m.notes,
+        played_with_us: m.gigCount,
+        last_played: m.lastGig,
+      })),
+    };
+  },
+});
+
 const SCHEMA_SUMMARY = `Tables (Postgres):
 gmail_accounts(id, email, display_name, status, backfill_status, last_synced_at, created_at)
 organizations(id, name, domains text[], website, notes, tags text[], created_at)
@@ -503,6 +550,8 @@ opportunities(id, title, kind (the goal) ['booking','perform_with','residency','
 activities(id, kind ['call','whatsapp','meeting','email','note','status'], outcome ['reached','no_answer','voicemail','call_back','wrong_number'] (calls), body, occurred_at, contact_id, organization_id, opportunity_id) — calls, WhatsApp, meetings, hand-logged emails, notes, booking status changes
 email_templates(id, project_id (null = all sheets), name, trigger, subject, body)
 email_drafts(id, account_id, contact_id, opportunity_id, campaign_id, status ['proposed','queued','revising','sending','sent','discarded','failed'], to_emails text[], subject, sent_at, created_at) — emails prepared for approval; queued = approved in a running campaign
+musician_profiles(contact_id, instruments text[] (keys like 'cello','violin','soprano'), based_in, website, roster ['roster','maybe','not_now'], notes) — one row per musician contact; select these columns explicitly (other columns are private)
+musician_gigs(id, contact_id, title, played_on date, project_id, instrument, notes) — what they played with us
 email_campaigns(id, name, project_id, account_id, status ['draft','running','paused','done','cancelled'], per_hour, daily_cap, window_start, window_end, weekdays_only, timezone, last_sent_at, started_at, finished_at) — emails sent gradually after the owner approved them
 A contact's emails: join contact_emails ce → message_participants mp on mp.email = ce.email → messages m on m.id = mp.message_id. The same email seen by two accounts has two rows with the same rfc822_message_id — use count(distinct coalesce(m.rfc822_message_id, m.id::text)).`;
 
@@ -637,6 +686,7 @@ const TOOLS: CrmTool[] = [
   listOpportunitiesTool,
   listProjectsTool,
   findPeopleForProject,
+  findMusicians,
   queryDatabase,
   updateContactTool,
   proposeEmailTool,
@@ -668,6 +718,7 @@ export function toolLabel(name: string): string {
     list_opportunities: "Checking the pipeline",
     list_projects: "Listing projects",
     find_people_for_project: "Finding people for the project",
+    find_musicians: "Looking through the musicians",
     query_database: "Querying the database",
     update_contact: "Preparing a change",
     propose_email: "Preparing an email for approval",
