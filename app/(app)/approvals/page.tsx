@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ChevronRight, Hourglass } from "lucide-react";
+import { ChevronRight, Hourglass, Layers } from "lucide-react";
 import { DraftCard } from "@/components/draft-card";
 import { EmptyState, PageHeader, SectionTitle } from "@/components/ui/layout";
 import { heldBackCounts, listCampaigns, listCampaignSummaries } from "@/lib/campaigns/campaigns";
@@ -57,6 +57,22 @@ export default async function ApprovalsPage() {
             ))}
           </div>
         </section>
+      ) : null}
+
+      {open.filter((d) => d.status === "proposed" || d.status === "failed").length ? (
+        <Link
+          href="/approvals/review"
+          className="mb-6 flex items-center gap-3 rounded-xl bg-brand px-4 py-3.5 text-white shadow-sm active:opacity-90 md:rounded-lg md:py-3 md:hover:opacity-95"
+        >
+          <Layers className="size-5 shrink-0" aria-hidden />
+          <span className="min-w-0 flex-1">
+            <span className="block text-[16px] font-semibold md:text-sm">Review one by one</span>
+            <span className="block text-[13px] text-white/80 md:text-xs">
+              {plural(open.filter((d) => d.status === "proposed" || d.status === "failed").length, "email")} · the full email on each card, swipe to the next
+            </span>
+          </span>
+          <ChevronRight className="size-5 shrink-0" aria-hidden />
+        </Link>
       ) : null}
 
       <section aria-label="Emails">
