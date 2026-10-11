@@ -1,55 +1,26 @@
 "use client";
 
 import Link from "next/link";
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useTransition,
-} from "react";
-import {
-  CalendarClock,
-  Check,
-  ChevronLeft,
-  ChevronRight,
-  Info,
-  Mail,
-  MessageSquareText,
-  Pencil,
-  Sparkles,
-  Trash2,
-  X,
-} from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { CalendarClock, Check, ChevronLeft, ChevronRight, Info, Mail, MessageSquareText, Pencil, Sparkles, Trash2, X } from "lucide-react";
 import { PostponeForm } from "@/components/assistant/review";
 import { VelaLoader } from "@/components/brand/vela-logo";
-import {
-  celebrateSend,
-  flourishOrigin,
-} from "@/components/brand/send-flourish";
+import { celebrateSend, flourishOrigin } from "@/components/brand/send-flourish";
 import { ContactAvatar } from "@/components/contact-avatar";
 import { useClaudeEnabled } from "@/components/features";
 import { AccountBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/field";
-import {
-  approveDraftAction,
-  discardDraftAction,
-  reviseDraftAction,
-  saveDraftEditsAction,
-  type ActionResult,
-} from "@/lib/ai/actions";
-import {
-  postponeAssistantDraftAction,
-  requestAssistantChangesAction,
-} from "@/lib/assistant/actions";
+import { approveDraftAction, discardDraftAction, reviseDraftAction, saveDraftEditsAction } from "@/lib/ai/actions";
+import { postponeAssistantDraftAction, requestAssistantChangesAction } from "@/lib/assistant/actions";
 import { ASSISTANT_REVIEW_TIMES } from "@/lib/assistant/types";
 import { formatRelative } from "@/lib/dates";
 import type { EmailDraft } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { CardBack } from "./card-back";
 import { loadCardInfo, type CardInfo } from "./card-info";
+import { MailingFace, type MailingCardData } from "./mailing-card";
+import { discardCampaignAction, startCampaignAction } from "@/app/(app)/approvals/actions";
 
 const PURPOSE: Record<EmailDraft["purpose"], string> = {
   reply: "Reply",
@@ -61,6 +32,9 @@ const PURPOSE: Record<EmailDraft["purpose"], string> = {
 
 type Panel = null | "edit" | "revise" | "changes" | "postpone";
 
+/** A card of the pile: one email, or a whole mailing (bulk send) approved at once. */
+type Item = { kind: "draft"; id: string; draft: EmailDraft } | { kind: "mailing"; id: string; mailing: MailingCardData };
+
 /**
  * Approvals one at a time, like flashcards: the whole email on the card in
  * small, dense type, the actions pinned at the bottom. Swipe (or ← →) to move
@@ -69,32 +43,34 @@ type Panel = null | "edit" | "revise" | "changes" | "postpone";
  */
 export function Flashcards({
   drafts,
+  mailings = [],
   timezone,
   today,
   startId,
 }: {
   drafts: EmailDraft[];
+  mailings?: MailingCardData[];
   timezone: string;
   today: string;
   startId?: string | null;
 }) {
   const claude = useClaudeEnabled();
   const [done, setDone] = useState<Record<string, string>>({});
-  const pile = useMemo(
-    () =>
-      drafts.filter(
-        (d) => !done[d.id] && d.status !== "sent" && d.status !== "discarded",
-      ),
-    [drafts, done],
+  // Mailings first: one card approves many emails.
+  const all = useMemo<Item[]>(
+    () => [
+      ...mailings.map((m) => ({ kind: "mailing" as const, id: `mailing:${m.id}`, mailing: m })),
+      ...drafts.filter((d) => d.status !== "sent" && d.status !== "discarded").map((d) => ({ kind: "draft" as const, id: d.id, draft: d })),
+    ],
+    [drafts, mailings],
   );
-  const [currentId, setCurrentId] = useState<string | null>(() =>
-    startId && drafts.some((d) => d.id === startId)
-      ? startId
-      : (drafts[0]?.id ?? null),
-  );
-  const found = pile.findIndex((d) => d.id === currentId);
+  const pile = useMemo(() => all.filter((i) => !done[i.id]), [all, done]);
+  const [currentId, setCurrentId] = useState<string | null>(() => (startId && all.some((i) => i.id === startId) ? startId : (all[0]?.id ?? null)));
+  const found = pile.findIndex((i) => i.id === currentId);
   const index = found >= 0 ? found : pile.length ? 0 : -1;
-  const draft = index >= 0 ? pile[index] : null;
+  const item = index >= 0 ? pile[index] : null;
+  const draft = item?.kind === "draft" ? item.draft : null;
+  const mailing = item?.kind === "mailing" ? item.mailing : null;
   const [panel, setPanel] = useState<Panel>(null);
   const [armed, setArmed] = useState(false);
   const [message, setMessage] = useState<{
@@ -105,9 +81,7 @@ export function Flashcards({
   // The back of the card (contact card, goal, latest emails), loaded the first time it is turned over.
   const [flipped, setFlipped] = useState(false);
   const [turning, setTurning] = useState(false);
-  const [infos, setInfos] = useState<
-    Record<string, CardInfo | { error: string }>
-  >({});
+  const [infos, setInfos] = useState<Record<string, CardInfo | { error: string }>>({});
   const cardRef = useRef<HTMLElement>(null);
   const toTop = () => cardRef.current?.scrollTo({ top: 0 });
 
@@ -160,22 +134,18 @@ export function Flashcards({
     toTop();
   };
 
-  const run = (
-    action: () => Promise<ActionResult>,
-    onOk: (r: ActionResult) => void,
-  ) =>
+  const run = <R extends { ok: boolean }>(action: () => Promise<R>, onOk: (r: R) => void) =>
     startTransition(async () => {
       const r = await action();
       if (r.ok) onOk(r);
-      else
-        setMessage({ tone: "error", text: r.error ?? "Something went wrong." });
+      else setMessage({ tone: "error", text: ("error" in r && typeof r.error === "string" ? r.error : null) ?? "Something went wrong." });
     });
 
   /** Turn the card over: a quick half-turn, swap faces, half-turn back. */
   const flip = useCallback(() => {
-    if (!draft) return;
-    const id = draft.id;
-    if (!flipped && !infos[id]) {
+    if (!item) return;
+    const id = item.id;
+    if (item.kind === "draft" && !flipped && !infos[id]) {
       void loadCardInfo(id).then((r) =>
         setInfos((prev) => ({
           ...prev,
@@ -193,15 +163,12 @@ export function Flashcards({
       setTurning(false);
       cardRef.current?.scrollTo({ top: 0 });
     }, 140);
-  }, [draft, flipped, infos]);
+  }, [item, flipped, infos]);
 
   // Keyboard: ← → move, Escape closes a panel.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const typing =
-        e.target instanceof HTMLElement &&
-        (e.target.closest("input, textarea, select") ||
-          e.target.isContentEditable);
+      const typing = e.target instanceof HTMLElement && (e.target.closest("input, textarea, select") || e.target.isContentEditable);
       if (e.key === "Escape" && panel) setPanel(null);
       if (typing || panel) return;
       if (e.key === "ArrowRight") go(1);
@@ -233,36 +200,28 @@ export function Flashcards({
     touch.current = null;
   };
 
-  if (!draft) {
+  if (!item) {
     const count = Object.keys(done).length;
     return (
       <div className="mx-auto flex max-w-md flex-col items-center gap-3 px-4 py-16 text-center">
         <span className="flex size-14 items-center justify-center rounded-full bg-success/10 text-success">
           <Check className="size-7" />
         </span>
-        <h1 className="text-xl font-semibold">
-          {count ? "All reviewed" : "Nothing to approve"}
-        </h1>
+        <h1 className="text-xl font-semibold">{count ? "All reviewed" : "Nothing to approve"}</h1>
         <p className="text-[15px] text-muted md:text-sm">
-          {count
-            ? `You went through ${count} ${count === 1 ? "email" : "emails"}.`
-            : "No emails are waiting for your approval."}
+          {count ? `You went through ${count} ${count === 1 ? "email" : "emails"}.` : "No emails are waiting for your approval."}
         </p>
-        <Link
-          href="/approvals"
-          className="text-[15px] text-brand underline-offset-2 hover:underline md:text-sm"
-        >
-          Back to Approvals
+        <Link href="/" className="text-[15px] text-brand underline-offset-2 hover:underline md:text-sm">
+          Back to Today
         </Link>
       </div>
     );
   }
 
-  const assistantFlow = Boolean(draft.assistantProjectId) && !draft.campaignId;
-  const busy =
-    pending || draft.status === "sending" || draft.status === "revising";
-  const reason = draft.assistantReason ?? draft.rationale;
-  const org = draft.organization;
+  const assistantFlow = Boolean(draft?.assistantProjectId) && !draft?.campaignId;
+  const busy = pending || draft?.status === "sending" || draft?.status === "revising";
+  const reason = draft ? (draft.assistantReason ?? draft.rationale) : null;
+  const org = draft?.organization;
   const tagline = org?.profile?.tagline;
 
   return (
@@ -271,9 +230,9 @@ export function Flashcards({
         {/* Just a way out and where you are */}
         <div className="flex h-11 shrink-0 items-center gap-1">
           <Link
-            href="/approvals"
+            href="/"
             aria-label="Close"
-            title="Back to Approvals"
+            title="Back to Today"
             className="-ml-1 flex size-10 items-center justify-center rounded-full text-muted active:bg-surface-2"
           >
             <X className="size-5" />
@@ -313,7 +272,7 @@ export function Flashcards({
         ) : null}
 
         <article
-          key={draft.id}
+          key={item.id}
           ref={cardRef}
           onClick={(e) => {
             // Tap anywhere on the card to turn it over (not on links or buttons, not after a swipe or while selecting text).
@@ -321,12 +280,7 @@ export function Flashcards({
               swiped.current = false;
               return;
             }
-            if (
-              (e.target as HTMLElement).closest(
-                "a, button, input, textarea, select, label, [role=dialog]",
-              )
-            )
-              return;
+            if ((e.target as HTMLElement).closest("a, button, input, textarea, select, label, [role=dialog]")) return;
             if (window.getSelection()?.toString()) return;
             flip();
           }}
@@ -340,119 +294,108 @@ export function Flashcards({
                   transition: "none",
                 }
               : {
-                  transform: turning
-                    ? "perspective(1200px) rotateY(90deg)"
-                    : "perspective(1200px) rotateY(0deg)",
+                  transform: turning ? "perspective(1200px) rotateY(90deg)" : "perspective(1200px) rotateY(0deg)",
                 }
           }
           className="min-h-0 min-w-0 flex-1 cursor-pointer overflow-y-auto overscroll-contain rounded-2xl border border-border bg-surface shadow-sm transition-transform duration-150 ease-in-out [overflow-wrap:anywhere]"
         >
-          <header className="flex items-start gap-3 border-b border-border px-4 pb-3 pt-3.5">
-            {draft.contact ? (
-              <ContactAvatar contact={draft.contact} size="md" />
-            ) : null}
-            <div className="min-w-0 flex-1">
-              <div className="flex items-baseline gap-2">
-                <span className="min-w-0 flex-1 truncate text-[16px] font-semibold leading-tight md:text-[15px]">
-                  {draft.contact ? (
-                    <Link
-                      href={`/contacts/${draft.contact.id}`}
-                      className="hover:underline"
+          {mailing ? <MailingFace mailing={mailing} flipped={flipped} /> : null}
+          {draft ? (
+            <>
+              <header className="flex items-start gap-3 border-b border-border px-4 pb-3 pt-3.5">
+                {draft.contact ? <ContactAvatar contact={draft.contact} size="md" /> : null}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline gap-2">
+                    <span className="min-w-0 flex-1 truncate text-[16px] font-semibold leading-tight md:text-[15px]">
+                      {draft.contact ? (
+                        <Link href={`/contacts/${draft.contact.id}`} className="hover:underline">
+                          {draft.contact.displayName}
+                        </Link>
+                      ) : (
+                        draft.to.join(", ")
+                      )}
+                    </span>
+                    <span className="shrink-0 text-[11px] uppercase tracking-wide text-subtle">{PURPOSE[draft.purpose]}</span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        flip();
+                      }}
+                      aria-pressed={flipped}
+                      title={flipped ? "Back to the email (i)" : "Contact card (i)"}
+                      className="-my-1 -mr-1.5 inline-flex h-8 shrink-0 items-center gap-1 rounded-full bg-surface-2 px-2.5 text-[12px] font-medium text-fg/80 active:opacity-70"
                     >
-                      {draft.contact.displayName}
-                    </Link>
-                  ) : (
-                    draft.to.join(", ")
-                  )}
-                </span>
-                <span className="shrink-0 text-[11px] uppercase tracking-wide text-subtle">
-                  {PURPOSE[draft.purpose]}
-                </span>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    flip();
-                  }}
-                  aria-pressed={flipped}
-                  title={flipped ? "Back to the email (i)" : "Contact card (i)"}
-                  className="-my-1 -mr-1.5 inline-flex h-8 shrink-0 items-center gap-1 rounded-full bg-surface-2 px-2.5 text-[12px] font-medium text-fg/80 active:opacity-70"
-                >
-                  {flipped ? (
-                    <Mail className="size-3.5" aria-hidden />
-                  ) : (
-                    <Info className="size-3.5" aria-hidden />
-                  )}
-                  {flipped ? "Email" : "Info"}
-                </button>
-              </div>
-              {org ? (
-                <p className="truncate text-[12px] text-muted">
-                  {org.name}
-                  {tagline ? ` · ${tagline}` : ""}
-                </p>
-              ) : null}
-              <p className="mt-0.5 flex items-center gap-1.5 text-[11px] text-subtle">
-                <AccountBadge email={draft.accountEmail} />
-                <span>{formatRelative(draft.updatedAt, timezone)}</span>
-              </p>
-            </div>
-          </header>
+                      {flipped ? <Mail className="size-3.5" aria-hidden /> : <Info className="size-3.5" aria-hidden />}
+                      {flipped ? "Email" : "Info"}
+                    </button>
+                  </div>
+                  {org ? (
+                    <p className="truncate text-[12px] text-muted">
+                      {org.name}
+                      {tagline ? ` · ${tagline}` : ""}
+                    </p>
+                  ) : null}
+                  <p className="mt-0.5 flex items-center gap-1.5 text-[11px] text-subtle">
+                    <AccountBadge email={draft.accountEmail} />
+                    <span>{formatRelative(draft.updatedAt, timezone)}</span>
+                  </p>
+                </div>
+              </header>
 
-          {flipped ? (
-            (() => {
-              const info = infos[draft.id];
-              if (!info)
-                return (
-                  <p className="px-4 py-6 text-center text-[13px] text-muted">
-                    Loading the contact card…
+              {flipped ? (
+                (() => {
+                  const info = infos[draft.id];
+                  if (!info) return <p className="px-4 py-6 text-center text-[13px] text-muted">Loading the contact card…</p>;
+                  if ("error" in info) return <p className="px-4 py-6 text-center text-[13px] text-danger">{info.error}</p>;
+                  return <CardBack draft={draft} info={info} timezone={timezone} />;
+                })()
+              ) : (
+                <div className="flex flex-col gap-2 px-4 py-3">
+                  {reason ? (
+                    <p className="rounded-md bg-surface-2 px-2.5 py-1.5 text-[12px] leading-snug text-muted">
+                      <Sparkles className="mr-1 inline size-3 align-[-1px]" aria-hidden />
+                      {reason}
+                    </p>
+                  ) : null}
+                  {draft.error ? <p className="rounded-md bg-warning/10 px-2.5 py-1.5 text-[12px] text-warning">{draft.error}</p> : null}
+                  <p className="text-[11.5px] leading-snug text-subtle">
+                    To {draft.to.join(", ")}
+                    {draft.cc.length ? ` · Cc ${draft.cc.join(", ")}` : ""}
+                    {draft.replyToSubject ? ` · in reply to “${draft.replyToSubject}”` : ""}
                   </p>
-                );
-              if ("error" in info)
-                return (
-                  <p className="px-4 py-6 text-center text-[13px] text-danger">
-                    {info.error}
-                  </p>
-                );
-              return <CardBack draft={draft} info={info} timezone={timezone} />;
-            })()
-          ) : (
-            <div className="flex flex-col gap-2 px-4 py-3">
-              {reason ? (
-                <p className="rounded-md bg-surface-2 px-2.5 py-1.5 text-[12px] leading-snug text-muted">
-                  <Sparkles
-                    className="mr-1 inline size-3 align-[-1px]"
-                    aria-hidden
-                  />
-                  {reason}
-                </p>
-              ) : null}
-              {draft.error ? (
-                <p className="rounded-md bg-warning/10 px-2.5 py-1.5 text-[12px] text-warning">
-                  {draft.error}
-                </p>
-              ) : null}
-              <p className="text-[11.5px] leading-snug text-subtle">
-                To {draft.to.join(", ")}
-                {draft.cc.length ? ` · Cc ${draft.cc.join(", ")}` : ""}
-                {draft.replyToSubject
-                  ? ` · in reply to “${draft.replyToSubject}”`
-                  : ""}
-              </p>
-              <h2 className="text-[15px] font-semibold leading-snug">
-                {draft.subject || "(no subject)"}
-              </h2>
-              <div className="whitespace-pre-wrap text-[13px] leading-[1.45] text-fg md:text-[13.5px]">
-                {draft.body}
-              </div>
-            </div>
-          )}
+                  <h2 className="text-[15px] font-semibold leading-snug">{draft.subject || "(no subject)"}</h2>
+                  <div className="whitespace-pre-wrap text-[13px] leading-[1.45] text-fg md:text-[13.5px]">{draft.body}</div>
+                </div>
+              )}
+            </>
+          ) : null}
         </article>
 
         {/* Actions under the card */}
         <div className="shrink-0 pb-2 pt-2">
           <div className="max-h-[70dvh] overflow-y-auto rounded-2xl border border-border bg-surface p-2 shadow-[0_8px_30px_rgba(0,0,0,0.12)]">
-            {panel === "edit" ? (
+            {mailing ? (
+              <MailingActions
+                mailing={mailing}
+                pending={pending}
+                onDiscard={() =>
+                  run(
+                    () => discardCampaignAction(mailing.id),
+                    () => finish(item.id, "Mailing discarded."),
+                  )
+                }
+                onApprove={(origin) =>
+                  run(
+                    () => startCampaignAction(mailing.id),
+                    () => {
+                      celebrateSend(origin);
+                      finish(item.id, `Sending ${mailing.count} emails, a few at a time.`);
+                    },
+                  )
+                }
+              />
+            ) : !draft ? null : panel === "edit" ? (
               <form
                 className="flex flex-col gap-2 p-1"
                 action={(formData) =>
@@ -465,36 +408,11 @@ export function Flashcards({
                   )
                 }
               >
-                <Input
-                  name="to"
-                  defaultValue={draft.to.join(", ")}
-                  aria-label="To"
-                  placeholder="To"
-                />
-                <Input
-                  name="cc"
-                  defaultValue={draft.cc.join(", ")}
-                  aria-label="Cc"
-                  placeholder="Cc"
-                />
-                <Input
-                  name="subject"
-                  defaultValue={draft.subject}
-                  aria-label="Subject"
-                  placeholder="Subject"
-                />
-                <Textarea
-                  name="body"
-                  defaultValue={draft.body}
-                  rows={9}
-                  aria-label="Message"
-                  className="text-[13px] leading-snug"
-                />
-                <PanelButtons
-                  pending={pending}
-                  onCancel={() => setPanel(null)}
-                  submit="Save"
-                />
+                <Input name="to" defaultValue={draft.to.join(", ")} aria-label="To" placeholder="To" />
+                <Input name="cc" defaultValue={draft.cc.join(", ")} aria-label="Cc" placeholder="Cc" />
+                <Input name="subject" defaultValue={draft.subject} aria-label="Subject" placeholder="Subject" />
+                <Textarea name="body" defaultValue={draft.body} rows={9} aria-label="Message" className="text-[13px] leading-snug" />
+                <PanelButtons pending={pending} onCancel={() => setPanel(null)} submit="Save" />
               </form>
             ) : panel === "revise" || panel === "changes" ? (
               <NoteForm
@@ -552,36 +470,20 @@ export function Flashcards({
                   <Trash2 className="size-5" />
                 </IconAction>
                 {assistantFlow ? (
-                  <IconAction
-                    label="Postpone"
-                    disabled={busy}
-                    onClick={() => setPanel("postpone")}
-                  >
+                  <IconAction label="Postpone" disabled={busy} onClick={() => setPanel("postpone")}>
                     <CalendarClock className="size-5" />
                   </IconAction>
                 ) : null}
                 {assistantFlow ? (
-                  <IconAction
-                    label="Changes"
-                    disabled={busy}
-                    onClick={() => setPanel("changes")}
-                  >
+                  <IconAction label="Changes" disabled={busy} onClick={() => setPanel("changes")}>
                     <MessageSquareText className="size-5" />
                   </IconAction>
                 ) : claude ? (
-                  <IconAction
-                    label="Change"
-                    disabled={busy}
-                    onClick={() => setPanel("revise")}
-                  >
+                  <IconAction label="Change" disabled={busy} onClick={() => setPanel("revise")}>
                     <Sparkles className="size-5" />
                   </IconAction>
                 ) : null}
-                <IconAction
-                  label="Edit"
-                  disabled={busy}
-                  onClick={() => setPanel("edit")}
-                >
+                <IconAction label="Edit" disabled={busy} onClick={() => setPanel("edit")}>
                   <Pencil className="size-5" />
                 </IconAction>
                 <button
@@ -610,12 +512,7 @@ export function Flashcards({
                 >
                   {pending && armed ? (
                     <>
-                      <VelaLoader
-                        size={16}
-                        label="Sending"
-                        className="text-current"
-                      />{" "}
-                      Sending…
+                      <VelaLoader size={16} label="Sending" className="text-current" /> Sending…
                     </>
                   ) : armed ? (
                     <span className="text-[14px]">Tap again to send</span>
@@ -631,6 +528,76 @@ export function Flashcards({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Discard (two taps), open the mailing, approve and start sending (two taps). */
+function MailingActions({
+  mailing,
+  pending,
+  onDiscard,
+  onApprove,
+}: {
+  mailing: MailingCardData;
+  pending: boolean;
+  onDiscard: () => void;
+  onApprove: (origin: ReturnType<typeof flourishOrigin>) => void;
+}) {
+  const [armed, setArmed] = useState<null | "discard" | "approve">(null);
+  useEffect(() => {
+    if (!armed) return;
+    const t = setTimeout(() => setArmed(null), 4000);
+    return () => clearTimeout(t);
+  }, [armed]);
+  return (
+    <div className="flex items-stretch gap-1">
+      <IconAction
+        label={armed === "discard" ? "Sure?" : "Discard"}
+        tone="danger"
+        disabled={pending}
+        onClick={() => {
+          if (armed !== "discard") return setArmed("discard");
+          setArmed(null);
+          onDiscard();
+        }}
+      >
+        <Trash2 className="size-5" />
+      </IconAction>
+      <Link
+        href={`/approvals/mailings/${mailing.id}`}
+        title="Open the mailing: settings and every email"
+        className="flex min-h-12 w-12 shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl text-[10px] font-medium text-muted active:bg-surface-2 md:w-16 md:hover:bg-surface-2"
+      >
+        <Pencil className="size-5" />
+        Open
+      </Link>
+      <button
+        type="button"
+        disabled={pending || !mailing.accountOk || mailing.count === 0}
+        onClick={(event) => {
+          if (armed !== "approve") return setArmed("approve");
+          setArmed(null);
+          onApprove(flourishOrigin(event.currentTarget));
+        }}
+        className={cn(
+          "flex min-h-12 min-w-0 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-2 text-[15px] font-semibold text-white transition-colors active:opacity-80 disabled:opacity-60",
+          armed === "approve" ? "bg-success" : "bg-brand",
+        )}
+      >
+        {pending && armed === null ? (
+          <>
+            <VelaLoader size={16} label="Working" className="text-current" /> Working…
+          </>
+        ) : armed === "approve" ? (
+          <span className="text-[14px]">Tap again to start</span>
+        ) : (
+          <>
+            <Check className="size-5 shrink-0" /> Approve {mailing.count}
+            <span className="hidden md:inline"> & start sending</span>
+          </>
+        )}
+      </button>
     </div>
   );
 }
@@ -700,41 +667,19 @@ function NoteForm({
         autoFocus
         required
       />
-      <PanelButtons
-        pending={pending}
-        onCancel={onCancel}
-        submit={submit}
-        disabled={!text.trim()}
-      />
+      <PanelButtons pending={pending} onCancel={onCancel} submit={submit} disabled={!text.trim()} />
     </form>
   );
 }
 
-function PanelButtons({
-  pending,
-  onCancel,
-  submit,
-  disabled,
-}: {
-  pending: boolean;
-  onCancel: () => void;
-  submit: string;
-  disabled?: boolean;
-}) {
+function PanelButtons({ pending, onCancel, submit, disabled }: { pending: boolean; onCancel: () => void; submit: string; disabled?: boolean }) {
   return (
     <div className="grid grid-cols-2 gap-2">
-      <Button
-        type="button"
-        variant="ghost"
-        onClick={onCancel}
-        disabled={pending}
-      >
+      <Button type="button" variant="ghost" onClick={onCancel} disabled={pending}>
         <X className="size-4" /> Cancel
       </Button>
       <Button type="submit" variant="primary" disabled={pending || disabled}>
-        {pending ? (
-          <VelaLoader size={16} label="Working" className="text-current" />
-        ) : null}
+        {pending ? <VelaLoader size={16} label="Working" className="text-current" /> : null}
         {submit}
       </Button>
     </div>

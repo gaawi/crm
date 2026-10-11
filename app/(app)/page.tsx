@@ -2,6 +2,8 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { ArrowDownLeft, ArrowUpRight, Check, Clock, Sparkles } from "lucide-react";
 import { loadReviewInbox, ReviewInbox } from "@/components/assistant/review-inbox";
+import { ApprovalsBlock } from "@/components/today/approvals-block";
+import { loadPendingApprovals } from "@/lib/approvals/pending";
 import { PhoneActions } from "@/components/booking/phone-actions";
 import { ContactRow, RowList } from "@/components/contact-row";
 import { CampaignFilter } from "@/components/today/campaign-filter";
@@ -56,13 +58,14 @@ function ContactPhoneActions({ contact, timezone }: { contact: ContactSummary; t
 export default async function TodayPage({ searchParams }: PageProps<"/">) {
   const timezone = env.timezone;
   const today = todayIn(timezone);
-  const [allFollowUps, allUpcoming, allActivity, counts, allReview, campaigns] = await Promise.all([
+  const [allFollowUps, allUpcoming, allActivity, counts, allReview, campaigns, pending] = await Promise.all([
     getFollowUps({ today, limit: 30 }),
     getUpcomingFollowUps({ today, days: 7, limit: 8 }),
     recentActivity(12),
     getOverviewCounts(),
     loadReviewInbox(today),
     listCampaignRefs(),
+    loadPendingApprovals(),
   ]);
 
   // Filter by campaign (?campaign=<id>): each item knows its campaigns; items outside every campaign show under All only.
@@ -76,7 +79,6 @@ export default async function TodayPage({ searchParams }: PageProps<"/">) {
   const ofContact = (id: string | undefined) => (id ? memberships.get(id) : undefined);
   const ofOpportunity = (o: { project: { id: string; sheet?: boolean } | null }) => (o.project?.sheet ? [o.project.id] : undefined);
   const todayItems = [
-    ...allReview.drafts.map((d) => [d.projectId]),
     ...allReview.actions.map((a) => [a.projectId]),
     ...allFollowUps.due.map((c) => ofContact(c.id)),
     ...allFollowUps.opportunities.map(ofOpportunity),
@@ -100,6 +102,7 @@ export default async function TodayPage({ searchParams }: PageProps<"/">) {
 
   const dateLabel = new Intl.DateTimeFormat("en-US", { timeZone: timezone, weekday: "long", month: "long", day: "numeric" }).format(new Date());
   const nothingToDo =
+    !pending.total &&
     !followUps.due.length && !followUps.opportunities.length && !followUps.needsReply.length && !followUps.awaitingReply.length;
 
   return (
@@ -132,7 +135,9 @@ export default async function TodayPage({ searchParams }: PageProps<"/">) {
 
       <div className="grid gap-8 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] [&>*]:min-w-0">
         <div className="flex flex-col gap-8">
-          <ReviewInbox today={today} data={review} campaignName={campaign?.name} />
+          <ApprovalsBlock pending={pending} />
+
+          <ReviewInbox today={today} data={review} campaignName={campaign?.name} emails={false} />
 
           {nothingToDo && counts.accounts > 0 ? (
             campaign ? (

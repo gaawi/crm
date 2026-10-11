@@ -6,13 +6,11 @@ import {
   Building2,
   CalendarCheck,
   FolderKanban,
-  Inbox,
   LayoutList,
   Mail,
   Megaphone,
   Menu,
   Music,
-  Send,
   Settings,
   Sparkles,
   Users,
@@ -30,7 +28,6 @@ interface NavItem {
 export const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Today", icon: CalendarCheck },
   { href: "/mail", label: "Mail", icon: Mail },
-  { href: "/approvals", label: "Approvals", icon: Send },
   { href: "/contacts", label: "Contacts", icon: Users },
   { href: "/organizations", label: "Organizations", icon: Building2 },
   { href: "/musicians", label: "Musicians", icon: Music },
@@ -41,20 +38,21 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
-/** iPhone tab bar: the four most used sections + More (Claude lives in More and on Today). */
+/** iPhone tab bar: the four most used sections + More. Approvals live in Today (its badge counts them). */
 const TAB_ITEMS: NavItem[] = [
   { href: "/", label: "Today", icon: CalendarCheck },
   { href: "/mail", label: "Mail", icon: Mail },
-  { href: "/approvals", label: "Approvals", icon: Inbox },
+  { href: "/campaigns", label: "Campaigns", icon: Megaphone },
   { href: "/contacts", label: "Contacts", icon: Users },
   { href: "/more", label: "More", icon: Menu },
 ];
 
 /** Routes reached through "More" keep the More tab highlighted. */
-const MORE_ROUTES = ["/more", "/campaigns", "/organizations", "/musicians", "/projects", "/pipeline", "/settings", "/search", "/assistant"];
+const MORE_ROUTES = ["/more", "/organizations", "/musicians", "/projects", "/pipeline", "/settings", "/search", "/assistant"];
 
 function isActive(pathname: string, href: string) {
-  if (href === "/") return pathname === "/";
+  // Approvals are part of Today.
+  if (href === "/") return pathname === "/" || pathname === "/approvals" || pathname.startsWith("/approvals/");
   if (href === "/more") return MORE_ROUTES.some((r) => pathname === r || pathname.startsWith(`${r}/`));
   return pathname === href || pathname.startsWith(`${href}/`);
 }
@@ -87,7 +85,7 @@ export function SideNav({ approvals = 0, mail = 0 }: { approvals?: number; mail?
           >
             <Icon className="size-4 shrink-0" strokeWidth={1.75} />
             {label}
-            {href === "/approvals" ? <Count value={approvals} /> : href === "/mail" ? <Count value={mail} /> : null}
+            {href === "/" ? <Count value={approvals} /> : href === "/mail" ? <Count value={mail} /> : null}
           </Link>
         );
       })}
@@ -127,7 +125,7 @@ export function TabBar({ approvals = 0, mail = 0 }: { approvals?: number; mail?:
               >
                 <Icon className="size-6" strokeWidth={active ? 2.1 : 1.6} />
                 {label}
-                <TabBadge value={href === "/approvals" ? approvals : href === "/mail" ? mail : 0} />
+                <TabBadge value={href === "/" ? approvals : href === "/mail" ? mail : 0} />
               </Link>
             </li>
           );

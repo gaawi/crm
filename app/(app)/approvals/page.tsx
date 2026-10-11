@@ -59,7 +59,7 @@ export default async function ApprovalsPage() {
         </section>
       ) : null}
 
-      {open.filter((d) => d.status === "proposed" || d.status === "failed").length ? (
+      {open.filter((d) => d.status === "proposed" || d.status === "failed").length + waitingCampaigns ? (
         <Link
           href="/approvals/review"
           className="mb-6 flex items-center gap-3 rounded-xl bg-brand px-4 py-3.5 text-white shadow-sm active:opacity-90 md:rounded-lg md:py-3 md:hover:opacity-95"
@@ -68,7 +68,8 @@ export default async function ApprovalsPage() {
           <span className="min-w-0 flex-1">
             <span className="block text-[16px] font-semibold md:text-sm">Review one by one</span>
             <span className="block text-[13px] text-white/80 md:text-xs">
-              {plural(open.filter((d) => d.status === "proposed" || d.status === "failed").length, "email")} · the full email on each card, swipe to the next
+              {plural(open.filter((d) => d.status === "proposed" || d.status === "failed").length + waitingCampaigns, "card")} · emails and mailings,
+              swipe to the next
             </span>
           </span>
           <ChevronRight className="size-5 shrink-0" aria-hidden />
@@ -107,7 +108,6 @@ export default async function ApprovalsPage() {
                   {d.revisionRequest ? <span className="block text-[13px] text-muted md:text-xs">You asked: “{d.revisionRequest}”</span> : null}
                   <span className="block text-[13px] text-subtle md:text-xs">Claude rewrites it in the next review ({ASSISTANT_REVIEW_TIMES}).</span>
                 </span>
-
               </li>
             ))}
           </ul>
@@ -131,7 +131,9 @@ export default async function ApprovalsPage() {
                     </span>
                   </span>
                   <span className="shrink-0 text-xs text-subtle">
-                    {c.finishedAt ? new Intl.DateTimeFormat("en-US", { timeZone: timezone, month: "short", day: "numeric" }).format(new Date(c.finishedAt)) : ""}
+                    {c.finishedAt
+                      ? new Intl.DateTimeFormat("en-US", { timeZone: timezone, month: "short", day: "numeric" }).format(new Date(c.finishedAt))
+                      : ""}
                   </span>
                   <ChevronRight className="size-4 shrink-0 text-subtle" aria-hidden />
                 </Link>

@@ -26,13 +26,26 @@ export async function loadReviewInbox(today: string): Promise<ReviewInboxData> {
  * prepared in active campaigns, and its recommended actions. Server component.
  * `campaignName`: Today is filtered to that campaign (`data` already is).
  */
-export function ReviewInbox({ today, data, campaignName }: { today: string; data: ReviewInboxData; campaignName?: string | null }) {
-  const { drafts, actions, sheets } = data;
+export function ReviewInbox({
+  today,
+  data,
+  campaignName,
+  emails = true,
+}: {
+  today: string;
+  data: ReviewInboxData;
+  campaignName?: string | null;
+  /** false: only calls, WhatsApps and tasks (Today, where the emails are reviewed as flashcards). */
+  emails?: boolean;
+}) {
+  const { actions, sheets } = data;
+  const drafts = emails ? data.drafts : [];
   const count = drafts.length + actions.length;
+  if (!emails && count === 0 && sheets.active) return null;
 
   return (
-    <section aria-label="To review today" data-testid="review-inbox">
-      <SectionTitle count={count || undefined}>To review today</SectionTitle>
+    <section aria-label={emails ? "To review today" : "Suggested actions"} data-testid="review-inbox">
+      <SectionTitle count={count || undefined}>{emails ? "To review today" : "Suggested by the assistant"}</SectionTitle>
       {count === 0 && campaignName ? (
         <EmptyState title={`Nothing to review in ${campaignName}`}>The assistant has no emails or actions for this campaign right now.</EmptyState>
       ) : count === 0 ? (
