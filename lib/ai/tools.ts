@@ -547,13 +547,13 @@ contact_projects(contact_id, project_id)
 messages(id, account_id, gmail_message_id, gmail_thread_id, rfc822_message_id, direction ['inbound','outbound'], from_email, from_name, subject, snippet, body_text, sent_at timestamptz, label_ids text[], is_automated, has_attachments, search tsvector)
 message_participants(message_id, role ['from','to','cc','bcc','reply_to'], email, name)
 opportunities(id, title, kind (the goal) ['booking','perform_with','residency','education','broadcast','venue','exchange','fundraising','sponsorship','grant','partnership','coproduction','network','introduction','press','sale','other'], stage ['lead','contacted','proposal','negotiation','won','lost'], contact_id, organization_id, project_id, value numeric, currency, follow_up_at date, next_action ['first_contact','call','send_proposal','send_materials','follow_up','meeting','agree_terms','send_contract','close_contract','logistics','invoice','thank_report','keep_informed','wait_reply'], next_step (detail), notes, event_dates, sheet_section, spaces, is_returning bool, closed_at, created_at)
-activities(id, kind ['call','whatsapp','meeting','email','note','status'], outcome ['reached','no_answer','voicemail','call_back','wrong_number'] (calls), body, occurred_at, contact_id, organization_id, opportunity_id) — calls, WhatsApp, meetings, hand-logged emails, notes, booking status changes
+activities(id, kind ['call','whatsapp','meeting','email','note','status'], outcome ['reached','no_answer','voicemail','call_back','wrong_number'] (calls), body, occurred_at, contact_id, organization_id, opportunity_id): calls, WhatsApp, meetings, hand-logged emails, notes, booking status changes
 email_templates(id, project_id (null = all sheets), name, trigger, subject, body)
-email_drafts(id, account_id, contact_id, opportunity_id, campaign_id, status ['proposed','queued','revising','sending','sent','discarded','failed'], to_emails text[], subject, sent_at, created_at) — emails prepared for approval; queued = approved in a running campaign
-musician_profiles(contact_id, instruments text[] (keys like 'cello','violin','soprano'), based_in, website, roster ['roster','maybe','not_now'], notes) — one row per musician contact; select these columns explicitly (other columns are private)
-musician_gigs(id, contact_id, title, played_on date, project_id, instrument, notes) — what they played with us
-email_campaigns(id, name, project_id, account_id, status ['draft','running','paused','done','cancelled'], per_hour, daily_cap, window_start, window_end, weekdays_only, timezone, last_sent_at, started_at, finished_at) — emails sent gradually after the owner approved them
-A contact's emails: join contact_emails ce → message_participants mp on mp.email = ce.email → messages m on m.id = mp.message_id. The same email seen by two accounts has two rows with the same rfc822_message_id — use count(distinct coalesce(m.rfc822_message_id, m.id::text)).`;
+email_drafts(id, account_id, contact_id, opportunity_id, campaign_id, status ['proposed','queued','revising','sending','sent','discarded','failed'], to_emails text[], subject, sent_at, created_at): emails prepared for approval; queued = approved in a running campaign
+musician_profiles(contact_id, instruments text[] (keys like 'cello','violin','soprano'), based_in, website, roster ['roster','maybe','not_now'], notes): one row per musician contact; select these columns explicitly (other columns are private)
+musician_gigs(id, contact_id, title, played_on date, project_id, instrument, notes): what they played with us
+email_campaigns(id, name, project_id, account_id, status ['draft','running','paused','done','cancelled'], per_hour, daily_cap, window_start, window_end, weekdays_only, timezone, last_sent_at, started_at, finished_at): emails sent gradually after the owner approved them
+A contact's emails: join contact_emails ce → message_participants mp on mp.email = ce.email → messages m on m.id = mp.message_id. The same email seen by two accounts has two rows with the same rfc822_message_id: use count(distinct coalesce(m.rfc822_message_id, m.id::text)).`;
 
 const queryDatabase = tool({
   name: "query_database",
@@ -571,7 +571,7 @@ const queryDatabase = tool({
 const updateContactTool = tool({
   name: "update_contact",
   description:
-    "Change a contact: set or clear the follow-up date and note, change status, add/remove tags, add/remove projects (by name), or append a line to the notes. Only do this when the owner asked for it. In the app the owner confirms the change with one tap before it is applied — tell them what you proposed.",
+    "Change a contact: set or clear the follow-up date and note, change status, add/remove tags, add/remove projects (by name), or append a line to the notes. Only do this when the owner asked for it. In the app the owner confirms the change with one tap before it is applied: tell them what you proposed.",
   mutates: true,
   confirm: true,
   summarize(input) {

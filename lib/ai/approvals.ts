@@ -1,4 +1,5 @@
 import "server-only";
+import { noEmDash } from "@/lib/text/no-em-dash";
 import { sql } from "@/lib/db";
 import { draftFollowUp, reviseEmail } from "@/lib/ai/draft";
 import { getContact } from "@/lib/queries/contacts";
@@ -100,6 +101,8 @@ export interface ProposeInput {
 
 /** Create a proposal (and its Gmail draft). Returns null if the autopilot already has one open for the contact. */
 export async function proposeEmail(input: ProposeInput): Promise<EmailDraft | null> {
+  // The owner never wants em dashes in the emails written for them.
+  input = { ...input, subject: noEmDash(input.subject), body: noEmDash(input.body) };
   const contactId = input.contactId ?? null;
   const replyToMessageId = input.replyToMessageId ?? null;
   let to = cleanList(input.to);

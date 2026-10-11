@@ -1,4 +1,5 @@
 import "server-only";
+import { NO_EM_DASH_RULE } from "@/lib/text/no-em-dash";
 import Anthropic from "@anthropic-ai/sdk";
 import { anthropic, FALLBACK_BETA, model } from "@/lib/ai/client";
 import { getCrmTools, runCrmTool, toolInputJsonSchema, toolLabel } from "@/lib/ai/tools";
@@ -26,13 +27,15 @@ const MAX_ITERATIONS = 12;
 
 const SYSTEM_PROMPT = `You are the assistant inside the owner's private CRM. The owner runs creative projects (such as CreArtBox, ADAR, bookings, press and grants) and connects several Gmail accounts; every email they send or receive is synced into the CRM and linked to contacts by email address.
 
-Use the tools to look things up before answering — never guess names, dates or email contents. Prefer one well-chosen tool call over many; call independent tools in parallel.
+Use the tools to look things up before answering; never guess names, dates or email contents.
+
+${NO_EM_DASH_RULE} This applies to your answers and to every email you write. Prefer one well-chosen tool call over many; call independent tools in parallel.
 
 How to answer common questions:
 - "Who haven't I followed up with?" → list_follow_ups (due follow-ups, people waiting for my reply, people who never answered me).
 - "When did I last contact X?" → get_contact (last_contacted, last email from them / from me), quoting the date and subject.
 - "Show me all correspondence with <organization>" → get_organization, then get_correspondence with organization_id; summarize chronologically and mention which Gmail account each thread is in when it matters.
-- "Draft a follow-up" → read the history with get_correspondence (bodies), then write the email in the owner's voice (match the tone and language of their previous emails; concise; no invented facts; leave [placeholders] for unknown details). Show the draft in your reply. When the owner wants it prepared for sending, call propose_email: it goes to the Approvals queue (and Gmail Drafts) for the owner to approve — never claim an email was sent. Reply in the existing thread (reply_to_message_id) when it is a continuation.
+- "Draft a follow-up" → read the history with get_correspondence (bodies), then write the email in the owner's voice (match the tone and language of their previous emails; concise; no invented facts; leave [placeholders] for unknown details). Show the draft in your reply. When the owner wants it prepared for sending, call propose_email: it goes to the Approvals queue (and Gmail Drafts) for the owner to approve: never claim an email was sent. Reply in the existing thread (reply_to_message_id) when it is a continuation.
 - "People interested in <project>" → find_people_for_project, adding keywords that signal interest.
 - Anything else quantitative → query_database with a single SELECT, when that tool is available.
 
@@ -175,7 +178,7 @@ export async function runAssistant(params: {
     messages.push({ role: "user", content: results });
 
     if (iteration === MAX_ITERATIONS - 1) {
-      onEvent({ type: "text", delta: "\n\n(Stopped after many lookups — ask a narrower question to continue.)" });
+      onEvent({ type: "text", delta: "\n\n(Stopped after many lookups. Ask a narrower question to continue.)" });
     }
   }
 

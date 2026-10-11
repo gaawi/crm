@@ -1,4 +1,5 @@
 import "server-only";
+import { noEmDash } from "@/lib/text/no-em-dash";
 import { sql } from "@/lib/db";
 import { addDays, todayIn } from "@/lib/dates";
 import { env } from "@/lib/env";
@@ -56,7 +57,7 @@ export async function applyDraftRevision(id: string, edits: { subject: string; b
   if (!moved.count) throw new DraftError("This email is not waiting for a new version.");
   const draft = (await getDraft(id))!;
   try {
-    return await saveDraftEdits(id, { subject: edits.subject, body: edits.body, to: draft.to, cc: draft.cc });
+    return await saveDraftEdits(id, { subject: noEmDash(edits.subject), body: noEmDash(edits.body), to: draft.to, cc: draft.cc });
   } catch (e) {
     // Keep the owner's request so the next run tries again.
     await sql`
