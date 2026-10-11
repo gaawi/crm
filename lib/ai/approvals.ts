@@ -101,8 +101,10 @@ export interface ProposeInput {
 
 /** Create a proposal (and its Gmail draft). Returns null if the autopilot already has one open for the contact. */
 export async function proposeEmail(input: ProposeInput): Promise<EmailDraft | null> {
-  // The owner never wants em dashes in the emails written for them.
-  input = { ...input, subject: noEmDash(input.subject), body: noEmDash(input.body) };
+  // The owner never wants em dashes in the emails Claude writes for them. Their
+  // own words (origin "owner": templates, edits) are kept as written; Claude's
+  // drafts made at the owner's request are cleaned where they are written (lib/ai/draft.ts).
+  if (input.origin !== "owner") input = { ...input, subject: noEmDash(input.subject), body: noEmDash(input.body) };
   const contactId = input.contactId ?? null;
   const replyToMessageId = input.replyToMessageId ?? null;
   let to = cleanList(input.to);
