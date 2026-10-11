@@ -158,6 +158,8 @@ export interface ThreadMessage {
   subject: string | null;
   /** Plain text without the quoted part; the snippet when there is no text. */
   body: string;
+  /** People it went to (To, Cc and Bcc): more than a few = a bulk email. */
+  recipients: number;
 }
 
 /**
@@ -185,14 +187,31 @@ export async function loadDraftThread(draftId: string): Promise<{ ok: true; thre
   let messages: Awaited<ReturnType<typeof getThread>> = [];
   if (replied) {
     kind = "thread";
-    // The whole thread: an email that arrived after the draft was written matters most.
-    messages = await getThread(replied.accountId, replied.gmailThreadId);
+    // The thread as this person lived it: an email sent to many (a mailing) gathers
+    // everyone's replies and bounces in one Gmail thread; only the emails they
+    // wrote or received are theirs. One that arrived after the draft matters most.
+    const thread = await getThread(replied.accountId, replied.gmailThreadId);
+    const people = [...new Set([...(contactId ? ((await getContact(contactId))?.emails ?? []) : []), ...draft.to, ...draft.cc])];
+    const theirs = thread.length
+      ? await sql<{ messageId: string }[]>`
+          select distinct message_id from message_participants
+           where message_id = any(${thread.map((m) => m.id)}::uuid[]) and email = any(${people}::text[])`
+      : [];
+    const ids = new Set(theirs.map((r) => r.messageId));
+    messages = thread.filter((m) => ids.has(m.id) || m.id === replied.id);
     if (!messages.length) messages = [replied];
   } else if (contactId) {
     messages = (await getContactHistory(contactId, { limit: 4, includeAutomated: false })).reverse();
     if (messages.length) kind = "history";
   }
   const name = (a: { name: string | null; email: string } | null | undefined) => a?.name || a?.email || "";
+  const counts = messages.length
+    ? await sql<{ messageId: string; n: number }[]>`
+        select message_id, count(distinct email)::int as n from message_participants
+         where message_id = any(${messages.map((m) => m.id)}::uuid[]) and role in ('to', 'cc', 'bcc')
+         group by message_id`
+    : [];
+  const recipients = new Map(counts.map((r) => [r.messageId, r.n]));
   return {
     ok: true,
     thread: {
@@ -206,6 +225,7 @@ export async function loadDraftThread(draftId: string): Promise<{ ok: true; thre
         sentAt: new Date(m.sentAt).toISOString(),
         subject: m.subject,
         body: (m.bodyText?.trim() || m.snippet || "").slice(0, BODY_MAX),
+        recipients: recipients.get(m.id) ?? m.to.length + m.cc.length,
       })),
     },
   };
