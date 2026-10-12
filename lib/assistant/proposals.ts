@@ -5,6 +5,8 @@ import { DraftError, proposeEmail } from "@/lib/ai/approvals";
 import { applyDraftRevision } from "@/lib/assistant/drafts";
 import { ASSISTANT_ACTION_KINDS, MAX_EMAILS_PER_CALL } from "@/lib/assistant/types";
 import { OPEN_DRAFT_STATUSES } from "@/lib/queries/assistant";
+import { getSettings } from "@/lib/queries/settings";
+import { env } from "@/lib/env";
 import { cleanHeaderText, replySubject } from "@/lib/gmail/mime";
 import { noEmDash } from "@/lib/text/no-em-dash";
 import { errorMessage } from "@/lib/utils";
@@ -115,7 +117,11 @@ export function threadSubject(subject: string | null): string {
  * its own mailbox); otherwise any account, and the reply then goes out from
  * that account when it can send (not monitor-only), so the thread stays one.
  */
-async function threadToContinue(contactId: string, subject: string, sendAccountId: string | null): Promise<{ messageId: string; accountId: string | null; subject: string | null } | null> {
+async function threadToContinue(
+  contactId: string,
+  subject: string,
+  sendAccountId: string | null,
+): Promise<{ messageId: string; accountId: string | null; subject: string | null } | null> {
   const wanted = threadSubject(subject);
   if (!wanted) return null;
   const messages = await sql<{ id: string; subject: string | null; accountId: string; writable: boolean }[]>`
@@ -135,9 +141,20 @@ async function threadToContinue(contactId: string, subject: string, sendAccountI
   return { messageId: elsewhere.id, accountId: elsewhere.writable ? elsewhere.accountId : sendAccountId, subject: elsewhere.subject };
 }
 
+/** New emails the assistant proposed today (owner's time zone), and how many it may still propose. */
+export async function dailyEmailBudget(): Promise<{ limit: number; used: number; left: number }> {
+  const { dailyEmails } = await getSettings("assistant");
+  const [{ used }] = await sql<{ used: number }[]>`
+    select count(*)::int as used from email_drafts
+     where origin = 'assistant'
+       and created_at >= (date_trunc('day', now() at time zone ${env.timezone}) at time zone ${env.timezone})`;
+  return { limit: dailyEmails, used, left: Math.max(0, dailyEmails - used) };
+}
+
 export async function applyProposals(raw: unknown): Promise<ProposalsResult> {
   const parsed = proposalsSchema.safeParse(raw);
-  if (!parsed.success) throw new ProposalError(`Invalid request: ${parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`, 400);
+  if (!parsed.success)
+    throw new ProposalError(`Invalid request: ${parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`, 400);
   const input = parsed.data;
 
   const [sheet] = await sql<{ id: string; active: boolean; archived: boolean; sendAccountId: string | null }[]>`
@@ -147,7 +164,9 @@ export async function applyProposals(raw: unknown): Promise<ProposalsResult> {
   if (!sheet) throw new ProposalError("Campaign not found.", 404);
   if (!sheet.active || sheet.archived) throw new ProposalError("The assistant is paused for this campaign.", 409);
 
-  const ids = [...new Set([...input.emails.map((e) => e.opportunityId), ...input.actions.flatMap((a) => (a.opportunityId ? [a.opportunityId] : []))])];
+  const ids = [
+    ...new Set([...input.emails.map((e) => e.opportunityId), ...input.actions.flatMap((a) => (a.opportunityId ? [a.opportunityId] : []))]),
+  ];
   const rows = ids.length
     ? await sql<RowInfo[]>`
         select op.id, op.title, op.stage, op.contact_id, nullif(btrim(c.name), '') as contact_name, o.name as org_name
@@ -158,7 +177,13 @@ export async function applyProposals(raw: unknown): Promise<ProposalsResult> {
     : [];
   const byId = new Map(rows.map((r) => [r.id, r]));
 
-  const result: ProposalsResult = { ok: true, projectId: sheet.id, created: { emails: [], actions: [], revisions: [] }, skipped: [], pendingRevisions: [] };
+  const result: ProposalsResult = {
+    ok: true,
+    projectId: sheet.id,
+    created: { emails: [], actions: [], revisions: [] },
+    skipped: [],
+    pendingRevisions: [],
+  };
 
   // First, the new versions of emails the owner asked to change.
   for (const revision of input.revisions) {
@@ -176,7 +201,8 @@ export async function applyProposals(raw: unknown): Promise<ProposalsResult> {
       // A reply keeps its thread's subject exactly (Gmail threads by subject too).
       const subject = owned.replySubject ? replySubject(owned.replySubject) || revision.subject : revision.subject;
       await applyDraftRevision(revision.draftId, { subject, body: revision.body });
-      if (revision.noteToOwner) await sql`update email_drafts set assistant_reason = ${noEmDash(revision.noteToOwner)} where id = ${revision.draftId}`;
+      if (revision.noteToOwner)
+        await sql`update email_drafts set assistant_reason = ${noEmDash(revision.noteToOwner)} where id = ${revision.draftId}`;
       result.created.revisions.push({ draftId: revision.draftId });
     } catch (e) {
       result.skipped.push({ type: "revision", ref: revision.draftId, reason: e instanceof DraftError ? e.message : errorMessage(e) });
@@ -191,6 +217,8 @@ export async function applyProposals(raw: unknown): Promise<ProposalsResult> {
      where d.status = 'changes_requested'
        and (op.project_id = ${sheet.id} or exists (select 1 from assistant_actions aa where aa.draft_id = d.id and aa.project_id = ${sheet.id}))`;
   const blocked = result.pendingRevisions.length > 0;
+
+  let budget = (await dailyEmailBudget()).left;
 
   // Emails: at most MAX_EMAILS_PER_CALL new proposals, never a second one for a row or contact.
   const seen = new Set<string>();
@@ -210,6 +238,10 @@ export async function applyProposals(raw: unknown): Promise<ProposalsResult> {
     }
     if (seen.has(row.id) || (row.contactId && seen.has(row.contactId))) {
       result.skipped.push({ type: "email", ref: row.id, reason: "Duplicate in this request." });
+      continue;
+    }
+    if (budget <= 0) {
+      result.skipped.push({ type: "email", ref: row.id, reason: "Daily limit of new emails reached (all campaigns). It comes back tomorrow." });
       continue;
     }
     if (result.created.emails.length >= MAX_EMAILS_PER_CALL) {
@@ -278,6 +310,7 @@ export async function applyProposals(raw: unknown): Promise<ProposalsResult> {
         })}
         returning id`;
       result.created.emails.push({ opportunityId: row.id, draftId: draft.id, actionId: action.id });
+      budget -= 1;
     } catch (e) {
       result.skipped.push({ type: "email", ref: row.id, reason: e instanceof DraftError ? e.message : errorMessage(e) });
     }

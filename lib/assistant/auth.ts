@@ -23,11 +23,7 @@ export async function assistantApiGuard(request: Request): Promise<Response | nu
   }
   const header = request.headers.get("authorization") ?? "";
   const bearer = /^Bearer\s+(.+)$/i.exec(header)?.[1]?.trim();
-  const ok = bearer
-    ? token
-      ? safeEqual(bearer, token)
-      : safeEqual(createHash("sha256").update(bearer).digest("hex"), storedHash!)
-    : false;
+  const ok = bearer ? (token ? safeEqual(bearer, token) : safeEqual(createHash("sha256").update(bearer).digest("hex"), storedHash!)) : false;
   if (!ok) {
     return Response.json({ error: "Unauthorized" }, { status: 401, headers: { "WWW-Authenticate": "Bearer" } });
   }

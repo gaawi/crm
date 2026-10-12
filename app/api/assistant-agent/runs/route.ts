@@ -1,14 +1,16 @@
 import { assistantApiGuard } from "@/lib/assistant/auth";
 import { applyRun, RunsError } from "@/lib/assistant/runs";
+import { runHeader } from "@/lib/assistant/write-route";
 
 /**
  * The daily routine's run log. Authorization: Bearer <ASSISTANT_API_TOKEN>.
  *
  * POST /api/assistant-agent/runs
- *      {"action": "start", "model"?}            → {"ok": true, "runId"}  (first call of every run)
+ *      {"action": "start", "agent"?: "writer" | "prospector", "model"?} → {"ok": true, "runId"}  (first call of every run)
  *      {"action": "finish", "runId"?, "report"} → {"ok": true, "runId"}  (last call: the report for the owner)
  * Every write made between start and finish (proposals, contacts, profiles,
- * contact-photos) is recorded with the run, request and response.
+ * contact-photos, rows) is recorded with the run, request and response; send
+ * "X-Assistant-Run: <runId>" on every call so overlapping runs never mix.
  */
 
 export async function POST(request: Request) {
@@ -21,7 +23,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "Send a JSON body." }, { status: 400 });
   }
   try {
-    return Response.json(await applyRun(body), { headers: { "Cache-Control": "no-store" } });
+    return Response.json(await applyRun(body, runHeader(request)), { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     if (error instanceof RunsError) return Response.json({ error: error.message }, { status: error.status });
     console.error("Assistant run log failed:", error);

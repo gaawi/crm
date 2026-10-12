@@ -138,7 +138,15 @@ export async function applyContactCards(body: unknown, now: Date = new Date()): 
     }
 
     const [current] = await sql<
-      { name: string | null; role: string | null; organizationId: string | null; phone: string | null; whatsapp: string | null; notes: string | null; researchSources: string[] }[]
+      {
+        name: string | null;
+        role: string | null;
+        organizationId: string | null;
+        phone: string | null;
+        whatsapp: string | null;
+        notes: string | null;
+        researchSources: string[];
+      }[]
     >`select nullif(btrim(name), '') as name, nullif(btrim(role), '') as role, organization_id, phone, whatsapp, notes, research_sources
         from contacts where id = ${target.id}`;
     if (!current) {

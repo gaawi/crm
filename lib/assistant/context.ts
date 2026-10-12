@@ -4,6 +4,7 @@ import { sql } from "@/lib/db";
 import { todayIn } from "@/lib/dates";
 import { env } from "@/lib/env";
 import { MAX_EMAILS_PER_CALL } from "@/lib/assistant/types";
+import { dailyEmailBudget } from "@/lib/assistant/proposals";
 import { OPEN_DRAFT_STATUSES, releasePostponed } from "@/lib/queries/assistant";
 
 /**
@@ -58,7 +59,11 @@ export interface AssistantContext {
   generatedAt: string;
   today: string;
   timezone: string;
-  limits: { maxEmailsPerProjectPerCall: number };
+  limits: {
+    maxEmailsPerProjectPerCall: number;
+    /** New emails per day, all campaigns together; left = what can still be proposed today. */
+    dailyEmails: { limit: number; used: number; left: number };
+  };
   /**
    * What the owner corrected in earlier emails ("Request changes"), newest
    * first: standing lessons on tone, facts and how to present us, to apply to
@@ -76,9 +81,24 @@ export interface AssistantContext {
     stageCounts: Record<string, number>;
     rows: SheetRowCtx[];
     truncatedRows: boolean;
-    openActions: { id: string; opportunityId: string | null; kind: string; title: string; status: string; postponedUntil: string | null; createdAt: string }[];
+    openActions: {
+      id: string;
+      opportunityId: string | null;
+      kind: string;
+      title: string;
+      status: string;
+      postponedUntil: string | null;
+      createdAt: string;
+    }[];
     pendingDrafts: { id: string; opportunityId: string | null; status: string; subject: string; postponedUntil: string | null; createdAt: string }[];
-    changesRequested: { draftId: string; opportunityId: string | null; to: string[]; revisionRequest: string | null; subject: string; body: string }[];
+    changesRequested: {
+      draftId: string;
+      opportunityId: string | null;
+      to: string[];
+      revisionRequest: string | null;
+      subject: string;
+      body: string;
+    }[];
     templates: { id: string; name: string; trigger: string; subject: string; body: string }[];
   }[];
 }
@@ -89,7 +109,15 @@ export async function buildAssistantContext(now: Date = new Date()): Promise<Ass
   await releasePostponed(today);
 
   const sheets = await sql<
-    { id: string; name: string; description: string | null; brief: string | null; currency: string; sendAccount: string | null; lastRunAt: Date | null }[]
+    {
+      id: string;
+      name: string;
+      description: string | null;
+      brief: string | null;
+      currency: string;
+      sendAccount: string | null;
+      lastRunAt: Date | null;
+    }[]
   >`
     select p.id, p.name, p.description, p.assistant_brief as brief, p.currency, a.email as send_account, p.assistant_last_run_at as last_run_at
       from projects p
@@ -160,7 +188,9 @@ export async function buildAssistantContext(now: Date = new Date()): Promise<Ass
     const [counts] = await sql<{ counts: Record<string, number> | null }[]>`
       select json_object_agg(stage, n) as counts from (select stage, count(*)::int as n from opportunities where project_id = ${sheet.id} group by stage) s`;
 
-    const actions = await sql<{ id: string; opportunityId: string | null; kind: string; title: string; status: string; postponedUntil: string | null; createdAt: Date }[]>`
+    const actions = await sql<
+      { id: string; opportunityId: string | null; kind: string; title: string; status: string; postponedUntil: string | null; createdAt: Date }[]
+    >`
       select id, opportunity_id, kind, title, status, postponed_until, created_at from assistant_actions
        where project_id = ${sheet.id} and status in ('open', 'postponed')
        order by priority, created_at desc limit 200`;
@@ -226,10 +256,24 @@ export async function buildAssistantContext(now: Date = new Date()): Promise<Ass
       openActions: actions.map((a) => ({ ...a, createdAt: iso(a.createdAt)! })),
       pendingDrafts: drafts
         .filter((d) => d.status !== "changes_requested")
-        .map((d) => ({ id: d.id, opportunityId: d.opportunityId, status: d.status, subject: d.subject, postponedUntil: d.postponedUntil, createdAt: iso(d.createdAt)! })),
+        .map((d) => ({
+          id: d.id,
+          opportunityId: d.opportunityId,
+          status: d.status,
+          subject: d.subject,
+          postponedUntil: d.postponedUntil,
+          createdAt: iso(d.createdAt)!,
+        })),
       changesRequested: drafts
         .filter((d) => d.status === "changes_requested")
-        .map((d) => ({ draftId: d.id, opportunityId: d.opportunityId, to: d.to, revisionRequest: d.revisionRequest, subject: d.subject, body: d.body.slice(0, 20_000) })),
+        .map((d) => ({
+          draftId: d.id,
+          opportunityId: d.opportunityId,
+          to: d.to,
+          revisionRequest: d.revisionRequest,
+          subject: d.subject,
+          body: d.body.slice(0, 20_000),
+        })),
       templates: templates.map((t) => ({ ...t, body: t.body.slice(0, 4000) })),
     });
   }
@@ -249,7 +293,7 @@ export async function buildAssistantContext(now: Date = new Date()): Promise<Ass
     generatedAt: now.toISOString(),
     today,
     timezone,
-    limits: { maxEmailsPerProjectPerCall: MAX_EMAILS_PER_CALL },
+    limits: { maxEmailsPerProjectPerCall: MAX_EMAILS_PER_CALL, dailyEmails: await dailyEmailBudget() },
     ownerLessons: lessons.map((l) => ({ date: iso(l.date)!, contact: l.contact, campaign: l.campaign, request: clip(l.request, 2000)! })),
     projects,
   };

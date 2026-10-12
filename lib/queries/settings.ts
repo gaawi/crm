@@ -23,6 +23,11 @@ export interface AppSettings {
     awaitingDays: number;
     lastRunAt: string | null;
   };
+  /** The daily campaign assistant (writer and prospector routines). */
+  assistant: {
+    /** New emails it may propose per day, all campaigns together (new versions the owner asked for do not count). */
+    dailyEmails: number;
+  };
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -36,6 +41,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     awaitingDays: 7,
     lastRunAt: null,
   },
+  assistant: { dailyEmails: 10 },
 };
 
 export async function getSettings<K extends keyof AppSettings>(key: K): Promise<AppSettings[K]> {

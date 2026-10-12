@@ -22,7 +22,7 @@ export async function assistantWrite(
   try {
     body = await request.json();
   } catch {
-    await logAssistantCall(endpoint, 400, null, { error: "Send a JSON body." });
+    await logAssistantCall(endpoint, 400, null, { error: "Send a JSON body." }, runHeader(request));
     return Response.json({ error: "Send a JSON body." }, { status: 400 });
   }
   let status = 200;
@@ -39,6 +39,11 @@ export async function assistantWrite(
       result = { error: failure };
     }
   }
-  await logAssistantCall(endpoint, status, body, result);
+  await logAssistantCall(endpoint, status, body, result, runHeader(request));
   return Response.json(result, { status, headers: { "Cache-Control": "no-store" } });
+}
+
+/** The run a call belongs to (X-Assistant-Run header), when the routine sends it. */
+export function runHeader(request: Request): string | null {
+  return request.headers.get("x-assistant-run")?.trim() || null;
 }

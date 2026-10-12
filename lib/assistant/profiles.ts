@@ -22,7 +22,9 @@ const itemSchema = z.object({
   profile: z.unknown(),
 });
 
-export type ProfileItemResult = { index: number; ok: true; organizationId: string } | { index: number; ok: false; error: string; organizationId?: string };
+export type ProfileItemResult =
+  | { index: number; ok: true; organizationId: string }
+  | { index: number; ok: false; error: string; organizationId?: string };
 
 export interface ApplyProfilesResult {
   ok: true;

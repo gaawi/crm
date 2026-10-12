@@ -29,7 +29,7 @@ export default async function AssistantRunsPage() {
     <>
       <PageHeader
         title="Assistant runs"
-        description="What the daily campaign assistant did on each run: new versions, emails proposed, contact cards, and what it skipped."
+        description="What the campaign assistants did on each run: the prospector adds and researches new prospects, the writer prepares the emails. Skipped items and their reasons included."
         back={{ href: "/more", label: "More" }}
       />
       {runs.length === 0 ? <p className="text-sm text-muted">No runs recorded yet.</p> : null}
@@ -48,7 +48,10 @@ function RunCard({ run, projects, tz }: { run: AssistantRun; projects: Map<strin
   return (
     <section className="rounded-xl border border-border bg-surface md:rounded-lg">
       <header className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-border px-4 py-2.5">
-        <h2 className="text-[15px] font-semibold">{formatDateTime(new Date(run.startedAt), tz)}</h2>
+        <h2 className="text-[15px] font-semibold">
+          {run.agent === "prospector" ? "Prospector" : run.agent === "writer" ? "Writer" : "Assistant"} ·{" "}
+          {formatDateTime(new Date(run.startedAt), tz)}
+        </h2>
         <span className="text-[12px] text-subtle">
           {run.id ? (run.finishedAt ? `${minutes} min` : "running or unfinished") : "outside a run"}
           {run.model ? ` · ${run.model}` : ""} · {run.calls.length} {run.calls.length === 1 ? "write" : "writes"}
@@ -84,13 +87,19 @@ function CallSummary({ call, projects, tz }: { call: AssistantRun["calls"][numbe
     }
     if (call.endpoint === "contacts") return `Contact cards: ${Number(res.updated ?? 0)} filled, ${Number(res.failed ?? 0)} failed`;
     if (call.endpoint === "profiles") return `Organization profiles: ${Number(res.updated ?? 0)} written, ${Number(res.failed ?? 0)} failed`;
+    if (call.endpoint === "rows")
+      return `${projects.get(str(req.projectId)) ?? "Campaign"}: ${Number(res.created ?? 0)} prospects added, ${Number(res.skipped ?? 0)} skipped`;
     if (call.endpoint === "contact-photos") return `Photos: ${Number(res.updated ?? 0)} set, ${Number(res.failed ?? 0)} failed`;
     return call.endpoint;
   })();
   const skipped = list(res.skipped);
   const itemErrors = list(res.results).filter((r) => r.ok === false);
   const pending = list(res.pendingRevisions);
-  const subjects = [...list(req.revisions).map((r) => `New version: ${str(r.subject)}`), ...list(req.emails).map((e) => `Email: ${str(e.subject)}`)];
+  const subjects = [
+    ...list(req.revisions).map((r) => `New version: ${str(r.subject)}`),
+    ...list(req.emails).map((e) => `Email: ${str(e.subject)}`),
+    ...list(req.rows).map((r) => `Prospect: ${str(r.organization)}${r.contactName ? ` (${str(r.contactName)})` : ""}, ${str(r.reason)}`),
+  ];
   const ok = !failed && !skipped.length && !itemErrors.length && !pending.length;
   return (
     <details>

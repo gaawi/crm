@@ -35,6 +35,8 @@ import { POST as proposalsRoute } from "@/app/api/assistant-agent/proposals/rout
 import { GET as contactsRoute, POST as contactsPost } from "@/app/api/assistant-agent/contacts/route";
 import { POST as runsRoute } from "@/app/api/assistant-agent/runs/route";
 import { GET as historyRoute } from "@/app/api/assistant-agent/history/route";
+import { POST as rowsRoute } from "@/app/api/assistant-agent/rows/route";
+import { GET as prospectsRoute } from "@/app/api/assistant-agent/prospects/route";
 import { listAssistantRuns } from "@/lib/assistant/runs";
 import { postponeDraft, requestDraftChanges } from "@/lib/assistant/drafts";
 import { addSheetRow, createSheet } from "@/lib/queries/booking";
@@ -329,8 +331,80 @@ describe("campaign assistant API", () => {
       expect((await historyRoute(new Request(`${URL_BASE}/history`, { headers: { authorization: `Bearer ${TOKEN}` } }))).status).toBe(400);
     });
 
+    it("prospector: finds people we wrote to, adds them as rows without duplicates, logged in its own run", async () => {
+      const { projectId } = await seed(1);
+      const [{ id: me }] = await sql<{ id: string }[]>`select id from gmail_accounts where email = 'me@example.com'`;
+      const send = async (gid: string, to: string, subject: string, body: string) => {
+        const [m] = await sql<{ id: string }[]>`
+          insert into messages (account_id, gmail_message_id, gmail_thread_id, rfc822_message_id, direction, from_email, subject, snippet, body_text, sent_at)
+          values (${me}, ${gid}, ${`t-${gid}`}, ${`<${gid}@test>`}, 'outbound', 'me@example.com', ${subject}, ${subject}, ${body}, now() - interval '30 days')
+          returning id`;
+        await sql`insert into message_participants (message_id, role, email) values (${m.id}, 'from', 'me@example.com'), (${m.id}, 'to', ${to})`;
+      };
+      await send("p1", "series@chamber.org", "Chamber series proposal", "Our piano quintet for your chamber music series");
+      await send("p2", "friend@family.com", "Dinner", "See you on Sunday");
+      await send("p3", "booker0@venue0.org", "Season", "Chamber music"); // already a row
+
+      const headers = { authorization: `Bearer ${TOKEN}` };
+      const all = await (await prospectsRoute(new Request(`${URL_BASE}/prospects?projectId=${projectId}`, { headers }))).json();
+      expect(all.prospects.map((p: { email: string }) => p.email).sort()).toEqual(["friend@family.com", "series@chamber.org"]);
+      const chamber = await (await prospectsRoute(new Request(`${URL_BASE}/prospects?projectId=${projectId}&q=chamber`, { headers }))).json();
+      expect(chamber.prospects).toEqual([expect.objectContaining({ email: "series@chamber.org", sentCount: 1, receivedCount: 0, mailboxes: ["me@example.com"] })]);
+
+      const run = (body: unknown, extra: Record<string, string> = {}) =>
+        runsRoute(new Request(`${URL_BASE}/runs`, { method: "POST", headers: { "content-type": "application/json", ...headers, ...extra }, body: JSON.stringify(body) }));
+      const { runId: writer } = await (await run({ action: "start" })).json();
+      const { runId: prospector } = await (await run({ action: "start", agent: "prospector" })).json();
+      const rows = (body: unknown) =>
+        rowsRoute(
+          new Request(`${URL_BASE}/rows`, {
+            method: "POST",
+            headers: { "content-type": "application/json", ...headers, "x-assistant-run": prospector },
+            body: JSON.stringify(body),
+          }),
+        );
+      const res = await (
+        await rows({
+          projectId,
+          rows: [
+            { organization: "Chamber Series", website: "https://www.chamber.org/season", email: "series@chamber.org", contactName: "Ann Lee", source: "email_history", reason: "We wrote in 2025 — no answer yet." },
+            { organization: "Venue 0", source: "research", reason: "Same organization as an existing row." },
+            { organization: "Other name", website: "chamber.org/about", source: "owner_list", reason: "Same website as the first one." },
+            { organization: "New Festival", source: "nope", reason: "x" },
+          ],
+        })
+      ).json();
+      expect(res.created).toBe(1);
+      expect(res.results.map((r: { ok: boolean; error?: string }) => r.ok || r.error)).toEqual([
+        true,
+        "Already in this campaign (same organization).",
+        "Already in this campaign (same organization).",
+        expect.stringMatching(/^source/),
+      ]);
+      const [row] = await sql<{ section: string; notes: string; stage: string }[]>`
+        select sheet_section as section, notes, stage from opportunities where id = ${res.results[0].opportunityId}`;
+      expect(row).toEqual({ section: "Nuevos · de nuestro email", stage: "lead", notes: "Origen: de nuestro email. We wrote in 2025, no answer yet." });
+
+      // Both runs open at once: the call went to the prospector's run, not the writer's.
+      const logged = await listAssistantRuns();
+      expect(logged.find((r) => r.id === prospector)).toMatchObject({ agent: "prospector", calls: [expect.objectContaining({ endpoint: "rows" })] });
+      expect(logged.find((r) => r.id === writer)).toMatchObject({ agent: "writer", calls: [] });
+    });
+
+    it("stops new emails at the daily limit (all campaigns together)", async () => {
+      const { projectId, ids } = await seed(3);
+      await sql`insert into app_settings (key, value) values ('assistant', '{"dailyEmails": 2}') on conflict (key) do update set value = excluded.value`;
+      const ctx = await (await get()).json();
+      expect(ctx.limits.dailyEmails).toEqual({ limit: 2, used: 0, left: 2 });
+      const body = await (await post({ projectId, emails: ids.map((id, i) => email(id, i)) })).json();
+      expect(body.created.emails).toHaveLength(2);
+      expect(body.skipped[0].reason).toMatch(/Daily limit/);
+      expect((await (await get()).json()).limits.dailyEmails).toEqual({ limit: 2, used: 2, left: 0 });
+    });
+
     it("caps new emails at 10 per campaign per call", async () => {
       const { projectId, ids } = await seed(12);
+      await sql`insert into app_settings (key, value) values ('assistant', '{"dailyEmails": 50}') on conflict (key) do update set value = excluded.value`;
       const body = await (await post({ projectId, emails: ids.map((id, i) => email(id, i)) })).json();
       expect(body.created.emails).toHaveLength(10);
       expect(body.skipped.filter((s: { reason: string }) => /Limit of 10/.test(s.reason))).toHaveLength(2);
