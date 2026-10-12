@@ -391,6 +391,47 @@ describe("campaign assistant API", () => {
       expect(logged.find((r) => r.id === writer)).toMatchObject({ agent: "writer", calls: [] });
     });
 
+    it("owner lists: rows with their section, follow-up date and history, then the prospector attaches the contact", async () => {
+      const { projectId } = await seed(1);
+      const headers = { "content-type": "application/json", authorization: `Bearer ${TOKEN}` };
+      const rows = async (body: unknown) =>
+        (await rowsRoute(new Request(`${URL_BASE}/rows`, { method: "POST", headers, body: JSON.stringify(body) }))).json();
+      const added = await rows({
+        projectId,
+        rows: [
+          {
+            organization: "Louisville Chamber Music",
+            source: "owner_list",
+            reason: "Lista de Josefina 2025: concierto confirmado.",
+            section: "Listas · 1 ya tocamos",
+            followUpAt: "2027-03-15",
+            returning: true,
+          },
+          { organization: "Bad Section", source: "owner_list", reason: "x", section: "Otra" },
+        ],
+      });
+      expect(added.results.map((r: { ok: boolean }) => r.ok)).toEqual([true, false]);
+      const rowId = added.results[0].opportunityId;
+      const [row] = await sql<{ section: string; followUpAt: string; isReturning: boolean; contactId: string | null }[]>`
+        select sheet_section as section, follow_up_at::text as follow_up_at, is_returning, contact_id from opportunities where id = ${rowId}`;
+      expect(row).toEqual({ section: "Listas · 1 ya tocamos", followUpAt: "2027-03-15", isReturning: true, contactId: null });
+
+      // The prospector found the person: attached to the row.
+      const attached = await rows({
+        projectId,
+        rows: [
+          { opportunityId: rowId, email: "Director@LouisvilleCM.org", contactName: "Pat Doe", role: "Executive Director", reason: "Equipo en su web." },
+          { opportunityId: rowId, email: "other@louisvillecm.org", reason: "Second time." },
+        ],
+      });
+      expect(attached.results[0]).toMatchObject({ ok: true, opportunityId: rowId });
+      expect(attached.results[1]).toMatchObject({ ok: false, error: expect.stringMatching(/already has a contact/) });
+      const [contact] = await sql<{ name: string; role: string; email: string; inProject: boolean }[]>`
+        select c.name, c.role, ce.email, exists (select 1 from contact_projects cp where cp.contact_id = c.id and cp.project_id = ${projectId}) as in_project
+          from opportunities op join contacts c on c.id = op.contact_id join contact_emails ce on ce.contact_id = c.id where op.id = ${rowId}`;
+      expect(contact).toEqual({ name: "Pat Doe", role: "Executive Director", email: "director@louisvillecm.org", inProject: true });
+    });
+
     it("stops new emails at the daily limit (all campaigns together)", async () => {
       const { projectId, ids } = await seed(3);
       await sql`insert into app_settings (key, value) values ('assistant', '{"dailyEmails": 2}') on conflict (key) do update set value = excluded.value`;

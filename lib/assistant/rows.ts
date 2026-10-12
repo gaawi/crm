@@ -2,6 +2,7 @@ import "server-only";
 import { z } from "zod";
 import { sql } from "@/lib/db";
 import { addSheetRow } from "@/lib/queries/booking";
+import { addContactEmail, createContact, getContactByEmail } from "@/lib/queries/contacts";
 import { noEmDash } from "@/lib/text/no-em-dash";
 import { isValidEmail, normalizeEmail } from "@/lib/utils";
 
@@ -41,7 +42,28 @@ const rowSchema = z.object({
   source: z.enum(Object.keys(ROW_SOURCES) as [keyof typeof ROW_SOURCES]),
   /** Why it fits the campaign's brief (one or two sentences, with the evidence). */
   reason: z.string().trim().min(1).max(1000),
-  notes: optText(2000),
+  notes: optText(4000),
+  /** Owner lists only: the list section ("Listas · 1 ya tocamos"…), a follow-up date and whether we played there. */
+  section: z
+    .string()
+    .trim()
+    .max(120)
+    .refine((v) => v.startsWith("Listas"), "section must start with \"Listas\".")
+    .nullish(),
+  followUpAt: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "followUpAt must be YYYY-MM-DD.")
+    .nullish(),
+  returning: z.boolean().nullish(),
+});
+
+/** Completing an existing row of the campaign (e.g. from an owner list) with the person to write to. */
+const attachSchema = z.object({
+  opportunityId: z.guid(),
+  email: z.string().trim().max(320),
+  contactName: optText(200),
+  role: optText(200),
+  reason: z.string().trim().min(1).max(1000),
 });
 
 const bodySchema = z.object({ projectId: z.guid(), rows: z.array(z.unknown()).min(1).max(MAX_ROWS_PER_CALL) });
@@ -86,6 +108,10 @@ export async function applyRows(body: unknown): Promise<{ ok: true; created: num
 
   const results: RowItemResult[] = [];
   for (const [index, raw] of parsed.data.rows.entries()) {
+    if (raw && typeof raw === "object" && "opportunityId" in raw) {
+      results.push(await attachContact(projectId, index, raw));
+      continue;
+    }
     const item = rowSchema.safeParse(raw);
     if (!item.success) {
       const issue = item.error.issues[0];
@@ -129,7 +155,9 @@ export async function applyRows(body: unknown): Promise<{ ok: true; created: num
         role: row.role,
         phone: row.phone,
         kind: (project.kind as never) ?? undefined,
-        section: ROW_SOURCES[row.source],
+        section: row.section ?? ROW_SOURCES[row.source],
+        followUpAt: row.followUpAt ?? null,
+        returning: row.returning ?? false,
         notes: [`Origen: ${ROW_SOURCES[row.source].replace("Nuevos · ", "")}. ${noEmDash(row.reason)}`, row.notes].filter(Boolean).join("\n\n"),
       });
       const [created] = await sql<{ contactId: string | null }[]>`select contact_id from opportunities where id = ${opportunityId}`;
@@ -140,4 +168,65 @@ export async function applyRows(body: unknown): Promise<{ ok: true; created: num
   }
   const created = results.filter((r) => r.ok).length;
   return { ok: true, created, skipped: results.length - created, results };
+}
+
+/**
+ * Give an existing row its contact: the person found for it (verified
+ * address). An existing contact with that address is linked; otherwise one is
+ * created in the row's organization. A row whose contact has no address gets
+ * this one; a row whose contact already has an address is left alone.
+ */
+async function attachContact(projectId: string, index: number, raw: unknown): Promise<RowItemResult> {
+  const item = attachSchema.safeParse(raw);
+  if (!item.success) {
+    const issue = item.error.issues[0];
+    return { index, ok: false, error: issue ? `${issue.path.join(".") || "row"}: ${issue.message}` : "Invalid row." };
+  }
+  const input = item.data;
+  const email = normalizeEmail(input.email);
+  if (!isValidEmail(email)) return { index, ok: false, error: `email: invalid address ${input.email}` };
+  const [row] = await sql<{ id: string; contactId: string | null; organizationId: string | null; notes: string | null; contactHasEmail: boolean }[]>`
+    select op.id, op.contact_id, op.organization_id, op.notes,
+           exists (select 1 from contact_emails ce where ce.contact_id = op.contact_id) as contact_has_email
+      from opportunities op where op.id = ${input.opportunityId} and op.project_id = ${projectId}`;
+  if (!row) return { index, ok: false, error: "Not a row of this campaign." };
+  const [elsewhere] = await sql<{ id: string }[]>`
+    select op.id from opportunities op join contact_emails ce on ce.contact_id = op.contact_id
+     where op.project_id = ${projectId} and ce.email = ${email} and op.id <> ${row.id} limit 1`;
+  if (elsewhere) return { index, ok: false, error: "That address is already another row of this campaign.", existingOpportunityId: elsewhere.id };
+
+  let contactId: string;
+  try {
+    if (row.contactId && row.contactHasEmail) return { index, ok: false, error: "The row already has a contact with an address (fill its card with POST contacts)." };
+    if (row.contactId) {
+      await addContactEmail(row.contactId, email);
+      contactId = row.contactId;
+    } else {
+      const existing = await getContactByEmail(email);
+      contactId =
+        existing?.id ??
+        (await createContact({
+          name: input.contactName ?? null,
+          emails: [email],
+          organizationId: row.organizationId,
+          role: input.role ?? null,
+          status: "lead",
+          projectIds: [projectId],
+        }));
+      await sql`update opportunities set contact_id = ${contactId} where id = ${row.id}`;
+    }
+  } catch (e) {
+    return { index, ok: false, error: e instanceof Error ? e.message : "Could not attach the contact." };
+  }
+  await sql`
+    update contacts
+       set name = coalesce(nullif(btrim(name), ''), ${input.contactName ?? null}),
+           role = coalesce(nullif(btrim(role), ''), ${input.role ?? null}),
+           organization_id = coalesce(organization_id, ${row.organizationId}),
+           status = case when status = 'new' then 'lead' else status end
+     where id = ${contactId}`;
+  await sql`insert into contact_projects (contact_id, project_id) values (${contactId}, ${projectId}) on conflict do nothing`;
+  const note = `Contacto añadido por el buscador: ${noEmDash(input.reason)}`;
+  await sql`update opportunities set notes = ${row.notes ? `${row.notes}\n\n${note}` : note} where id = ${row.id}`;
+  return { index, ok: true, opportunityId: row.id, contactId };
 }
