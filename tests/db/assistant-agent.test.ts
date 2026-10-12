@@ -41,7 +41,7 @@ import { listAssistantRuns } from "@/lib/assistant/runs";
 import { postponeDraft, requestDraftChanges } from "@/lib/assistant/drafts";
 import { addSheetRow, createSheet } from "@/lib/queries/booking";
 import { getDraft } from "@/lib/queries/drafts";
-import { listAssistantActions, listAssistantDrafts, releasePostponed } from "@/lib/queries/assistant";
+import { addActionComment, listAssistantActions, listAssistantDrafts, releasePostponed } from "@/lib/queries/assistant";
 import { insertAccount, useTestDatabase } from "../setup/db";
 
 describe("campaign assistant API", () => {
@@ -76,13 +76,27 @@ describe("campaign assistant API", () => {
     await sql`update projects set assistant_active = ${active}, assistant_brief = 'Book 10 dates in autumn' where id = ${projectId}`;
     const ids: string[] = [];
     for (let i = 0; i < rows; i++) {
-      ids.push(await addSheetRow({ projectId, organization: `Venue ${i}`, email: `booker${i}@venue${i}.org`, contactName: `Booker ${i}`, phone: "+34600000000" }));
+      ids.push(
+        await addSheetRow({
+          projectId,
+          organization: `Venue ${i}`,
+          email: `booker${i}@venue${i}.org`,
+          contactName: `Booker ${i}`,
+          phone: "+34600000000",
+        }),
+      );
     }
     if (cards) await fillCards();
     return { projectId, ids };
   }
 
-  const email = (opportunityId: string, n = 0) => ({ opportunityId, subject: `Autumn dates ${n}`, body: `Hello ${n}`, reason: "No reply in 12 days", priority: 1 });
+  const email = (opportunityId: string, n = 0) => ({
+    opportunityId,
+    subject: `Autumn dates ${n}`,
+    body: `Hello ${n}`,
+    reason: "No reply in 12 days",
+    priority: 1,
+  });
 
   beforeEach(() => {
     process.env.ASSISTANT_API_TOKEN = TOKEN;
@@ -140,7 +154,11 @@ describe("campaign assistant API", () => {
 
     it("creates proposals with a reason and an email action, never sends, and skips rows that already have one", async () => {
       const { projectId, ids } = await seed(2);
-      const res = await post({ projectId, emails: [email(ids[0]), email(ids[1], 1)], actions: [{ opportunityId: ids[0], kind: "whatsapp", title: "WhatsApp Booker 0" }] });
+      const res = await post({
+        projectId,
+        emails: [email(ids[0]), email(ids[1], 1)],
+        actions: [{ opportunityId: ids[0], kind: "whatsapp", title: "WhatsApp Booker 0" }],
+      });
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.created.emails).toHaveLength(2);
@@ -150,7 +168,9 @@ describe("campaign assistant API", () => {
       expect(state.sent).toHaveLength(0);
 
       // Second run: same rows → skipped (open), duplicate action skipped too.
-      const again = await (await post({ projectId, emails: [email(ids[0])], actions: [{ opportunityId: ids[0], kind: "whatsapp", title: "Again" }] })).json();
+      const again = await (
+        await post({ projectId, emails: [email(ids[0])], actions: [{ opportunityId: ids[0], kind: "whatsapp", title: "Again" }] })
+      ).json();
       expect(again.created.emails).toHaveLength(0);
       expect(again.created.actions).toHaveLength(0);
       expect(again.skipped.map((s: { type: string }) => s.type).sort()).toEqual(["action", "email"]);
@@ -196,7 +216,8 @@ describe("campaign assistant API", () => {
 
     it("fills the contact card before any email: empty fields only, with sources", async () => {
       const { projectId, ids } = await seed(1, true, false);
-      const contacts = (path = "") => contactsRoute(new Request(`${URL_BASE}/contacts?projectId=${projectId}${path}`, { headers: { authorization: `Bearer ${TOKEN}` } }));
+      const contacts = (path = "") =>
+        contactsRoute(new Request(`${URL_BASE}/contacts?projectId=${projectId}${path}`, { headers: { authorization: `Bearer ${TOKEN}` } }));
       const cards = (body: unknown) =>
         contactsPost(
           new Request(`${URL_BASE}/contacts`, {
@@ -286,7 +307,14 @@ describe("campaign assistant API", () => {
       const both = await (
         await post({
           projectId,
-          revisions: [{ draftId, subject: "Re: Collaboration - ADAR 2027", body: "A concrete idea", noteToOwner: "Checked their season: they program dance — and music." }],
+          revisions: [
+            {
+              draftId,
+              subject: "Re: Collaboration - ADAR 2027",
+              body: "A concrete idea",
+              noteToOwner: "Checked their season: they program dance — and music.",
+            },
+          ],
           emails: [email(ids[1], 1)],
         })
       ).json();
@@ -307,6 +335,65 @@ describe("campaign assistant API", () => {
       expect(logged.calls[1].response).toMatchObject({ pendingRevisions: [{ draftId }] });
     });
 
+    it("answers the owner's comments on actions before any new email, and updates or closes the action", async () => {
+      const { projectId, ids } = await seed(3);
+      const made = await (
+        await post({
+          projectId,
+          actions: [
+            { opportunityId: ids[0], kind: "call", title: "Llamar a Booker 0", reason: "No contesta emails", priority: 1 },
+            { opportunityId: ids[1], kind: "whatsapp", title: "WhatsApp a Booker 1", priority: 2 },
+          ],
+        })
+      ).json();
+      const [callId, whatsappId] = made.created.actions.map((a: { actionId: string }) => a.actionId);
+
+      expect(await addActionComment(callId, "Ya le llamé ayer, mejor un email con las fechas de marzo")).toBe(true);
+      expect(await addActionComment(whatsappId, "Espera a enero")).toBe(true);
+      const [listed] = (await listAssistantActions({ projectId })).filter((a) => a.id === callId);
+      expect(listed.comments).toEqual([expect.objectContaining({ by: "owner", text: "Ya le llamé ayer, mejor un email con las fechas de marzo" })]);
+
+      // The writer sees them in its context, and as owner lessons.
+      const ctx = await (await get()).json();
+      expect(ctx.projects[0].actionComments.map((c: { actionId: string }) => c.actionId).sort()).toEqual([callId, whatsappId].sort());
+      expect(ctx.ownerLessons.map((l: { request: string }) => l.request)).toContain("Espera a enero");
+
+      // New emails wait until every comment is answered.
+      const blocked = await (await post({ projectId, emails: [email(ids[2], 2)] })).json();
+      expect(blocked.created.emails).toHaveLength(0);
+      expect(blocked.skipped[0].reason).toMatch(/comments on actions first/);
+      expect(blocked.pendingActionComments).toHaveLength(2);
+
+      // Answers in one call: one closes the action, one updates it; then the email goes through.
+      const answered = await (
+        await post({
+          projectId,
+          actionReplies: [
+            { actionId: callId, reply: "Entendido — preparo el email con las fechas de marzo y cierro la llamada.", status: "done" },
+            { actionId: whatsappId, reply: "De acuerdo, lo retomo en enero.", title: "WhatsApp a Booker 1 en enero", priority: 3 },
+            { actionId: whatsappId, reply: "Twice" },
+          ],
+          emails: [email(ids[2], 2)],
+        })
+      ).json();
+      expect(answered.created.actionReplies).toEqual([{ actionId: callId }, { actionId: whatsappId }]);
+      expect(answered.skipped).toEqual([
+        expect.objectContaining({ type: "actionReply", ref: whatsappId, reason: expect.stringMatching(/No comment/) }),
+      ]);
+      expect(answered.pendingActionComments).toEqual([]);
+      expect(answered.created.emails).toHaveLength(1);
+
+      const [call] = await sql<{ status: string; completedAt: Date | null; comments: { by: string; text: string }[] }[]>`
+        select status, completed_at, comments from assistant_actions where id = ${callId}`;
+      expect(call.status).toBe("done");
+      expect(call.completedAt).not.toBeNull();
+      expect(call.comments.map((c) => c.by)).toEqual(["owner", "assistant"]);
+      expect(call.comments[1].text).toBe("Entendido, preparo el email con las fechas de marzo y cierro la llamada.");
+      const [whatsapp] = await listAssistantActions({ projectId }).then((all) => all.filter((a) => a.id === whatsappId));
+      expect(whatsapp).toMatchObject({ status: "open", title: "WhatsApp a Booker 1 en enero", priority: 3 });
+      expect((await (await get()).json()).projects[0].actionComments).toEqual([]);
+    });
+
     it("history: every earlier email with the person, from all mailboxes, mass emails summarised", async () => {
       await seed(1);
       const josefina = await insertAccount("josefina@example.com", { monitor_only: true });
@@ -320,7 +407,14 @@ describe("campaign assistant API", () => {
         for (const e of to) await sql`insert into message_participants (message_id, role, email) values (${m.id}, 'to', ${e})`;
       };
       await add(josefina, "j1", "josefina@example.com", ["booker0@venue0.org"], "Season 2025", "2025-01-10T10:00:00Z");
-      await add(me, "g1", "me@example.com", ["booker0@venue0.org", "a@x.org", "b@x.org", "c@x.org", "d@x.org", "e@x.org"], "Newsletter", "2025-06-01T10:00:00Z");
+      await add(
+        me,
+        "g1",
+        "me@example.com",
+        ["booker0@venue0.org", "a@x.org", "b@x.org", "c@x.org", "d@x.org", "e@x.org"],
+        "Newsletter",
+        "2025-06-01T10:00:00Z",
+      );
       await add(me, "g2", "booker0@venue0.org", ["me@example.com"], "Re: Season 2025", "2025-01-12T10:00:00Z");
       const [{ contactId }] = await sql<{ contactId: string }[]>`select contact_id from contact_emails where email = 'booker0@venue0.org'`;
       const res = await historyRoute(new Request(`${URL_BASE}/history?contactId=${contactId}`, { headers: { authorization: `Bearer ${TOKEN}` } }));
@@ -349,10 +443,18 @@ describe("campaign assistant API", () => {
       const all = await (await prospectsRoute(new Request(`${URL_BASE}/prospects?projectId=${projectId}`, { headers }))).json();
       expect(all.prospects.map((p: { email: string }) => p.email).sort()).toEqual(["friend@family.com", "series@chamber.org"]);
       const chamber = await (await prospectsRoute(new Request(`${URL_BASE}/prospects?projectId=${projectId}&q=chamber`, { headers }))).json();
-      expect(chamber.prospects).toEqual([expect.objectContaining({ email: "series@chamber.org", sentCount: 1, receivedCount: 0, mailboxes: ["me@example.com"] })]);
+      expect(chamber.prospects).toEqual([
+        expect.objectContaining({ email: "series@chamber.org", sentCount: 1, receivedCount: 0, mailboxes: ["me@example.com"] }),
+      ]);
 
       const run = (body: unknown, extra: Record<string, string> = {}) =>
-        runsRoute(new Request(`${URL_BASE}/runs`, { method: "POST", headers: { "content-type": "application/json", ...headers, ...extra }, body: JSON.stringify(body) }));
+        runsRoute(
+          new Request(`${URL_BASE}/runs`, {
+            method: "POST",
+            headers: { "content-type": "application/json", ...headers, ...extra },
+            body: JSON.stringify(body),
+          }),
+        );
       const { runId: writer } = await (await run({ action: "start" })).json();
       const { runId: prospector } = await (await run({ action: "start", agent: "prospector" })).json();
       const rows = (body: unknown) =>
@@ -367,7 +469,14 @@ describe("campaign assistant API", () => {
         await rows({
           projectId,
           rows: [
-            { organization: "Chamber Series", website: "https://www.chamber.org/season", email: "series@chamber.org", contactName: "Ann Lee", source: "email_history", reason: "We wrote in 2025 — no answer yet." },
+            {
+              organization: "Chamber Series",
+              website: "https://www.chamber.org/season",
+              email: "series@chamber.org",
+              contactName: "Ann Lee",
+              source: "email_history",
+              reason: "We wrote in 2025 — no answer yet.",
+            },
             { organization: "Venue 0", source: "research", reason: "Same organization as an existing row." },
             { organization: "Other name", website: "chamber.org/about", source: "owner_list", reason: "Same website as the first one." },
             { organization: "New Festival", source: "nope", reason: "x" },
@@ -383,7 +492,11 @@ describe("campaign assistant API", () => {
       ]);
       const [row] = await sql<{ section: string; notes: string; stage: string }[]>`
         select sheet_section as section, notes, stage from opportunities where id = ${res.results[0].opportunityId}`;
-      expect(row).toEqual({ section: "Nuevos · de nuestro email", stage: "lead", notes: "Origen: de nuestro email. We wrote in 2025, no answer yet." });
+      expect(row).toEqual({
+        section: "Nuevos · de nuestro email",
+        stage: "lead",
+        notes: "Origen: de nuestro email. We wrote in 2025, no answer yet.",
+      });
 
       // Both runs open at once: the call went to the prospector's run, not the writer's.
       const logged = await listAssistantRuns();
@@ -420,7 +533,13 @@ describe("campaign assistant API", () => {
       const attached = await rows({
         projectId,
         rows: [
-          { opportunityId: rowId, email: "Director@LouisvilleCM.org", contactName: "Pat Doe", role: "Executive Director", reason: "Equipo en su web." },
+          {
+            opportunityId: rowId,
+            email: "Director@LouisvilleCM.org",
+            contactName: "Pat Doe",
+            role: "Executive Director",
+            reason: "Equipo en su web.",
+          },
           { opportunityId: rowId, email: "other@louisvillecm.org", reason: "Second time." },
         ],
       });
@@ -432,7 +551,18 @@ describe("campaign assistant API", () => {
       expect(contact).toEqual({ name: "Pat Doe", role: "Executive Director", email: "director@louisvillecm.org", inProject: true });
 
       // The prospector's view of the list rows: full notes, filters.
-      await rows({ projectId, rows: [{ organization: "Old Festival", source: "owner_list", reason: "2019.", section: "Listas · 4 antiguos (2016-2019)", notes: "Contacto antiguo: x@old.org" }] });
+      await rows({
+        projectId,
+        rows: [
+          {
+            organization: "Old Festival",
+            source: "owner_list",
+            reason: "2019.",
+            section: "Listas · 4 antiguos (2016-2019)",
+            notes: "Contacto antiguo: x@old.org",
+          },
+        ],
+      });
       const list = async (q: string) =>
         (await rowsListRoute(new Request(`${URL_BASE}/rows?projectId=${projectId}${q}`, { headers: { authorization: `Bearer ${TOKEN}` } }))).json();
       const lists = await list("&section=Listas");
@@ -485,7 +615,11 @@ describe("campaign assistant API", () => {
       await requestDraftChanges(draftId, "Shorter, mention the October dates");
       expect(await getDraft(draftId)).toMatchObject({ status: "changes_requested", revisionRequest: "Shorter, mention the October dates" });
       const ctx = await (await get()).json();
-      expect(ctx.projects[0].changesRequested[0]).toMatchObject({ draftId, revisionRequest: "Shorter, mention the October dates", subject: "Autumn dates 0" });
+      expect(ctx.projects[0].changesRequested[0]).toMatchObject({
+        draftId,
+        revisionRequest: "Shorter, mention the October dates",
+        subject: "Autumn dates 0",
+      });
       expect(await listAssistantDrafts({ projectId })).toHaveLength(0);
 
       const res = await (await post({ projectId, revisions: [{ draftId, subject: "October dates", body: "Short version" }] })).json();
@@ -499,7 +633,9 @@ describe("campaign assistant API", () => {
 
     it("postponed drafts and actions come back on their day", async () => {
       const { projectId, ids } = await seed(1);
-      const { created } = await (await post({ projectId, emails: [email(ids[0])], actions: [{ kind: "task", title: "Update the tech rider" }] })).json();
+      const { created } = await (
+        await post({ projectId, emails: [email(ids[0])], actions: [{ kind: "task", title: "Update the tech rider" }] })
+      ).json();
       const draftId = created.emails[0].draftId;
       await postponeDraft(draftId, "2099-01-01");
       expect(await listAssistantDrafts({ projectId })).toHaveLength(0);

@@ -83,7 +83,7 @@ function CallSummary({ call, projects, tz }: { call: AssistantRun["calls"][numbe
     if (failed) return `${call.endpoint}: error ${call.status}`;
     if (call.endpoint === "proposals") {
       const created = obj(res.created);
-      return `${projects.get(str(req.projectId)) ?? "Campaign"}: ${list(created.revisions).length} new versions, ${list(created.emails).length} emails, ${list(created.actions).length} actions`;
+      return `${projects.get(str(req.projectId)) ?? "Campaign"}: ${list(created.revisions).length} new versions, ${list(created.actionReplies).length} answers to comments, ${list(created.emails).length} emails, ${list(created.actions).length} actions`;
     }
     if (call.endpoint === "contacts") return `Contact cards: ${Number(res.updated ?? 0)} filled, ${Number(res.failed ?? 0)} failed`;
     if (call.endpoint === "profiles") return `Organization profiles: ${Number(res.updated ?? 0)} written, ${Number(res.failed ?? 0)} failed`;
@@ -94,9 +94,10 @@ function CallSummary({ call, projects, tz }: { call: AssistantRun["calls"][numbe
   })();
   const skipped = list(res.skipped);
   const itemErrors = list(res.results).filter((r) => r.ok === false);
-  const pending = list(res.pendingRevisions);
+  const pending = [...list(res.pendingRevisions), ...list(res.pendingActionComments)];
   const subjects = [
     ...list(req.revisions).map((r) => `New version: ${str(r.subject)}`),
+    ...list(req.actionReplies).map((r) => `Answer to your comment: ${str(r.reply)}`),
     ...list(req.emails).map((e) => `Email: ${str(e.subject)}`),
     ...list(req.rows).map((r) => `Prospect: ${str(r.organization)}${r.contactName ? ` (${str(r.contactName)})` : ""}, ${str(r.reason)}`),
   ];
@@ -112,7 +113,7 @@ function CallSummary({ call, projects, tz }: { call: AssistantRun["calls"][numbe
         <span className="min-w-0 flex-1">
           {title}
           {skipped.length ? <span className="text-warning"> · {skipped.length} skipped</span> : null}
-          {pending.length ? <span className="text-warning"> · {pending.length} change requests still waiting</span> : null}
+          {pending.length ? <span className="text-warning"> · {pending.length} requests or comments still waiting</span> : null}
         </span>
         <span className="shrink-0 text-[11px] text-subtle">{time}</span>
       </summary>

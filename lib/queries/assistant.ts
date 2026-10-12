@@ -71,7 +71,7 @@ export async function listAssistantActions(
              'displayName', coalesce(nullif(btrim(c.name), ''),
                (select ce.email from contact_emails ce where ce.contact_id = c.id order by ce.is_primary desc, ce.created_at limit 1), 'Unknown'),
              'phone', c.phone, 'whatsapp', c.whatsapp, 'photoUrl', c.photo_url) end as contact,
-           aa.kind, aa.title, aa.reason, aa.priority, aa.status, aa.postponed_until, aa.draft_id, aa.created_at, aa.completed_at
+           aa.kind, aa.title, aa.reason, aa.priority, aa.status, aa.postponed_until, aa.draft_id, aa.created_at, aa.completed_at, aa.comments
       from assistant_actions aa
       join projects p on p.id = aa.project_id
       left join opportunities op on op.id = aa.opportunity_id
@@ -138,6 +138,15 @@ export async function setActionStatus(id: string, status: AssistantActionStatus,
            postponed_until = ${status === "postponed" ? (postponedUntil ?? null) : null}::date,
            completed_at = ${status === "done" || status === "dismissed" ? sql`now()` : sql`null`}
      where id = ${id}`;
+  return result.count === 1;
+}
+
+/** The owner's comment on an action: the assistant answers it on its next run. */
+export async function addActionComment(id: string, text: string): Promise<boolean> {
+  if (!ID.test(id)) return false;
+  const comment = { at: new Date().toISOString(), by: "owner", text };
+  const result = await sql`
+    update assistant_actions set comments = comments || ${sql.json([comment])}::jsonb where id = ${id}`;
   return result.count === 1;
 }
 

@@ -11,6 +11,16 @@ export type AssistantPriority = 1 | 2 | 3;
 
 export const ASSISTANT_ACTION_KINDS: AssistantActionKind[] = ["email", "call", "whatsapp", "task"];
 
+/** A comment on a suggested action: the owner's, or the assistant's answer. */
+export interface AssistantActionComment {
+  at: string;
+  by: "owner" | "assistant";
+  text: string;
+}
+
+/** Longest comment the owner can write on an action. */
+export const MAX_ACTION_COMMENT = 2000;
+
 /** Most emails the routine may propose for one campaign in one call. */
 export const MAX_EMAILS_PER_CALL = 10;
 
@@ -37,6 +47,8 @@ export interface AssistantAction {
   draftId: string | null;
   createdAt: string;
   completedAt: string | null;
+  /** Oldest first. The assistant answers on its next run while the last one is the owner's. */
+  comments: AssistantActionComment[];
 }
 
 /** A sheet's assistant settings. */

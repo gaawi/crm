@@ -5,12 +5,12 @@ import { z } from "zod";
 import { requireSession } from "@/lib/auth";
 import { approveAndSend, discardDraft, DraftError, saveDraftEdits } from "@/lib/ai/approvals";
 import { draftErrorMessage } from "@/lib/ai/draft";
-import { DEFAULT_POSTPONE_DAYS } from "@/lib/assistant/types";
+import { DEFAULT_POSTPONE_DAYS, MAX_ACTION_COMMENT } from "@/lib/assistant/types";
 import { addDays, todayIn } from "@/lib/dates";
 import { env } from "@/lib/env";
 import { getDraft } from "@/lib/queries/drafts";
 import { postponeDraft, requestDraftChanges } from "@/lib/assistant/drafts";
-import { setActionStatus, syncDraftAction, updateAssistantSettings } from "@/lib/queries/assistant";
+import { addActionComment, setActionStatus, syncDraftAction, updateAssistantSettings } from "@/lib/queries/assistant";
 import { DraftError as GmailDraftError } from "@/lib/sync/drafts";
 
 /**
@@ -117,6 +117,18 @@ export async function setAssistantActionStatusAction(
   if (!(await setActionStatus(id, status, day))) return { ok: false, error: "Action not found." };
   refresh();
   return { ok: true };
+}
+
+/** A comment on a suggested action: the assistant answers it, and updates or closes the action, on its next run. */
+export async function commentAssistantActionAction(id: string, comment: string): Promise<Result> {
+  await requireSession();
+  if (!uuid.safeParse(id).success) return { ok: false, error: "Invalid action" };
+  const text = String(comment ?? "").trim();
+  if (!text) return { ok: false, error: "Write a comment." };
+  if (text.length > MAX_ACTION_COMMENT) return { ok: false, error: `Keep it under ${MAX_ACTION_COMMENT} characters.` };
+  if (!(await addActionComment(id, text))) return { ok: false, error: "Action not found." };
+  refresh();
+  return { ok: true, message: "The assistant will answer on its next review." };
 }
 
 /** Active / Paused switch of a campaign's assistant. */

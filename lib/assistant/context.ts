@@ -3,7 +3,7 @@ import { cardMissing, type CardField } from "@/lib/contacts/card";
 import { sql } from "@/lib/db";
 import { todayIn } from "@/lib/dates";
 import { env } from "@/lib/env";
-import { MAX_EMAILS_PER_CALL } from "@/lib/assistant/types";
+import { MAX_EMAILS_PER_CALL, type AssistantActionComment } from "@/lib/assistant/types";
 import { dailyEmailBudget } from "@/lib/assistant/proposals";
 import { OPEN_DRAFT_STATUSES, releasePostponed } from "@/lib/queries/assistant";
 
@@ -65,8 +65,8 @@ export interface AssistantContext {
     dailyEmails: { limit: number; used: number; left: number };
   };
   /**
-   * What the owner corrected in earlier emails ("Request changes"), newest
-   * first: standing lessons on tone, facts and how to present us, to apply to
+   * What the owner corrected in earlier emails ("Request changes") and wrote
+   * on suggested actions, newest first: standing lessons on tone, facts and how to present us, to apply to
    * every email, not only the one they were written for.
    */
   ownerLessons: { date: string; contact: string | null; campaign: string | null; request: string }[];
@@ -100,6 +100,20 @@ export interface AssistantContext {
       body: string;
     }[];
     templates: { id: string; name: string; trigger: string; subject: string; body: string }[];
+    /**
+     * Suggested actions the owner commented on and the assistant has not
+     * answered yet (the last comment is the owner's): answer each one in
+     * proposals.actionReplies, before any new email.
+     */
+    actionComments: {
+      actionId: string;
+      opportunityId: string | null;
+      kind: string;
+      title: string;
+      reason: string | null;
+      status: string;
+      comments: AssistantActionComment[];
+    }[];
   }[];
 }
 
@@ -219,6 +233,21 @@ export async function buildAssistantContext(now: Date = new Date()): Promise<Ass
        order by d.created_at desc
        limit 300`;
 
+    const commented = await sql<
+      {
+        actionId: string;
+        opportunityId: string | null;
+        kind: string;
+        title: string;
+        reason: string | null;
+        status: string;
+        comments: AssistantActionComment[];
+      }[]
+    >`
+      select id as action_id, opportunity_id, kind, title, reason, status, comments from assistant_actions
+       where project_id = ${sheet.id} and jsonb_array_length(comments) > 0 and comments -> -1 ->> 'by' = 'owner'
+       order by (comments -> -1 ->> 'at') limit 100`;
+
     const templates = await sql<{ id: string; name: string; trigger: string; subject: string; body: string }[]>`
       select id, name, trigger, subject, body from email_templates
        where project_id = ${sheet.id} or project_id is null
@@ -276,6 +305,7 @@ export async function buildAssistantContext(now: Date = new Date()): Promise<Ass
           body: d.body.slice(0, 20_000),
         })),
       templates: templates.map((t) => ({ ...t, body: t.body.slice(0, 4000) })),
+      actionComments: commented,
     });
   }
 
@@ -287,6 +317,14 @@ export async function buildAssistantContext(now: Date = new Date()): Promise<Ass
       left join opportunities op on op.id = d.opportunity_id
       left join projects p on p.id = op.project_id
      where nullif(btrim(r->>'note'), '') is not null and (r->>'at')::timestamptz > now() - interval '120 days'
+    union all
+    select (k->>'at')::timestamptz, nullif(btrim(c.name), ''), p.name, k->>'text'
+      from assistant_actions aa
+      cross join lateral jsonb_array_elements(aa.comments) k
+      join projects p on p.id = aa.project_id
+      left join opportunities op on op.id = aa.opportunity_id
+      left join contacts c on c.id = coalesce(aa.contact_id, op.contact_id)
+     where k->>'by' = 'owner' and nullif(btrim(k->>'text'), '') is not null and (k->>'at')::timestamptz > now() - interval '120 days'
      order by 1 desc
      limit 80`;
 

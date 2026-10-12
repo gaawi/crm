@@ -15,7 +15,7 @@ import { errorMessage } from "@/lib/utils";
  * What the daily routine writes back (POST /api/assistant-agent/proposals).
  * Emails become proposals in the approval queue (never sent here), each with
  * an 'email' action; other actions are recommendations; revisions answer the
- * owner's "Request changes".
+ * owner's "Request changes"; actionReplies answer the owner's comments on actions.
  */
 
 const text = (max: number) => z.string().trim().min(1).max(max);
@@ -60,6 +60,24 @@ export const proposalsSchema = z.object({
     )
     .max(50)
     .default([]),
+  /** Answers to the owner's comments on suggested actions (context.projects[].actionComments). */
+  actionReplies: z
+    .array(
+      z.object({
+        actionId: z.guid(),
+        /** For the owner, in Spanish: what you did or found, or a question back. */
+        reply: text(2000),
+        /** Optional updates the comment calls for. */
+        title: text(200).optional(),
+        reason: z.string().trim().max(1000).optional(),
+        kind: z.enum(ASSISTANT_ACTION_KINDS as ["email", "call", "whatsapp", "task"]).optional(),
+        priority: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional(),
+        /** "done" or "dismissed" closes the action (e.g. the owner already did it, or an email replaces it); "open" keeps it. */
+        status: z.enum(["open", "done", "dismissed"]).optional(),
+      }),
+    )
+    .max(100)
+    .default([]),
 });
 
 export type ProposalsInput = z.input<typeof proposalsSchema>;
@@ -71,10 +89,13 @@ export interface ProposalsResult {
     emails: { opportunityId: string; draftId: string; actionId: string }[];
     actions: { actionId: string; opportunityId: string | null }[];
     revisions: { draftId: string }[];
+    actionReplies: { actionId: string }[];
   };
-  skipped: { type: "email" | "action" | "revision"; ref: string | null; reason: string }[];
+  skipped: { type: "email" | "action" | "revision" | "actionReply"; ref: string | null; reason: string }[];
   /** Change requests of this campaign still without a new version after this call. */
   pendingRevisions: { draftId: string; revisionRequest: string | null }[];
+  /** The owner's comments on actions of this campaign still without an answer after this call. */
+  pendingActionComments: { actionId: string; comment: string }[];
 }
 
 export class ProposalError extends Error {
@@ -180,9 +201,10 @@ export async function applyProposals(raw: unknown): Promise<ProposalsResult> {
   const result: ProposalsResult = {
     ok: true,
     projectId: sheet.id,
-    created: { emails: [], actions: [], revisions: [] },
+    created: { emails: [], actions: [], revisions: [], actionReplies: [] },
     skipped: [],
     pendingRevisions: [],
+    pendingActionComments: [],
   };
 
   // First, the new versions of emails the owner asked to change.
@@ -209,14 +231,46 @@ export async function applyProposals(raw: unknown): Promise<ProposalsResult> {
     }
   }
 
-  // The owner's change requests come before any new email.
+  // Then the answers to the owner's comments on suggested actions.
+  for (const answer of input.actionReplies) {
+    const [action] = await sql<{ id: string; awaiting: boolean }[]>`
+      select id, (jsonb_array_length(comments) > 0 and comments -> -1 ->> 'by' = 'owner') as awaiting
+        from assistant_actions where id = ${answer.actionId} and project_id = ${sheet.id}`;
+    if (!action) {
+      result.skipped.push({ type: "actionReply", ref: answer.actionId, reason: "Not an action of this campaign." });
+      continue;
+    }
+    if (!action.awaiting) {
+      result.skipped.push({ type: "actionReply", ref: answer.actionId, reason: "No comment of the owner waits for an answer on this action." });
+      continue;
+    }
+    const reply = { at: new Date().toISOString(), by: "assistant", text: noEmDash(answer.reply) };
+    const closing = answer.status === "done" || answer.status === "dismissed";
+    await sql`
+      update assistant_actions
+         set comments = comments || ${sql.json([reply])}::jsonb,
+             title = coalesce(${answer.title ? noEmDash(answer.title) : null}, title),
+             reason = coalesce(${answer.reason !== undefined ? noEmDash(answer.reason) : null}, reason),
+             kind = coalesce(${answer.kind ?? null}, kind),
+             priority = coalesce(${answer.priority ?? null}::smallint, priority),
+             status = coalesce(${answer.status ?? null}, status),
+             postponed_until = case when ${answer.status ?? null}::text is null then postponed_until else null end,
+             completed_at = case when ${closing} then now() when ${answer.status ?? null}::text = 'open' then null else completed_at end
+       where id = ${action.id}`;
+    result.created.actionReplies.push({ actionId: action.id });
+  }
+
+  // The owner's change requests and comments come before any new email.
+  result.pendingActionComments = await sql<{ actionId: string; comment: string }[]>`
+    select id as action_id, comments -> -1 ->> 'text' as comment from assistant_actions
+     where project_id = ${sheet.id} and jsonb_array_length(comments) > 0 and comments -> -1 ->> 'by' = 'owner'`;
   result.pendingRevisions = await sql<{ draftId: string; revisionRequest: string | null }[]>`
     select distinct d.id as draft_id, d.revision_request
       from email_drafts d
       left join opportunities op on op.id = d.opportunity_id
      where d.status = 'changes_requested'
        and (op.project_id = ${sheet.id} or exists (select 1 from assistant_actions aa where aa.draft_id = d.id and aa.project_id = ${sheet.id}))`;
-  const blocked = result.pendingRevisions.length > 0;
+  const blocked = result.pendingRevisions.length > 0 || result.pendingActionComments.length > 0;
 
   let budget = (await dailyEmailBudget()).left;
 
@@ -232,7 +286,9 @@ export async function applyProposals(raw: unknown): Promise<ProposalsResult> {
       result.skipped.push({
         type: "email",
         ref: row.id,
-        reason: `Answer the owner's change requests first (revisions[]): ${result.pendingRevisions.length} still waiting. No new email until they are done.`,
+        reason: result.pendingRevisions.length
+          ? `Answer the owner's change requests first (revisions[]): ${result.pendingRevisions.length} still waiting. No new email until they are done.`
+          : `Answer the owner's comments on actions first (actionReplies[]): ${result.pendingActionComments.length} still waiting. No new email until they are answered.`,
       });
       continue;
     }
