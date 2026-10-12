@@ -5,7 +5,8 @@ import { DraftError, proposeEmail } from "@/lib/ai/approvals";
 import { applyDraftRevision } from "@/lib/assistant/drafts";
 import { ASSISTANT_ACTION_KINDS, MAX_EMAILS_PER_CALL } from "@/lib/assistant/types";
 import { OPEN_DRAFT_STATUSES } from "@/lib/queries/assistant";
-import { cleanHeaderText } from "@/lib/gmail/mime";
+import { cleanHeaderText, replySubject } from "@/lib/gmail/mime";
+import { noEmDash } from "@/lib/text/no-em-dash";
 import { errorMessage } from "@/lib/utils";
 
 /**
@@ -46,7 +47,15 @@ export const proposalsSchema = z.object({
     .max(100)
     .default([]),
   revisions: z
-    .array(z.object({ draftId: z.guid(), subject: text(300), body: text(20_000) }))
+    .array(
+      z.object({
+        draftId: z.guid(),
+        subject: text(300),
+        body: text(20_000),
+        /** For the owner, shown on the card: what was researched or changed, or a question back. */
+        noteToOwner: z.string().trim().max(2000).nullish(),
+      }),
+    )
     .max(50)
     .default([]),
 });
@@ -62,6 +71,8 @@ export interface ProposalsResult {
     revisions: { draftId: string }[];
   };
   skipped: { type: "email" | "action" | "revision"; ref: string | null; reason: string }[];
+  /** Change requests of this campaign still without a new version after this call. */
+  pendingRevisions: { draftId: string; revisionRequest: string | null }[];
 }
 
 export class ProposalError extends Error {
@@ -82,7 +93,7 @@ interface RowInfo {
   orgName: string | null;
 }
 
-/** "RE: Fwd: Hola  mundo" → "hola mundo": the subject a thread is known by. */
+/** "RE: Fwd: Hola  mundo" → "hola mundo": the subject a thread is known by (dashes of any kind alike). */
 export function threadSubject(subject: string | null): string {
   let text = cleanHeaderText(subject).toLowerCase();
   for (;;) {
@@ -90,7 +101,11 @@ export function threadSubject(subject: string | null): string {
     if (next === text) break;
     text = next;
   }
-  return text.replace(/\s+/g, " ").trim();
+  // Any kind of dash counts the same: "Collaboration – ADAR" and "Collaboration - ADAR" are one thread.
+  return text
+    .replace(/[\u2010-\u2015\u2212-]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 /**
@@ -100,7 +115,7 @@ export function threadSubject(subject: string | null): string {
  * its own mailbox); otherwise any account, and the reply then goes out from
  * that account when it can send (not monitor-only), so the thread stays one.
  */
-async function threadToContinue(contactId: string, subject: string, sendAccountId: string | null): Promise<{ messageId: string; accountId: string | null } | null> {
+async function threadToContinue(contactId: string, subject: string, sendAccountId: string | null): Promise<{ messageId: string; accountId: string | null; subject: string | null } | null> {
   const wanted = threadSubject(subject);
   if (!wanted) return null;
   const messages = await sql<{ id: string; subject: string | null; accountId: string; writable: boolean }[]>`
@@ -114,10 +129,10 @@ async function threadToContinue(contactId: string, subject: string, sendAccountI
      limit 200`;
   const matching = messages.filter((m) => threadSubject(m.subject) === wanted);
   const own = matching.find((m) => m.accountId === sendAccountId);
-  if (own) return { messageId: own.id, accountId: sendAccountId };
+  if (own) return { messageId: own.id, accountId: sendAccountId, subject: own.subject };
   const elsewhere = matching[0];
   if (!elsewhere) return null;
-  return { messageId: elsewhere.id, accountId: elsewhere.writable ? elsewhere.accountId : sendAccountId };
+  return { messageId: elsewhere.id, accountId: elsewhere.writable ? elsewhere.accountId : sendAccountId, subject: elsewhere.subject };
 }
 
 export async function applyProposals(raw: unknown): Promise<ProposalsResult> {
@@ -143,7 +158,39 @@ export async function applyProposals(raw: unknown): Promise<ProposalsResult> {
     : [];
   const byId = new Map(rows.map((r) => [r.id, r]));
 
-  const result: ProposalsResult = { ok: true, projectId: sheet.id, created: { emails: [], actions: [], revisions: [] }, skipped: [] };
+  const result: ProposalsResult = { ok: true, projectId: sheet.id, created: { emails: [], actions: [], revisions: [] }, skipped: [], pendingRevisions: [] };
+
+  // First, the new versions of emails the owner asked to change.
+  for (const revision of input.revisions) {
+    const [owned] = await sql<{ replySubject: string | null }[]>`
+      select (select m.subject from messages m where m.id = d.reply_to_message_id) as reply_subject
+        from email_drafts d
+       where d.id = ${revision.draftId}
+         and (exists (select 1 from assistant_actions aa where aa.draft_id = d.id and aa.project_id = ${sheet.id})
+              or exists (select 1 from opportunities op where op.id = d.opportunity_id and op.project_id = ${sheet.id}))`;
+    if (!owned) {
+      result.skipped.push({ type: "revision", ref: revision.draftId, reason: "Not an email of this campaign." });
+      continue;
+    }
+    try {
+      // A reply keeps its thread's subject exactly (Gmail threads by subject too).
+      const subject = owned.replySubject ? replySubject(owned.replySubject) || revision.subject : revision.subject;
+      await applyDraftRevision(revision.draftId, { subject, body: revision.body });
+      if (revision.noteToOwner) await sql`update email_drafts set assistant_reason = ${noEmDash(revision.noteToOwner)} where id = ${revision.draftId}`;
+      result.created.revisions.push({ draftId: revision.draftId });
+    } catch (e) {
+      result.skipped.push({ type: "revision", ref: revision.draftId, reason: e instanceof DraftError ? e.message : errorMessage(e) });
+    }
+  }
+
+  // The owner's change requests come before any new email.
+  result.pendingRevisions = await sql<{ draftId: string; revisionRequest: string | null }[]>`
+    select distinct d.id as draft_id, d.revision_request
+      from email_drafts d
+      left join opportunities op on op.id = d.opportunity_id
+     where d.status = 'changes_requested'
+       and (op.project_id = ${sheet.id} or exists (select 1 from assistant_actions aa where aa.draft_id = d.id and aa.project_id = ${sheet.id}))`;
+  const blocked = result.pendingRevisions.length > 0;
 
   // Emails: at most MAX_EMAILS_PER_CALL new proposals, never a second one for a row or contact.
   const seen = new Set<string>();
@@ -151,6 +198,14 @@ export async function applyProposals(raw: unknown): Promise<ProposalsResult> {
     const row = byId.get(email.opportunityId);
     if (!row) {
       result.skipped.push({ type: "email", ref: email.opportunityId, reason: "Not a row of this campaign." });
+      continue;
+    }
+    if (blocked) {
+      result.skipped.push({
+        type: "email",
+        ref: row.id,
+        reason: `Answer the owner's change requests first (revisions[]): ${result.pendingRevisions.length} still waiting. No new email until they are done.`,
+      });
       continue;
     }
     if (seen.has(row.id) || (row.contactId && seen.has(row.contactId))) {
@@ -196,7 +251,7 @@ export async function applyProposals(raw: unknown): Promise<ProposalsResult> {
         contactId: row.contactId,
         accountId: thread ? thread.accountId : sheet.sendAccountId,
         replyToMessageId: thread?.messageId ?? null,
-        subject: email.subject,
+        subject: thread ? replySubject(thread.subject) || email.subject : email.subject,
         body: email.body,
         opportunityId: row.id,
         purpose: email.purpose ?? (row.stage === "lead" ? "outreach" : "follow_up"),
@@ -258,25 +313,6 @@ export async function applyProposals(raw: unknown): Promise<ProposalsResult> {
       })}
       returning id`;
     result.created.actions.push({ actionId: created.id, opportunityId: row?.id ?? null });
-  }
-
-  // New versions of emails the owner asked to change.
-  for (const revision of input.revisions) {
-    const [owned] = await sql`
-      select 1 from email_drafts d
-       where d.id = ${revision.draftId}
-         and (exists (select 1 from assistant_actions aa where aa.draft_id = d.id and aa.project_id = ${sheet.id})
-              or exists (select 1 from opportunities op where op.id = d.opportunity_id and op.project_id = ${sheet.id}))`;
-    if (!owned) {
-      result.skipped.push({ type: "revision", ref: revision.draftId, reason: "Not an email of this campaign." });
-      continue;
-    }
-    try {
-      await applyDraftRevision(revision.draftId, { subject: revision.subject, body: revision.body });
-      result.created.revisions.push({ draftId: revision.draftId });
-    } catch (e) {
-      result.skipped.push({ type: "revision", ref: revision.draftId, reason: e instanceof DraftError ? e.message : errorMessage(e) });
-    }
   }
 
   await sql`update projects set assistant_last_run_at = now() where id = ${sheet.id}`;

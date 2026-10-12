@@ -59,6 +59,12 @@ export interface AssistantContext {
   today: string;
   timezone: string;
   limits: { maxEmailsPerProjectPerCall: number };
+  /**
+   * What the owner corrected in earlier emails ("Request changes"), newest
+   * first: standing lessons on tone, facts and how to present us, to apply to
+   * every email, not only the one they were written for.
+   */
+  ownerLessons: { date: string; contact: string | null; campaign: string | null; request: string }[];
   projects: {
     id: string;
     name: string;
@@ -228,11 +234,23 @@ export async function buildAssistantContext(now: Date = new Date()): Promise<Ass
     });
   }
 
+  const lessons = await sql<{ date: Date; contact: string | null; campaign: string | null; request: string }[]>`
+    select (r->>'at')::timestamptz as date, nullif(btrim(c.name), '') as contact, p.name as campaign, r->>'note' as request
+      from email_drafts d
+      cross join lateral jsonb_array_elements(d.revisions) r
+      left join contacts c on c.id = d.contact_id
+      left join opportunities op on op.id = d.opportunity_id
+      left join projects p on p.id = op.project_id
+     where nullif(btrim(r->>'note'), '') is not null and (r->>'at')::timestamptz > now() - interval '120 days'
+     order by 1 desc
+     limit 80`;
+
   return {
     generatedAt: now.toISOString(),
     today,
     timezone,
     limits: { maxEmailsPerProjectPerCall: MAX_EMAILS_PER_CALL },
+    ownerLessons: lessons.map((l) => ({ date: iso(l.date)!, contact: l.contact, campaign: l.campaign, request: clip(l.request, 2000)! })),
     projects,
   };
 }

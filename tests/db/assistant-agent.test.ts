@@ -33,6 +33,8 @@ import { sql } from "@/lib/db";
 import { GET as contextRoute } from "@/app/api/assistant-agent/context/route";
 import { POST as proposalsRoute } from "@/app/api/assistant-agent/proposals/route";
 import { GET as contactsRoute, POST as contactsPost } from "@/app/api/assistant-agent/contacts/route";
+import { POST as runsRoute } from "@/app/api/assistant-agent/runs/route";
+import { listAssistantRuns } from "@/lib/assistant/runs";
 import { postponeDraft, requestDraftChanges } from "@/lib/assistant/drafts";
 import { addSheetRow, createSheet } from "@/lib/queries/booking";
 import { getDraft } from "@/lib/queries/drafts";
@@ -241,6 +243,65 @@ describe("campaign assistant API", () => {
       const third = await (await post({ projectId, emails: [email(ids[0])] })).json();
       expect(third.created.emails).toHaveLength(1);
       expect((await (await contacts("&unresearched=1")).json()).contacts).toHaveLength(0);
+    });
+
+    it("answers the owner's change requests before any new email, keeps a reply's subject and records the run", async () => {
+      const { projectId, ids } = await seed(2);
+      const run = (body: unknown) =>
+        runsRoute(
+          new Request(`${URL_BASE}/runs`, {
+            method: "POST",
+            headers: { "content-type": "application/json", authorization: `Bearer ${TOKEN}` },
+            body: JSON.stringify(body),
+          }),
+        );
+      const { runId } = await (await run({ action: "start", model: "test-model" })).json();
+      expect(runId).toBeTruthy();
+
+      // A reply in a thread (its subject has an en dash, which must survive).
+      const [{ id: accountId }] = await sql<{ id: string }[]>`select id from gmail_accounts`;
+      const [msg] = await sql<{ id: string }[]>`
+        insert into messages (account_id, gmail_message_id, gmail_thread_id, rfc822_message_id, direction, from_email, subject, snippet, sent_at)
+        values (${accountId}, 'r1', 't-r1', '<r1@test>', 'inbound', 'booker0@venue0.org', 'Collaboration – ADAR 2027', 'Hi', now() - interval '1 day')
+        returning id`;
+      await sql`insert into message_participants (message_id, role, email) values (${msg.id}, 'from', 'booker0@venue0.org'), (${msg.id}, 'to', 'me@example.com')`;
+      const first = await (await post({ projectId, emails: [{ ...email(ids[0]), subject: "Re: Collaboration - ADAR 2027" }] })).json();
+      const draftId = first.created.emails[0].draftId;
+      expect((await getDraft(draftId))?.subject).toBe("Re: Collaboration – ADAR 2027");
+
+      await requestDraftChanges(draftId, "Never say producer; propose a concrete idea");
+      const ctx = await (await get()).json();
+      expect(ctx.ownerLessons[0]).toMatchObject({ request: "Never say producer; propose a concrete idea", contact: "Booker 0" });
+
+      // A new email while the change request is unanswered: refused.
+      const blocked = await (await post({ projectId, emails: [email(ids[1], 1)] })).json();
+      expect(blocked.created.emails).toHaveLength(0);
+      expect(blocked.skipped[0].reason).toMatch(/change requests first/);
+      expect(blocked.pendingRevisions).toEqual([{ draftId, revisionRequest: "Never say producer; propose a concrete idea" }]);
+
+      // Revision and new email in one call: the revision goes first, then the email is accepted.
+      const both = await (
+        await post({
+          projectId,
+          revisions: [{ draftId, subject: "Re: Collaboration - ADAR 2027", body: "A concrete idea", noteToOwner: "Checked their season: they program dance — and music." }],
+          emails: [email(ids[1], 1)],
+        })
+      ).json();
+      expect(both.created.revisions).toEqual([{ draftId }]);
+      expect(both.created.emails).toHaveLength(1);
+      expect(both.pendingRevisions).toEqual([]);
+      expect(await getDraft(draftId)).toMatchObject({
+        subject: "Re: Collaboration – ADAR 2027",
+        body: "A concrete idea",
+        assistantReason: "Checked their season: they program dance, and music.",
+      });
+
+      await run({ action: "finish", report: "Revisé 1 email y propuse 1." });
+      const [logged] = await listAssistantRuns();
+      expect(logged).toMatchObject({ id: runId, model: "test-model", report: "Revisé 1 email y propuse 1." });
+      expect(logged.finishedAt).not.toBeNull();
+      expect(logged.calls.map((c) => c.endpoint)).toEqual(["proposals", "proposals", "proposals"]);
+      expect(logged.calls[1].response).toMatchObject({ pendingRevisions: [{ draftId }] });
     });
 
     it("caps new emails at 10 per campaign per call", async () => {

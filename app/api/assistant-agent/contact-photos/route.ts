@@ -1,4 +1,4 @@
-import { assistantApiGuard } from "@/lib/assistant/auth";
+import { assistantWrite } from "@/lib/assistant/write-route";
 import { applyContactPhotos, ContactPhotosError } from "@/lib/assistant/contact-photos";
 
 /**
@@ -14,22 +14,12 @@ import { applyContactPhotos, ContactPhotosError } from "@/lib/assistant/contact-
 
 export const maxDuration = 60;
 
-const noStore = { "Cache-Control": "no-store" };
-
 export async function POST(request: Request) {
-  const denied = await assistantApiGuard(request);
-  if (denied) return denied;
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return Response.json({ error: "Send a JSON body." }, { status: 400 });
-  }
-  try {
-    return Response.json(await applyContactPhotos(body), { headers: noStore });
-  } catch (error) {
-    if (error instanceof ContactPhotosError) return Response.json({ error: error.message }, { status: error.status });
-    console.error("Assistant contact photos failed:", error);
-    return Response.json({ error: "Could not save the photos." }, { status: 500 });
-  }
+  return assistantWrite(
+    request,
+    "contact-photos",
+    applyContactPhotos,
+    (e): e is ContactPhotosError => e instanceof ContactPhotosError,
+    "Could not save the photos.",
+  );
 }

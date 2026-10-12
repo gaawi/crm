@@ -1,4 +1,4 @@
-import { assistantApiGuard } from "@/lib/assistant/auth";
+import { assistantWrite } from "@/lib/assistant/write-route";
 import { applyProposals, ProposalError } from "@/lib/assistant/proposals";
 
 /**
@@ -11,19 +11,5 @@ import { applyProposals, ProposalError } from "@/lib/assistant/proposals";
 export const maxDuration = 120;
 
 export async function POST(request: Request) {
-  const denied = await assistantApiGuard(request);
-  if (denied) return denied;
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return Response.json({ error: "Send a JSON body." }, { status: 400 });
-  }
-  try {
-    return Response.json(await applyProposals(body), { headers: { "Cache-Control": "no-store" } });
-  } catch (error) {
-    if (error instanceof ProposalError) return Response.json({ error: error.message }, { status: error.status });
-    console.error("Assistant proposals failed:", error);
-    return Response.json({ error: "Could not save the proposals." }, { status: 500 });
-  }
+  return assistantWrite(request, "proposals", applyProposals, (e): e is ProposalError => e instanceof ProposalError, "Could not save the proposals.");
 }

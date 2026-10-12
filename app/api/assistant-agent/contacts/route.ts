@@ -1,4 +1,5 @@
 import { assistantApiGuard } from "@/lib/assistant/auth";
+import { assistantWrite } from "@/lib/assistant/write-route";
 import { applyContactCards, ContactCardsError } from "@/lib/assistant/contact-cards";
 import { ContactPhotosError, listContactsForProject } from "@/lib/assistant/contact-photos";
 
@@ -44,19 +45,11 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const denied = await assistantApiGuard(request);
-  if (denied) return denied;
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return Response.json({ error: "Send a JSON body." }, { status: 400 });
-  }
-  try {
-    return Response.json(await applyContactCards(body), { headers: noStore });
-  } catch (error) {
-    if (error instanceof ContactCardsError) return Response.json({ error: error.message }, { status: error.status });
-    console.error("Assistant contact cards failed:", error);
-    return Response.json({ error: "Could not save the contact cards." }, { status: 500 });
-  }
+  return assistantWrite(
+    request,
+    "contacts",
+    applyContactCards,
+    (e): e is ContactCardsError => e instanceof ContactCardsError,
+    "Could not save the contact cards.",
+  );
 }
