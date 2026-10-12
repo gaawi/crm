@@ -34,6 +34,7 @@ import { GET as contextRoute } from "@/app/api/assistant-agent/context/route";
 import { POST as proposalsRoute } from "@/app/api/assistant-agent/proposals/route";
 import { GET as contactsRoute, POST as contactsPost } from "@/app/api/assistant-agent/contacts/route";
 import { POST as runsRoute } from "@/app/api/assistant-agent/runs/route";
+import { GET as historyRoute } from "@/app/api/assistant-agent/history/route";
 import { listAssistantRuns } from "@/lib/assistant/runs";
 import { postponeDraft, requestDraftChanges } from "@/lib/assistant/drafts";
 import { addSheetRow, createSheet } from "@/lib/queries/booking";
@@ -302,6 +303,30 @@ describe("campaign assistant API", () => {
       expect(logged.finishedAt).not.toBeNull();
       expect(logged.calls.map((c) => c.endpoint)).toEqual(["proposals", "proposals", "proposals"]);
       expect(logged.calls[1].response).toMatchObject({ pendingRevisions: [{ draftId }] });
+    });
+
+    it("history: every earlier email with the person, from all mailboxes, mass emails summarised", async () => {
+      await seed(1);
+      const josefina = await insertAccount("josefina@example.com", { monitor_only: true });
+      const [{ id: me }] = await sql<{ id: string }[]>`select id from gmail_accounts where email = 'me@example.com'`;
+      const add = async (account: string, gid: string, from: string, to: string[], subject: string, at: string) => {
+        const [m] = await sql<{ id: string }[]>`
+          insert into messages (account_id, gmail_message_id, gmail_thread_id, rfc822_message_id, direction, from_email, subject, snippet, body_text, sent_at)
+          values (${account}, ${gid}, ${`t-${gid}`}, ${`<${gid}@test>`}, ${from.startsWith("booker") ? "inbound" : "outbound"}, ${from}, ${subject}, ${subject}, ${`Body of ${subject}`}, ${at})
+          returning id`;
+        await sql`insert into message_participants (message_id, role, email) values (${m.id}, 'from', ${from})`;
+        for (const e of to) await sql`insert into message_participants (message_id, role, email) values (${m.id}, 'to', ${e})`;
+      };
+      await add(josefina, "j1", "josefina@example.com", ["booker0@venue0.org"], "Season 2025", "2025-01-10T10:00:00Z");
+      await add(me, "g1", "me@example.com", ["booker0@venue0.org", "a@x.org", "b@x.org", "c@x.org", "d@x.org", "e@x.org"], "Newsletter", "2025-06-01T10:00:00Z");
+      await add(me, "g2", "booker0@venue0.org", ["me@example.com"], "Re: Season 2025", "2025-01-12T10:00:00Z");
+      const [{ contactId }] = await sql<{ contactId: string }[]>`select contact_id from contact_emails where email = 'booker0@venue0.org'`;
+      const res = await historyRoute(new Request(`${URL_BASE}/history?contactId=${contactId}`, { headers: { authorization: `Bearer ${TOKEN}` } }));
+      const body = await res.json();
+      expect(body.messages.map((m: { subject: string }) => m.subject)).toEqual(["Newsletter", "Re: Season 2025", "Season 2025"]);
+      expect(body.messages[0]).toMatchObject({ bulk: true, recipients: 6, to: ["(mass email to 6 people)"] });
+      expect(body.messages[2]).toMatchObject({ mailbox: "josefina@example.com", direction: "outbound", body: "Body of Season 2025" });
+      expect((await historyRoute(new Request(`${URL_BASE}/history`, { headers: { authorization: `Bearer ${TOKEN}` } }))).status).toBe(400);
     });
 
     it("caps new emails at 10 per campaign per call", async () => {
