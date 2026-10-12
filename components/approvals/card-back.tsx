@@ -1,17 +1,38 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowDownLeft, ArrowUpRight, ExternalLink, Mail, MessageCircle, Music, Phone, Search, StickyNote, Target } from "lucide-react";
+import {
+  ArrowDownLeft,
+  ArrowUpRight,
+  ExternalLink,
+  Landmark,
+  Mail,
+  MessageCircle,
+  Music,
+  Phone,
+  Search,
+  StickyNote,
+  Target,
+  Users,
+} from "lucide-react";
 import { ContactAvatar } from "@/components/contact-avatar";
 import { OrgProfileCard } from "@/components/organizations/profile-card";
 import { ProjectDot, StatusBadge, TagBadge } from "@/components/ui/badge";
 import { formatPhone, telHref, whatsappUrl } from "@/lib/booking/phone";
 import { CARD_FIELD_LABEL } from "@/lib/contacts/card";
+import { PROFILE_KIND_LABEL } from "@/lib/organizations/profile";
 import { formatDate, formatRelative } from "@/lib/dates";
 import type { EmailDraft } from "@/lib/types";
 import type { CardInfo } from "./card-info";
 
-const ACTIVITY_LABEL: Record<string, string> = { call: "Call", whatsapp: "WhatsApp", meeting: "Meeting", email: "Email", note: "Note", status: "Status" };
+const ACTIVITY_LABEL: Record<string, string> = {
+  call: "Call",
+  whatsapp: "WhatsApp",
+  meeting: "Meeting",
+  email: "Email",
+  note: "Note",
+  status: "Status",
+};
 
 /** The back of a flashcard: the contact card, the goal, recent emails and calls, the organization. */
 export function CardBack({ draft, info, timezone }: { draft: EmailDraft; info: CardInfo; timezone: string }) {
@@ -48,7 +69,8 @@ export function CardBack({ draft, info, timezone }: { draft: EmailDraft; info: C
               ))}
             </div>
             <p className="mt-1 text-[12px] text-subtle">
-              {c.messageCount} {c.messageCount === 1 ? "email" : "emails"} · last {c.lastContactedAt ? formatRelative(new Date(c.lastContactedAt), timezone) : "never"}
+              {c.messageCount} {c.messageCount === 1 ? "email" : "emails"} · last{" "}
+              {c.lastContactedAt ? formatRelative(new Date(c.lastContactedAt), timezone) : "never"}
               {c.followUpAt ? ` · follow up ${formatDate(new Date(`${c.followUpAt}T12:00:00Z`), timezone)}` : ""}
             </p>
           </div>
@@ -87,6 +109,8 @@ export function CardBack({ draft, info, timezone }: { draft: EmailDraft; info: C
         </section>
       ) : null}
 
+      <SeriesAtAGlance organization={draft.organization ?? null} />
+
       {g ? (
         <section className="rounded-lg bg-surface-2 px-3 py-2">
           <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-subtle">
@@ -117,7 +141,12 @@ export function CardBack({ draft, info, timezone }: { draft: EmailDraft; info: C
             {info.musician.website ? (
               <>
                 {" · "}
-                <a href={info.musician.website} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 hover:underline">
+                <a
+                  href={info.musician.website}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-0.5 hover:underline"
+                >
                   web <ExternalLink className="size-3" aria-hidden />
                 </a>
               </>
@@ -197,6 +226,97 @@ export function CardBack({ draft, info, timezone }: { draft: EmailDraft; info: C
         </Link>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * What the owner checks before approving: what kind of series it is, the
+ * hall (type, size, piano), which kinds of groups they present and who has
+ * played there. Says plainly what is still unknown.
+ */
+function SeriesAtAGlance({ organization }: { organization: EmailDraft["organization"] | null }) {
+  const p = organization?.profile;
+  if (!organization || !p) {
+    return (
+      <section className="rounded-lg border border-dashed border-border px-3 py-2 text-[12.5px] text-muted">
+        No profile of {organization?.name ?? "the organization"} yet: the kind of series, the hall and who has played there appear here once
+        researched.
+      </section>
+    );
+  }
+  const missing = [!p.venues?.length && "the hall", !p.formats?.length && "the groups they present", !p.artists?.length && "who has played"].filter(
+    Boolean,
+  ) as string[];
+  return (
+    <section className="flex flex-col gap-2 rounded-lg bg-surface-2 px-3 py-2.5">
+      <div>
+        <p className="flex flex-wrap items-baseline gap-x-1.5">
+          <span className="text-[15px] font-semibold">{organization.name}</span>
+          {p.kind ? (
+            <span className="rounded-full bg-surface px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-brand">
+              {PROFILE_KIND_LABEL[p.kind]}
+            </span>
+          ) : null}
+        </p>
+        {p.tagline ? <p className="text-muted">{p.tagline}</p> : null}
+      </div>
+
+      {p.venues?.length ? (
+        <div>
+          <p className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-subtle">
+            <Landmark className="size-3.5" aria-hidden /> {p.venues.length === 1 ? "Hall" : "Halls"}
+          </p>
+          <ul className="mt-0.5 flex flex-col gap-0.5">
+            {p.venues.map((v, i) => (
+              <li key={i}>
+                <span className="font-medium">{v.name}</span>
+                {[v.type, v.capacity ? `${v.capacity} seats` : null, v.notes].filter(Boolean).map((x, j) => (
+                  <span key={j} className="text-muted">
+                    {" · "}
+                    {x}
+                  </span>
+                ))}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {p.formats?.length ? (
+        <div>
+          <p className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-subtle">
+            <Users className="size-3.5" aria-hidden /> Groups they present
+          </p>
+          <ul className="mt-1 flex flex-wrap gap-1">
+            {p.formats.map((f, i) => (
+              <li key={i} className="rounded-full bg-surface px-2 py-0.5 text-[12px]">
+                {f}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {p.artists?.length ? (
+        <div>
+          <p className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-subtle">
+            <Music className="size-3.5" aria-hidden /> Who has played
+          </p>
+          <ul className="mt-0.5 flex flex-col gap-0.5">
+            {p.artists.slice(0, 10).map((a, i) => (
+              <li key={i}>
+                <span className="font-medium">{a.name}</span>
+                {a.formation ? <span className="text-muted"> · {a.formation}</span> : null}
+                {a.date ? <span className="text-subtle"> · {a.date}</span> : null}
+              </li>
+            ))}
+          </ul>
+          {p.artists.length > 10 ? <p className="text-[12px] text-subtle">and {p.artists.length - 10} more in the full profile below</p> : null}
+        </div>
+      ) : null}
+
+      {missing.length ? <p className="text-[12px] text-warning">Not researched yet: {missing.join(", ")}.</p> : null}
+    </section>
   );
 }
 

@@ -19,7 +19,19 @@ import {
 } from "lucide-react";
 import { PlaceLink } from "@/components/organizations/place-link";
 import { Sheet } from "@/components/ui/sheet";
-import { hostOf, isHttpsUrl, addressMapsUrl, orgPlace, PROFILE_KIND_LABEL, profileTagline, profileTaglineParts, venueMapsUrl, type OrgProfile, type OrgProfileOwner, type ProfileKind } from "@/lib/organizations/profile";
+import {
+  hostOf,
+  isHttpsUrl,
+  addressMapsUrl,
+  orgPlace,
+  PROFILE_KIND_LABEL,
+  profileTagline,
+  profileTaglineParts,
+  venueMapsUrl,
+  type OrgProfile,
+  type OrgProfileOwner,
+  type ProfileKind,
+} from "@/lib/organizations/profile";
 import { cn } from "@/lib/utils";
 
 /**
@@ -37,6 +49,7 @@ import { cn } from "@/lib/utils";
  */
 
 const KIND_ICON: Record<ProfileKind, typeof Building2> = {
+  series: Music,
   festival: Tent,
   venue: Theater,
   presenter: Music,
@@ -229,7 +242,14 @@ export function OrgProfileLine({
     <div data-testid="org-profile-line" className={cn("flex min-w-0 items-center gap-2", className)}>
       {photo ? (
         <button type="button" tabIndex={-1} aria-hidden onClick={show} className="shrink-0 rounded-full">
-          <RemoteImage key={photo.url} url={photo.url} alt="" onFail={() => fail(photo.url)} check={check(photo.url)} className="size-7 rounded-full bg-surface-2" />
+          <RemoteImage
+            key={photo.url}
+            url={photo.url}
+            alt=""
+            onFail={() => fail(photo.url)}
+            check={check(photo.url)}
+            className="size-7 rounded-full bg-surface-2"
+          />
         </button>
       ) : null}
       <span className="flex min-w-0 flex-1 items-center gap-1.5 text-[15px] text-muted md:text-sm">
@@ -259,7 +279,9 @@ export function OrgProfileLine({
         data-testid="org-profile-open"
         className={cn(
           "-my-2 inline-flex shrink-0 items-center justify-center rounded-full active:bg-surface-2 md:my-0 md:h-7 md:gap-1 md:border md:border-border md:px-2.5 md:text-xs md:hover:bg-surface-2 md:hover:text-fg",
-          labelOnPhone ? "h-11 gap-1.5 border border-border px-3.5 text-[15px] font-medium text-fg md:font-normal md:text-muted" : "size-11 text-muted md:size-auto",
+          labelOnPhone
+            ? "h-11 gap-1.5 border border-border px-3.5 text-[15px] font-medium text-fg md:font-normal md:text-muted"
+            : "size-11 text-muted md:size-auto",
         )}
       >
         <Info className={cn("md:size-3.5", labelOnPhone ? "size-4" : "size-5")} strokeWidth={1.75} aria-hidden />
@@ -305,11 +327,7 @@ export function OrgProfileCard({
   return (
     <article
       data-testid="org-profile"
-      className={cn(
-        "overflow-hidden bg-surface",
-        bare ? "-mx-4 -mt-4 md:-mx-5" : "rounded-xl border border-border md:rounded-lg",
-        className,
-      )}
+      className={cn("overflow-hidden bg-surface", bare ? "-mx-4 -mt-4 md:-mx-5" : "rounded-xl border border-border md:rounded-lg", className)}
     >
       {hero ? (
         <div>
@@ -342,7 +360,11 @@ export function OrgProfileCard({
           </figure>
 
           {images.length > 1 ? (
-            <div className="flex snap-x gap-2 overflow-x-auto px-4 pt-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="list" aria-label="Photos">
+            <div
+              className="flex snap-x gap-2 overflow-x-auto px-4 pt-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              role="list"
+              aria-label="Photos"
+            >
               {images.map((img, i) => (
                 <button
                   key={img.url}
@@ -378,9 +400,7 @@ export function OrgProfileCard({
           ) : null}
           <div className="flex flex-wrap gap-1.5">
             {p.kind ? <Chip icon={KindIcon}>{PROFILE_KIND_LABEL[p.kind]}</Chip> : null}
-            {place ? (
-              <PlaceLink place={place} className={cn(chipClass, "hover:bg-surface-2/70")} iconClassName="size-3.5 md:size-3" />
-            ) : null}
+            {place ? <PlaceLink place={place} className={cn(chipClass, "hover:bg-surface-2/70")} iconClassName="size-3.5 md:size-3" /> : null}
             {p.dates ? <Chip icon={CalendarDays}>{p.dates}</Chip> : null}
             {p.scale ? <Chip icon={Users}>{p.scale}</Chip> : null}
           </div>
@@ -395,6 +415,32 @@ export function OrgProfileCard({
         {p.programming ? (
           <Section title="Programs">
             <p className="prose-plain text-[15px] leading-relaxed text-fg md:text-sm">{p.programming}</p>
+          </Section>
+        ) : null}
+
+        {p.formats?.length ? (
+          <Section title="Groups they present">
+            <ul className="flex flex-wrap gap-1.5">
+              {p.formats.map((f, i) => (
+                <li key={i} className="rounded-full bg-surface-2 px-2.5 py-0.5 text-[13px] text-fg md:text-xs">
+                  {f}
+                </li>
+              ))}
+            </ul>
+          </Section>
+        ) : null}
+
+        {p.artists?.length ? (
+          <Section title="Who has played">
+            <ul className="flex flex-col gap-1">
+              {p.artists.map((a, i) => (
+                <li key={i} className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 text-[15px] md:text-sm">
+                  <span className="font-medium text-fg">{a.name}</span>
+                  {a.formation ? <span className="text-muted">· {a.formation}</span> : null}
+                  {a.date ? <span className="text-subtle">· {a.date}</span> : null}
+                </li>
+              ))}
+            </ul>
           </Section>
         ) : null}
 

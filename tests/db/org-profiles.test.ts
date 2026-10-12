@@ -1,7 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { sql } from "@/lib/db";
 import { GET as profilesGet, POST as profilesPost } from "@/app/api/assistant-agent/profiles/route";
-import { orgProfileSchema, parseImageLines, parseLinkLines, parseVenueLines, profileTagline, profileTaglineParts, readProfile } from "@/lib/organizations/profile";
+import {
+  orgProfileSchema,
+  parseImageLines,
+  parseLinkLines,
+  parseVenueLines,
+  profileTagline,
+  profileTaglineParts,
+  readProfile,
+} from "@/lib/organizations/profile";
 import { addSheetRow, createSheet } from "@/lib/queries/booking";
 import { getOrganizationProfile, getOrganizationWithProfile } from "@/lib/queries/org-profiles";
 import { getDraft } from "@/lib/queries/drafts";
@@ -93,7 +101,14 @@ describe("organization profiles API", () => {
     expect(body.results.map((r: { organizationId: string }) => r.organizationId)).toEqual([orgA, orgB, orgA]);
 
     const a = await getOrganizationProfile(orgA);
-    expect(a?.profile).toMatchObject({ summary: "Updated through the email.", kind: "festival", tagline: PROFILE.tagline, city: "Girona", country: "Spain", researchedBy: "claude" });
+    expect(a?.profile).toMatchObject({
+      summary: "Updated through the email.",
+      kind: "festival",
+      tagline: PROFILE.tagline,
+      city: "Girona",
+      country: "Spain",
+      researchedBy: "claude",
+    });
     expect(a?.profile?.researchedAt).toMatch(/^\d{4}-\d\d-\d\dT/);
     expect(a?.profileUpdatedAt).toBeInstanceOf(Date);
     expect(a?.profile?.venues).toEqual([{ name: "Cloister", type: "outdoor stage", capacity: 600 }]);
@@ -187,6 +202,25 @@ describe("profile parsing", () => {
         { label: "Program 2026", url: "https://fest.org/program" },
         { label: "fest.org", url: "https://www.fest.org/" },
       ],
+    });
+  });
+
+  it("keeps what the owner checks: series kind, groups they present, who has played", () => {
+    const profile = readProfile({
+      summary: "A chamber series.",
+      kind: "series",
+      formats: ["String quartets", "Piano trios", ""],
+      artists: [
+        { name: "Merz Trio", formation: "Piano trio", date: "Mar 2026" },
+        { name: "Solo", formation: "" },
+      ],
+      venues: [{ name: "Main Hall", type: "Concert hall", capacity: 450, notes: "Steinway D" }],
+    });
+    expect(profile).toMatchObject({
+      kind: "series",
+      formats: ["String quartets", "Piano trios"],
+      artists: [{ name: "Merz Trio", formation: "Piano trio", date: "Mar 2026" }, { name: "Solo" }],
+      venues: [{ name: "Main Hall", notes: "Steinway D" }],
     });
   });
 

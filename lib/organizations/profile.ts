@@ -8,10 +8,11 @@ import { z } from "zod";
  * client components.
  */
 
-export const PROFILE_KINDS = ["festival", "venue", "presenter", "organization", "other"] as const;
+export const PROFILE_KINDS = ["series", "festival", "venue", "presenter", "organization", "other"] as const;
 export type ProfileKind = (typeof PROFILE_KINDS)[number];
 
 export const PROFILE_KIND_LABEL: Record<ProfileKind, string> = {
+  series: "Concert series",
   festival: "Festival",
   venue: "Venue",
   presenter: "Presenter",
@@ -61,6 +62,14 @@ export const venueSchema = z.object({
   address: optText(200),
 });
 
+export const artistSchema = z.object({
+  name: text(200),
+  /** "String quartet", "Piano trio", "Pianist"… */
+  formation: optText(120),
+  /** "2025-26 season", "Nov 20, 2026"… */
+  date: optText(60),
+});
+
 export const MAX_TAGLINE = 120;
 
 export const orgProfileSchema = z.object({
@@ -73,6 +82,19 @@ export const orgProfileSchema = z.object({
     .transform((v) => v ?? undefined)
     .optional(),
   programming: optText(2000),
+  /** The kinds of groups they present: "String quartets", "Piano trios", "Solo recitals", "Early music"… */
+  formats: z
+    .array(z.string().trim().max(80))
+    .max(12)
+    .nullish()
+    .transform((v) => {
+      const kept = (v ?? []).filter(Boolean);
+      return kept.length ? kept : undefined;
+    })
+    .optional(),
+  /** Who has played there (recent and upcoming), with the group's formation: what the owner checks before writing. */
+  artists: optList(artistSchema, 40),
+  /** Halls: name, type, capacity; the piano (make and model) goes in notes. */
   venues: optList(venueSchema, 20),
   /** "Kuopio": shown with the country as "Kuopio, Finland", linked to Google Maps. */
   city: optText(80),
@@ -167,7 +189,11 @@ export function mapsSearchUrl(query: string): string {
  */
 export function mapsQueryUrl(parts: (string | null | undefined)[]): string | null {
   // " kuopionlahdenkatu 23 70100 kuopio ": whole words only, so "Kuopio" is in it but not in "Kuopionlahdenkatu".
-  const words = (v: string) => ` ${v.toLowerCase().replace(/[\s,.;:()/]+/g, " ").trim()} `;
+  const words = (v: string) =>
+    ` ${v
+      .toLowerCase()
+      .replace(/[\s,.;:()/]+/g, " ")
+      .trim()} `;
   const kept: string[] = [];
   for (const raw of parts) {
     const part = raw?.replace(/\s+/g, " ").trim();
