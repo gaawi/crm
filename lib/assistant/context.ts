@@ -15,7 +15,7 @@ import { OPEN_DRAFT_STATUSES, releasePostponed } from "@/lib/queries/assistant";
  * sheet, 5 emails and 5 activities per row, texts truncated.
  */
 
-const MAX_ROWS = 150;
+const MAX_ROWS = 250;
 const MAX_SHEETS = 20;
 
 const clip = (value: string | null | undefined, max: number): string | null => {
@@ -181,7 +181,8 @@ export async function buildAssistantContext(now: Date = new Date()): Promise<Ass
                    order by a.occurred_at desc limit 5) y
         ) ac on true
        where op.project_id = ${sheet.id}
-       order by array_position(array['negotiation','proposal','contacted','lead','won','lost']::text[], op.stage),
+       order by (op.contact_id is null),
+                array_position(array['negotiation','proposal','contacted','lead','won','lost']::text[], op.stage),
                 op.follow_up_at asc nulls last
        limit ${MAX_ROWS + 1}`;
 

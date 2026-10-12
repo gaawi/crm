@@ -48,7 +48,7 @@ const rowSchema = z.object({
     .string()
     .trim()
     .max(120)
-    .refine((v) => v.startsWith("Listas"), "section must start with \"Listas\".")
+    .refine((v) => v.startsWith("Listas"), 'section must start with "Listas".')
     .nullish(),
   followUpAt: z
     .string()
@@ -197,7 +197,8 @@ async function attachContact(projectId: string, index: number, raw: unknown): Pr
 
   let contactId: string;
   try {
-    if (row.contactId && row.contactHasEmail) return { index, ok: false, error: "The row already has a contact with an address (fill its card with POST contacts)." };
+    if (row.contactId && row.contactHasEmail)
+      return { index, ok: false, error: "The row already has a contact with an address (fill its card with POST contacts)." };
     if (row.contactId) {
       await addContactEmail(row.contactId, email);
       contactId = row.contactId;
@@ -229,4 +230,62 @@ async function attachContact(projectId: string, index: number, raw: unknown): Pr
   const note = `Contacto añadido por el buscador: ${noEmDash(input.reason)}`;
   await sql`update opportunities set notes = ${row.notes ? `${row.notes}\n\n${note}` : note} where id = ${row.id}`;
   return { index, ok: true, opportunityId: row.id, contactId };
+}
+
+const listSchema = z.object({
+  projectId: z.guid(),
+  /** Rows whose section starts with this ("Listas", "Listas · 2"…). */
+  section: z.string().trim().max(120).optional(),
+  withoutContact: z.enum(["1", "true", "0", "false"]).optional(),
+  unresearched: z.enum(["1", "true", "0", "false"]).optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  offset: z.coerce.number().int().min(0).max(10_000).default(0),
+});
+
+/**
+ * GET /api/assistant-agent/rows: a campaign's rows with their full notes, in
+ * the order the prospector works them (section, then name), filtered by
+ * section prefix, rows without a contact, or rows whose card was never filled.
+ */
+export async function listRows(params: URLSearchParams) {
+  const parsed = listSchema.safeParse(Object.fromEntries(params));
+  if (!parsed.success) throw new RowsError("Pass projectId and optionally section, withoutContact=1, unresearched=1, limit (max 200), offset.", 400);
+  const { projectId, section, limit, offset } = parsed.data;
+  const withoutContact = parsed.data.withoutContact === "1" || parsed.data.withoutContact === "true";
+  const unresearched = parsed.data.unresearched === "1" || parsed.data.unresearched === "true";
+  const [project] = await sql`select 1 from projects where id = ${projectId} and sheet`;
+  if (!project) throw new RowsError("Campaign not found.", 404);
+  const filter = sql`
+    op.project_id = ${projectId}
+    ${section ? sql`and op.sheet_section ilike ${`${section.replace(/[\\%_]/g, (c) => `\\${c}`)}%`}` : sql``}
+    ${withoutContact ? sql`and op.contact_id is null` : sql``}
+    ${unresearched ? sql`and (c.id is null or c.researched_at is null)` : sql``}`;
+  const [{ total }] = await sql<{ total: number }[]>`
+    select count(*)::int as total from opportunities op left join contacts c on c.id = op.contact_id where ${filter}`;
+  const rows = await sql<
+    {
+      opportunityId: string;
+      organization: string | null;
+      website: string | null;
+      city: string | null;
+      section: string | null;
+      stage: string;
+      followUpAt: string | null;
+      returning: boolean;
+      notes: string | null;
+      contact: { id: string; name: string | null; email: string | null; role: string | null; researchedAt: string | null } | null;
+    }[]
+  >`
+    select op.id as opportunity_id, o.name as organization, o.website, o.city, op.sheet_section as section, op.stage,
+           op.follow_up_at::text as follow_up_at, op.is_returning as returning, op.notes,
+           case when c.id is null then null else json_build_object(
+             'id', c.id, 'name', nullif(btrim(c.name), ''), 'role', nullif(btrim(c.role), ''), 'researchedAt', c.researched_at,
+             'email', (select ce.email from contact_emails ce where ce.contact_id = c.id order by ce.is_primary desc, ce.created_at limit 1)) end as contact
+      from opportunities op
+      left join organizations o on o.id = op.organization_id
+      left join contacts c on c.id = op.contact_id
+     where ${filter}
+     order by op.sheet_section nulls last, lower(coalesce(o.name, op.title))
+     limit ${limit} offset ${offset}`;
+  return { projectId, total, count: rows.length, rows };
 }

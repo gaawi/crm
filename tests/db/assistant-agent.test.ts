@@ -35,7 +35,7 @@ import { POST as proposalsRoute } from "@/app/api/assistant-agent/proposals/rout
 import { GET as contactsRoute, POST as contactsPost } from "@/app/api/assistant-agent/contacts/route";
 import { POST as runsRoute } from "@/app/api/assistant-agent/runs/route";
 import { GET as historyRoute } from "@/app/api/assistant-agent/history/route";
-import { POST as rowsRoute } from "@/app/api/assistant-agent/rows/route";
+import { GET as rowsListRoute, POST as rowsRoute } from "@/app/api/assistant-agent/rows/route";
 import { GET as prospectsRoute } from "@/app/api/assistant-agent/prospects/route";
 import { listAssistantRuns } from "@/lib/assistant/runs";
 import { postponeDraft, requestDraftChanges } from "@/lib/assistant/drafts";
@@ -430,6 +430,18 @@ describe("campaign assistant API", () => {
         select c.name, c.role, ce.email, exists (select 1 from contact_projects cp where cp.contact_id = c.id and cp.project_id = ${projectId}) as in_project
           from opportunities op join contacts c on c.id = op.contact_id join contact_emails ce on ce.contact_id = c.id where op.id = ${rowId}`;
       expect(contact).toEqual({ name: "Pat Doe", role: "Executive Director", email: "director@louisvillecm.org", inProject: true });
+
+      // The prospector's view of the list rows: full notes, filters.
+      await rows({ projectId, rows: [{ organization: "Old Festival", source: "owner_list", reason: "2019.", section: "Listas · 4 antiguos (2016-2019)", notes: "Contacto antiguo: x@old.org" }] });
+      const list = async (q: string) =>
+        (await rowsListRoute(new Request(`${URL_BASE}/rows?projectId=${projectId}${q}`, { headers: { authorization: `Bearer ${TOKEN}` } }))).json();
+      const lists = await list("&section=Listas");
+      expect(lists.total).toBe(2);
+      expect(lists.rows.map((r: { organization: string }) => r.organization)).toEqual(["Louisville Chamber Music", "Old Festival"]);
+      expect((await list("&section=Listas&withoutContact=1")).rows).toEqual([
+        expect.objectContaining({ organization: "Old Festival", contact: null, notes: expect.stringContaining("x@old.org") }),
+      ]);
+      expect((await list("&unresearched=1")).total).toBe(2); // Louisville (card not filled yet) and Old Festival (no contact)
     });
 
     it("stops new emails at the daily limit (all campaigns together)", async () => {
