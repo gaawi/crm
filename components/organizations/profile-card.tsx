@@ -305,6 +305,7 @@ export function OrgProfileCard({
   editHref,
   orgHref,
   showName = true,
+  hideAtAGlance = false,
   bare = false,
   className,
 }: {
@@ -316,6 +317,8 @@ export function OrgProfileCard({
   orgHref?: string | null;
   /** The organization's name above the summary. */
   showName?: boolean;
+  /** Leave out the groups they present, who has played and the venues (the flashcard shows them at the top). */
+  hideAtAGlance?: boolean;
   bare?: boolean;
   className?: string;
 }) {
@@ -426,7 +429,7 @@ export function OrgProfileCard({
           </Section>
         ) : null}
 
-        {p.formats?.length ? (
+        {!hideAtAGlance && p.formats?.length ? (
           <Section title="Groups they present">
             <ul className="flex flex-wrap gap-1.5">
               {p.formats.map((f, i) => (
@@ -438,7 +441,7 @@ export function OrgProfileCard({
           </Section>
         ) : null}
 
-        {p.artists?.length ? (
+        {!hideAtAGlance && p.artists?.length ? (
           <Section title="Who has played">
             <ul className="flex flex-col gap-1">
               {p.artists.map((a, i) => (
@@ -452,7 +455,7 @@ export function OrgProfileCard({
           </Section>
         ) : null}
 
-        {p.venues?.length ? (
+        {!hideAtAGlance && p.venues?.length ? (
           <Section title={p.venues.length === 1 ? "Venue" : "Venues"}>
             <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border">
               {p.venues.map((v, i) => (

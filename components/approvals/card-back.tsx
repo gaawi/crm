@@ -182,6 +182,7 @@ export function CardBack({ draft, info, timezone }: { draft: EmailDraft; info: C
           profile={draft.organization.profile}
           organization={draft.organization}
           orgHref={`/organizations/${draft.organization.id}`}
+          hideAtAGlance
           className="text-[13px]"
         />
       ) : null}
@@ -324,7 +325,7 @@ function SeriesAtAGlance({ organization }: { organization: EmailDraft["organizat
             <Music className="size-3.5" aria-hidden /> Who has played
           </p>
           <ul className="mt-0.5 flex flex-col gap-0.5">
-            {p.artists.slice(0, 10).map((a, i) => (
+            {p.artists.map((a, i) => (
               <li key={i}>
                 <span className="font-medium">{a.name}</span>
                 {a.formation ? <span className="text-muted"> · {a.formation}</span> : null}
@@ -332,7 +333,6 @@ function SeriesAtAGlance({ organization }: { organization: EmailDraft["organizat
               </li>
             ))}
           </ul>
-          {p.artists.length > 10 ? <p className="text-[12px] text-subtle">and {p.artists.length - 10} more in the full profile below</p> : null}
         </div>
       ) : null}
 
