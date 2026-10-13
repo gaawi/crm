@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ContactAvatar } from "@/components/contact-avatar";
+import { ContactOrgAvatar } from "@/components/contact-org-avatar";
 import { useClaudeEnabled } from "@/components/features";
 import { useEffect, useState, useTransition } from "react";
 import { CalendarClock, Check, FileText, Hourglass, MessageSquareText, Pencil, Send, Sparkles, Trash2 } from "lucide-react";
@@ -92,13 +92,26 @@ export function DraftCard({
     }
     setArmed(false);
     const origin: FlourishOrigin | null = flourishOrigin(event.currentTarget);
-    run(() => approveDraftAction(draft.id), () => celebrateSend(origin));
+    run(
+      () => approveDraftAction(draft.id),
+      () => celebrateSend(origin),
+    );
   };
 
   return (
     <article id={`draft-${draft.id}`} className="min-w-0 overflow-hidden rounded-xl border border-border bg-surface md:rounded-lg">
       <header className="flex flex-wrap items-center gap-1.5 border-b border-border px-4 py-3">
-        {draft.contact ? <ContactAvatar contact={draft.contact} size="sm" className="mr-1" /> : null}
+        {draft.contact ? (
+          <ContactOrgAvatar
+            contact={draft.contact}
+            organization={
+              draft.organization ? { id: draft.organization.id, name: draft.organization.name, logo: draft.organization.profile.logo } : null
+            }
+            layout="badge"
+            size="sm"
+            className="mr-1"
+          />
+        ) : null}
         <span className="min-w-0 truncate text-[15px] font-medium md:text-sm">
           {draft.contact ? (
             <Link href={`/contacts/${draft.contact.id}`} className="hover:underline">
@@ -110,7 +123,10 @@ export function DraftCard({
         </span>
         <Badge>{PURPOSE_LABEL[draft.purpose]}</Badge>
         {draft.status === "queued" ? (
-          <Badge className="bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300" title="Approved: it goes out with its mailing, a few at a time">
+          <Badge
+            className="bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300"
+            title="Approved: it goes out with its mailing, a few at a time"
+          >
             Queued
           </Badge>
         ) : null}
@@ -155,7 +171,12 @@ export function DraftCard({
         {mode === "edit" ? (
           <form
             className="flex flex-col gap-2"
-            action={(formData) => run(() => saveDraftEditsAction(draft.id, formData), () => setMode("view"))}
+            action={(formData) =>
+              run(
+                () => saveDraftEditsAction(draft.id, formData),
+                () => setMode("view"),
+              )
+            }
           >
             <Input name="to" defaultValue={draft.to.join(", ")} aria-label="To" placeholder="To" />
             <Input name="cc" defaultValue={draft.cc.join(", ")} aria-label="Cc" placeholder="Cc" />
@@ -196,10 +217,15 @@ export function DraftCard({
         {mode === "revise" ? (
           <form
             className="flex flex-col gap-2 rounded-lg bg-surface-2 p-3"
-            action={() => run(() => reviseDraftAction(draft.id, note), () => {
-              setNote("");
-              setMode("view");
-            })}
+            action={() =>
+              run(
+                () => reviseDraftAction(draft.id, note),
+                () => {
+                  setNote("");
+                  setMode("view");
+                },
+              )
+            }
           >
             <label htmlFor={`note-${draft.id}`} className="text-xs font-medium text-muted">
               Tell Claude what to change
@@ -234,10 +260,13 @@ export function DraftCard({
             className="flex flex-col gap-2 rounded-lg bg-surface-2 p-3"
             onSubmit={(e) => {
               e.preventDefault();
-              run(() => requestAssistantChangesAction(draft.id, comment), () => {
-                setComment("");
-                setMode("view");
-              });
+              run(
+                () => requestAssistantChangesAction(draft.id, comment),
+                () => {
+                  setComment("");
+                  setMode("view");
+                },
+              );
             }}
           >
             <label htmlFor={`changes-${draft.id}`} className="text-xs font-medium text-muted">
@@ -268,7 +297,12 @@ export function DraftCard({
             today={todayIn(timezone)}
             pending={pending}
             onCancel={() => setMode("view")}
-            onSubmit={(date) => run(() => postponeAssistantDraftAction(draft.id, date), () => setMode("view"))}
+            onSubmit={(date) =>
+              run(
+                () => postponeAssistantDraftAction(draft.id, date),
+                () => setMode("view"),
+              )
+            }
           />
         ) : null}
 
@@ -292,7 +326,9 @@ export function DraftCard({
       ) : postponed && mode === "view" ? (
         <footer className="flex items-center gap-2.5 border-t border-border px-4 py-3 text-sm text-muted">
           <CalendarClock className="size-4 shrink-0 text-subtle" aria-hidden />
-          <span className="min-w-0 flex-1">Postponed{draft.postponedUntil ? ` until ${formatDate(draft.postponedUntil, timezone)}` : ""}: it comes back by itself that day.</span>
+          <span className="min-w-0 flex-1">
+            Postponed{draft.postponedUntil ? ` until ${formatDate(draft.postponedUntil, timezone)}` : ""}: it comes back by itself that day.
+          </span>
         </footer>
       ) : mode === "view" ? (
         <footer className="grid grid-cols-2 gap-2 border-t border-border px-4 py-3 md:flex md:flex-wrap md:items-center">

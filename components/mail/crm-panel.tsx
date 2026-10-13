@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ContactOrgAvatar } from "@/components/contact-org-avatar";
 import { CalendarClock, Plus, UserPlus } from "lucide-react";
 import { clearFollowUp, setFollowUpPreset } from "@/app/(app)/contacts/[id]/actions";
 import { ProjectBadge, StageBadge, StatusBadge } from "@/components/ui/badge";
@@ -60,7 +61,9 @@ export async function CrmPanel({
             )}
           </div>
         ) : (
-          <p className="rounded-xl border border-dashed border-border px-4 py-3 text-[15px] text-muted md:rounded-lg md:text-sm">Only you are in this conversation.</p>
+          <p className="rounded-xl border border-dashed border-border px-4 py-3 text-[15px] text-muted md:rounded-lg md:text-sm">
+            Only you are in this conversation.
+          </p>
         )}
         {participants.length > MAX_PEOPLE ? (
           <p className="mt-2 px-4 text-[13px] text-subtle md:px-0 md:text-xs">+{participants.length - MAX_PEOPLE} more people in this conversation</p>
@@ -83,9 +86,7 @@ function ContactCard({ contact, deals, today, returnPath }: { contact: Contact; 
   return (
     <article className="overflow-hidden rounded-xl border border-border bg-surface md:rounded-lg">
       <div className="flex items-start gap-3 px-4 pb-3 pt-3.5 md:px-3 md:pt-3">
-        <span aria-hidden className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-surface-2 text-[13px] font-medium text-muted md:size-9 md:text-xs">
-          {initials(contact.displayName)}
-        </span>
+        <ContactOrgAvatar contact={contact} organization={contact.organization} size="md" />
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
             <Link href={`/contacts/${contact.id}`} className="min-w-0 truncate text-[17px] font-semibold text-fg hover:underline md:text-sm">
@@ -167,7 +168,10 @@ function ContactCard({ contact, deals, today, returnPath }: { contact: Contact; 
         <Link href={newDeal} className="flex h-11 flex-1 items-center justify-center gap-1.5 text-fg/80 hover:bg-surface-2 md:h-8">
           <Plus className="size-4 md:size-3.5" /> New goal
         </Link>
-        <Link href={`/contacts/${contact.id}`} className="flex h-11 flex-1 items-center justify-center border-l border-border text-fg/80 hover:bg-surface-2 md:h-8">
+        <Link
+          href={`/contacts/${contact.id}`}
+          className="flex h-11 flex-1 items-center justify-center border-l border-border text-fg/80 hover:bg-surface-2 md:h-8"
+        >
           Open contact
         </Link>
       </div>
@@ -179,12 +183,19 @@ function UnknownCard({ address }: { address: Address }) {
   const href = `/contacts/new?${new URLSearchParams({ email: address.email, ...(address.name ? { name: address.name } : {}) })}`;
   return (
     <article className="flex items-center gap-3 rounded-xl border border-border bg-surface px-4 py-3 md:rounded-lg md:px-3">
-      <span aria-hidden className="inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-dashed border-border text-[13px] text-subtle md:size-9 md:text-xs">
+      <span
+        aria-hidden
+        className="inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-dashed border-border text-[13px] text-subtle md:size-9 md:text-xs"
+      >
         {initials(address.name || address.email)}
       </span>
       <div className="min-w-0 flex-1">
         <p className="truncate text-[17px] font-medium md:text-sm">{address.name || address.email}</p>
-        {address.name ? <p className="truncate text-[13px] text-subtle md:text-xs">{address.email}</p> : <p className="text-[13px] text-subtle md:text-xs">Not in Vela</p>}
+        {address.name ? (
+          <p className="truncate text-[13px] text-subtle md:text-xs">{address.email}</p>
+        ) : (
+          <p className="text-[13px] text-subtle md:text-xs">Not in Vela</p>
+        )}
       </div>
       <Link
         href={href}

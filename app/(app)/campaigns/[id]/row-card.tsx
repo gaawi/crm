@@ -4,7 +4,7 @@ import { memo } from "react";
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { CallButton, WhatsAppButton } from "@/components/booking/phone-actions";
-import { ContactAvatar } from "@/components/contact-avatar";
+import { ContactOrgAvatar } from "@/components/contact-org-avatar";
 import { GoalBadge, NextActionIcon } from "@/components/goals";
 import { OrgProfileLine } from "@/components/organizations/profile-card";
 import { StageBadge } from "@/components/ui/badge";
@@ -72,7 +72,10 @@ export const RowCard = memo(function RowCard({
   ) : null;
 
   const title = row.organization ? (
-    <Link href={`/organizations/${row.organization.id}`} className="text-[17px] font-semibold leading-snug text-fg [overflow-wrap:anywhere] active:opacity-60">
+    <Link
+      href={`/organizations/${row.organization.id}`}
+      className="text-[17px] font-semibold leading-snug text-fg [overflow-wrap:anywhere] active:opacity-60"
+    >
       {name}
     </Link>
   ) : (
@@ -89,7 +92,14 @@ export const RowCard = memo(function RowCard({
         )}
       >
         {select}
-        {c ? <ContactAvatar contact={c} size="sm" /> : null}
+        {c ? (
+          <ContactOrgAvatar
+            contact={c}
+            organization={row.organization ? { id: row.organization.id, name: row.organization.name, logo: row.organization.profile?.logo } : null}
+            layout="badge"
+            size="sm"
+          />
+        ) : null}
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-1.5">
             <span className="truncate text-[15px] font-semibold">{name}</span>
@@ -98,7 +108,10 @@ export const RowCard = memo(function RowCard({
           <div className="mt-0.5 flex min-w-0 items-center gap-1.5">
             <StageBadge stage={row.stage} label={stageLabel(row.stage, row.kind)} />
             {row.nextAction ? (
-              <span className="flex min-w-0 shrink items-center gap-1 text-[13px] font-medium text-fg/80" title={`Next step: ${nextActionLabel(row.nextAction)}`}>
+              <span
+                className="flex min-w-0 shrink items-center gap-1 text-[13px] font-medium text-fg/80"
+                title={`Next step: ${nextActionLabel(row.nextAction)}`}
+              >
                 <NextActionIcon action={row.nextAction} />
                 <span className="truncate">{nextActionLabel(row.nextAction)}</span>
               </span>
@@ -157,7 +170,13 @@ export const RowCard = memo(function RowCard({
           <div className="mt-2.5">
             {c ? (
               <div className="flex min-w-0 items-center gap-2.5">
-                <ContactAvatar contact={c} size="md" />
+                <ContactOrgAvatar
+                  contact={c}
+                  organization={
+                    row.organization ? { id: row.organization.id, name: row.organization.name, logo: row.organization.profile?.logo } : null
+                  }
+                  size="md"
+                />
                 <div className="min-w-0 flex-1">
                   <Link href={`/contacts/${c.id}`} className="block truncate text-[15px] text-fg active:opacity-60">
                     {who}
@@ -196,14 +215,19 @@ export const RowCard = memo(function RowCard({
       <details className="group border-t border-border">
         <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-4 text-[15px] text-fg active:bg-surface-2 [&::-webkit-details-marker]:hidden">
           <span className="shrink-0 font-medium">Details</span>
-          <span className="min-w-0 flex-1 truncate text-[13px] text-muted">
-            {[row.nextStep, row.eventDates].filter(Boolean).join(" · ")}
-          </span>
+          <span className="min-w-0 flex-1 truncate text-[13px] text-muted">{[row.nextStep, row.eventDates].filter(Boolean).join(" · ")}</span>
           <ChevronRight className="size-4 shrink-0 text-subtle transition-transform group-open:rotate-90" strokeWidth={2} />
         </summary>
         <div className="flex flex-col gap-3 px-3 pb-4 pt-1">
           <CardField label="Next step detail">
-            <TextCell rowId={row.id} name="nextStep" value={row.nextStep} placeholder="Ask for Ana, the season's dates…" label="Next step detail" look="field" />
+            <TextCell
+              rowId={row.id}
+              name="nextStep"
+              value={row.nextStep}
+              placeholder="Ask for Ana, the season's dates…"
+              label="Next step detail"
+              look="field"
+            />
           </CardField>
           <CardField label="Goal">
             <KindCell rowId={row.id} value={row.kind} look="field" />
@@ -254,7 +278,15 @@ export const RowCard = memo(function RowCard({
             </CardField>
           </div>
           <CardField label="Section">
-            <TextCell rowId={row.id} name="section" value={row.section} placeholder="No section" label="Section" list={ctx.sectionsListId} look="field" />
+            <TextCell
+              rowId={row.id}
+              name="section"
+              value={row.section}
+              placeholder="No section"
+              label="Section"
+              list={ctx.sectionsListId}
+              look="field"
+            />
           </CardField>
           <CardField label="Halls / spaces">
             <TextCell rowId={row.id} name="spaces" value={row.spaces} placeholder="Sala principal" label="Halls / spaces" look="field" />

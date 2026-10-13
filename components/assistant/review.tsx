@@ -7,6 +7,7 @@ import { CallButton, WhatsAppButton } from "@/components/booking/phone-actions";
 import { VelaLoader } from "@/components/brand/vela-logo";
 import { celebrateSend, flourishOrigin } from "@/components/brand/send-flourish";
 import { ContactAvatar } from "@/components/contact-avatar";
+import { ContactOrgAvatar } from "@/components/contact-org-avatar";
 import { OrgProfileLine } from "@/components/organizations/profile-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -149,7 +150,15 @@ export function AssistantDraftCard({
     <article data-testid="assistant-draft" className="min-w-0 overflow-hidden rounded-xl border border-border bg-surface md:rounded-lg">
       <header className="flex flex-wrap items-center gap-1.5 border-b border-border px-4 py-3">
         {draft.contact ? (
-          <ContactAvatar contact={draft.contact} size="sm" className="mr-1" />
+          <ContactOrgAvatar
+            contact={draft.contact}
+            organization={
+              draft.organization ? { id: draft.organization.id, name: draft.organization.name, logo: draft.organization.profile.logo } : null
+            }
+            layout="badge"
+            size="sm"
+            className="mr-1"
+          />
         ) : (
           <Mail className="size-4 shrink-0 text-subtle" aria-hidden />
         )}

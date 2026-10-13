@@ -6,7 +6,7 @@ import { CalendarClock, Check, ChevronLeft, ChevronRight, Info, Mail, MessageSqu
 import { PostponeForm } from "@/components/assistant/review";
 import { VelaLoader } from "@/components/brand/vela-logo";
 import { celebrateSend, flourishOrigin } from "@/components/brand/send-flourish";
-import { ContactAvatar } from "@/components/contact-avatar";
+import { ContactOrgAvatar } from "@/components/contact-org-avatar";
 import { useClaudeEnabled } from "@/components/features";
 import { AccountBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -396,7 +396,13 @@ export function Flashcards({
           {draft ? (
             <>
               <header className="flex items-start gap-3 border-b border-border px-4 pb-3 pt-3.5">
-                {draft.contact && !flipped ? <ContactAvatar contact={draft.contact} size="md" /> : null}
+                {draft.contact && !flipped ? (
+                  <ContactOrgAvatar
+                    contact={draft.contact}
+                    organization={org ? { id: org.id, name: org.name, logo: org.profile.logo } : null}
+                    size="md"
+                  />
+                ) : null}
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline gap-2">
                     <span className="min-w-0 flex-1 truncate text-[16px] font-semibold leading-tight md:text-[15px]">

@@ -109,6 +109,8 @@ export interface OrganizationRef {
   id: string;
   name: string;
   kind?: OrganizationKind | null;
+  /** Its logo (organizations.profile.logo), when known. */
+  logo?: string | null;
 }
 
 export interface ContactRef {

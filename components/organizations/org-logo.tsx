@@ -13,21 +13,16 @@ import { cn, initials } from "@/lib/utils";
  */
 
 const SIZES = {
-  md: "size-10 text-sm",
-  lg: "size-20 text-2xl md:size-12 md:text-base",
+  /** Corner badge on a list avatar. */
+  badge: "size-[18px] rounded-[5px] text-[8px]",
+  sm: "size-8 rounded-lg text-xs",
+  md: "size-10 rounded-xl text-sm",
+  lg: "size-20 rounded-xl text-2xl md:size-12 md:text-base",
 } as const;
 
-export function OrgLogo({
-  name,
-  logo,
-  size = "md",
-  className,
-}: {
-  name: string;
-  logo?: string | null;
-  size?: keyof typeof SIZES;
-  className?: string;
-}) {
+export type OrgLogoSize = keyof typeof SIZES;
+
+export function OrgLogo({ name, logo, size = "md", className }: { name: string; logo?: string | null; size?: OrgLogoSize; className?: string }) {
   const url = safePhotoUrl(logo);
   const [failed, setFailed] = useState<string | null>(null);
   const showLogo = url !== null && failed !== url;
@@ -40,7 +35,7 @@ export function OrgLogo({
       aria-hidden
       data-logo={showLogo ? "image" : "initials"}
       className={cn(
-        "relative inline-flex shrink-0 select-none items-center justify-center overflow-hidden rounded-xl border border-border font-semibold",
+        "inline-flex shrink-0 select-none items-center justify-center overflow-hidden border border-border font-semibold",
         showLogo ? "bg-white" : "bg-surface-2 text-muted",
         SIZES[size],
         className,
@@ -56,7 +51,7 @@ export function OrgLogo({
           decoding="async"
           referrerPolicy="no-referrer"
           onError={() => setFailed(url)}
-          className="size-full object-contain p-1.5"
+          className={cn("size-full object-contain", size === "badge" ? "p-px" : "p-1.5")}
         />
       ) : initials(name) ? (
         initials(name)

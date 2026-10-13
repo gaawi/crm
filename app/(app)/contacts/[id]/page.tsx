@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { cache, type ReactNode } from "react";
 import { Archive, CalendarClock, Check, Ellipsis, GitMerge, Music, Plus, Trash2, X } from "lucide-react";
 import { ContactAvatar } from "@/components/contact-avatar";
+import { ContactOrgAvatar } from "@/components/contact-org-avatar";
 import { DraftFollowUp } from "@/components/draft-follow-up";
 import { PhoneLink } from "@/components/booking/phone-actions";
 import { EmailTimeline } from "@/components/email-timeline";
@@ -19,12 +20,7 @@ import { CONTACT_STATUSES, PROJECT_COLORS } from "@/lib/constants";
 import { sql } from "@/lib/db";
 import { formatDate, formatDateTime, formatDue, formatRelative, todayIn } from "@/lib/dates";
 import { env } from "@/lib/env";
-import {
-  findDuplicateCandidates,
-  getContact,
-  getContactHistory,
-  listContacts,
-} from "@/lib/queries/contacts";
+import { findDuplicateCandidates, getContact, getContactHistory, listContacts } from "@/lib/queries/contacts";
 import { listActivities } from "@/lib/queries/activities";
 import { listOpportunities } from "@/lib/queries/opportunities";
 import { getMusicianProfile, listGigs, type MusicianProfile } from "@/lib/queries/musicians";
@@ -38,7 +34,16 @@ import { ActionForm, FormSubmit } from "../../_components/action-form";
 import { Dropdown } from "../../_components/dropdown";
 import { FilterForm } from "../../_components/filter-form";
 import { Segmented } from "../../_components/segmented";
-import { BackLink, FormActions, GroupAction, GroupTitle, SearchInput, iconButtonClass, menuItemClass, menuItemDangerClass } from "../../_components/ui";
+import {
+  BackLink,
+  FormActions,
+  GroupAction,
+  GroupTitle,
+  SearchInput,
+  iconButtonClass,
+  menuItemClass,
+  menuItemDangerClass,
+} from "../../_components/ui";
 import { hrefWith, oneOf, param } from "../../_lib/url";
 import { isId } from "../../_lib/validation";
 import {
@@ -151,28 +156,21 @@ export default async function ContactPage({ params, searchParams }: PageProps<"/
   ]);
 
   const openDeals = deals.filter((d) => d.stage !== "won" && d.stage !== "lost");
-  const olderHref =
-    history.length === HISTORY_PAGE
-      ? hrefWith(base, { q, before: history[history.length - 1].sentAt.toISOString() })
-      : null;
+  const olderHref = history.length === HISTORY_PAGE ? hrefWith(base, { q, before: history[history.length - 1].sentAt.toISOString() }) : null;
   // Calls and notes go between the emails of this page; older ones wait for "Older emails".
   const oldestEmail = olderHref ? history[history.length - 1].sentAt : null;
   const dealTitles = new Map(deals.map((d) => [d.id, d.title]));
   const extras = activities
     .map((a) => ({ activity: a, context: a.opportunityId ? (dealTitles.get(a.opportunityId) ?? null) : null }))
-    .filter(({ activity, context }) => (!oldestEmail || new Date(activity.occurredAt) >= oldestEmail) && (!q || activityMatches(activity, q, context)))
+    .filter(
+      ({ activity, context }) => (!oldestEmail || new Date(activity.occurredAt) >= oldestEmail) && (!q || activityMatches(activity, q, context)),
+    )
     .map(({ activity, context }) => activityExtra(activity, timezone, context));
   const show = (t: Tab) => (tab === t ? "" : "hidden md:flex");
 
   return (
     <>
-      <ContactHeader
-        contact={contact}
-        accounts={accounts}
-        timezone={timezone}
-        editingPhoto={param(sp, "edit") === "photo"}
-        musician={musician}
-      />
+      <ContactHeader contact={contact} accounts={accounts} timezone={timezone} editingPhoto={param(sp, "edit") === "photo"} musician={musician} />
 
       {orgProfile ? (
         <OrgProfileLine
@@ -255,14 +253,7 @@ export default async function ContactPage({ params, searchParams }: PageProps<"/
             ) : (
               <ProfileSection contact={contact} editHref={`${base}?tab=details&edit=profile`} />
             )}
-            <MusicianSection
-              contact={contact}
-              profile={musician}
-              gigs={gigs}
-              projects={projects}
-              editing={editingMusician}
-              timezone={timezone}
-            />
+            <MusicianSection contact={contact} profile={musician} gigs={gigs} projects={projects} editing={editingMusician} timezone={timezone} />
             <EmailsSection contact={contact} />
             <ProjectsSection contact={contact} projects={projects} />
             <ActivitySection contact={contact} timezone={timezone} />
@@ -281,7 +272,11 @@ function PhotoForm({ contact, cancelHref }: { contact: Contact; cancelHref: stri
   return (
     <section aria-label="Photo" className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-4 md:rounded-lg">
       <ActionForm action={updatePhotoAction.bind(null, contact.id)} className="flex flex-col gap-3">
-        <Field label="Photo URL" htmlFor="photo-url" hint="An https image address, e.g. from their website or a festival page. Shown without sending your address to that site.">
+        <Field
+          label="Photo URL"
+          htmlFor="photo-url"
+          hint="An https image address, e.g. from their website or a festival page. Shown without sending your address to that site."
+        >
           <Input
             id="photo-url"
             name="photoUrl"
@@ -315,12 +310,20 @@ function PhotoForm({ contact, cancelHref }: { contact: Contact; cancelHref: stri
         </FormActions>
       </ActionForm>
       {contact.photoUrl ? (
-        <form action={removePhotoAction.bind(null, contact.id)} className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
+        <form
+          action={removePhotoAction.bind(null, contact.id)}
+          className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3"
+        >
           <p className="min-w-0 text-[13px] text-muted md:text-xs">
             {contact.photoSource ? (
               <>
                 From{" "}
-                <a href={contact.photoSource} target="_blank" rel="noreferrer noopener" className="underline underline-offset-2 [overflow-wrap:anywhere]">
+                <a
+                  href={contact.photoSource}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="underline underline-offset-2 [overflow-wrap:anywhere]"
+                >
                   {(() => {
                     try {
                       return new URL(contact.photoSource).hostname;
@@ -383,7 +386,7 @@ function ContactHeader({
 
       <div className="flex flex-col items-center gap-3 text-center md:flex-row md:gap-4 md:text-left">
         <div className="flex shrink-0 flex-col items-center">
-          <ContactAvatar contact={contact} size="lg" zoomable photoSource={contact.photoSource} />
+          <ContactOrgAvatar contact={contact} organization={contact.organization} size="lg" zoomable photoSource={contact.photoSource} />
           {editingPhoto ? null : (
             <Link
               href={`${base}?edit=photo`}
@@ -419,10 +422,7 @@ function ContactHeader({
               </Link>
             ) : null}
             {contact.primaryEmail && contact.primaryEmail !== contact.displayName ? (
-              <a
-                href={`mailto:${contact.primaryEmail}`}
-                className="min-w-0 max-w-full truncate text-[15px] text-muted hover:text-fg md:text-sm"
-              >
+              <a href={`mailto:${contact.primaryEmail}`} className="min-w-0 max-w-full truncate text-[15px] text-muted hover:text-fg md:text-sm">
                 {contact.primaryEmail}
               </a>
             ) : !contact.primaryEmail ? (
@@ -456,9 +456,7 @@ function FollowUpSection({ contact, today }: { contact: Contact; today: string }
   const due = contact.followUpAt;
   const overdue = due !== null && due < today;
   const weekday = due
-    ? new Intl.DateTimeFormat("en-US", { timeZone: "UTC", weekday: "short", month: "short", day: "numeric" }).format(
-        new Date(`${due}T12:00:00Z`),
-      )
+    ? new Intl.DateTimeFormat("en-US", { timeZone: "UTC", weekday: "short", month: "short", day: "numeric" }).format(new Date(`${due}T12:00:00Z`))
     : null;
   const presets: { key: "1w" | "2w" | "1m"; label: string }[] = [
     { key: "1w", label: "+1 week" },
@@ -618,9 +616,7 @@ function ProfileSection({ contact, editHref }: { contact: Contact; editHref: str
             <span className="text-subtle">—</span>
           )}
         </InfoRow>
-        <InfoRow label="Notes">
-          {contact.notes ? <p className="prose-plain">{contact.notes}</p> : <span className="text-subtle">—</span>}
-        </InfoRow>
+        <InfoRow label="Notes">{contact.notes ? <p className="prose-plain">{contact.notes}</p> : <span className="text-subtle">—</span>}</InfoRow>
       </dl>
     </section>
   );
@@ -822,10 +818,7 @@ function ActivitySection({ contact, timezone }: { contact: Contact; timezone: st
         <StatRow label="Last contact" value={when(contact.lastContactedAt)} title={formatDateTime(contact.lastContactedAt, timezone)} />
         <StatRow label="They last wrote" value={when(contact.lastInboundAt)} title={formatDateTime(contact.lastInboundAt, timezone)} />
         <StatRow label="You last wrote" value={when(contact.lastOutboundAt)} title={formatDateTime(contact.lastOutboundAt, timezone)} />
-        <StatRow
-          label="Added"
-          value={`${formatDate(contact.createdAt, timezone)} · ${contact.source === "gmail" ? "from Gmail" : "by hand"}`}
-        />
+        <StatRow label="Added" value={`${formatDate(contact.createdAt, timezone)} · ${contact.source === "gmail" ? "from Gmail" : "by hand"}`} />
       </dl>
     </section>
   );
@@ -845,9 +838,7 @@ function DuplicatesSection({ contact, duplicates }: { contact: Contact; duplicat
               <Link href={`/contacts/${d.id}`} className="block truncate text-[15px] font-medium text-fg hover:underline md:text-sm">
                 {d.displayName}
               </Link>
-              <p className="truncate text-[13px] text-muted md:text-xs">
-                {[d.primaryEmail, d.organization?.name].filter(Boolean).join(" · ")}
-              </p>
+              <p className="truncate text-[13px] text-muted md:text-xs">{[d.primaryEmail, d.organization?.name].filter(Boolean).join(" · ")}</p>
             </div>
             <ButtonLink href={`/contacts/${contact.id}?merge=1&source=${d.id}`} size="sm" className="shrink-0">
               Merge…
@@ -880,12 +871,11 @@ function MergeScreen({
       <div className="flex flex-col gap-5">
         <div className="rounded-xl border border-border bg-surface p-4 md:rounded-lg">
           <p className="text-[15px] text-fg md:text-sm">
-            Merge <span className="font-medium">{source.displayName}</span> into{" "}
-            <span className="font-medium">{contact.displayName}</span>?
+            Merge <span className="font-medium">{source.displayName}</span> into <span className="font-medium">{contact.displayName}</span>?
           </p>
           <p className="mt-2 text-[15px] text-muted md:text-sm">
-            {source.displayName}&rsquo;s addresses, email history, projects, tags, notes and goals move to {contact.displayName}.
-            Empty fields are filled from {source.displayName}. Then {source.displayName} is deleted. This can&rsquo;t be undone.
+            {source.displayName}&rsquo;s addresses, email history, projects, tags, notes and goals move to {contact.displayName}. Empty fields are
+            filled from {source.displayName}. Then {source.displayName} is deleted. This can&rsquo;t be undone.
           </p>
           <dl className="mt-3 grid grid-cols-[6rem_minmax(0,1fr)] gap-x-3 gap-y-1 text-[13px] md:text-xs">
             <dt className="text-subtle">Addresses</dt>
@@ -928,7 +918,10 @@ function MergeScreen({
           <GroupTitle>{fromSearch ? "Matches" : "Possible duplicates"}</GroupTitle>
           <RowList>
             {candidates.map((c) => (
-              <li key={c.id} className="relative flex min-h-[60px] items-center gap-3 px-4 py-2.5 active:bg-surface-2 md:min-h-0 md:hover:bg-surface-2/40">
+              <li
+                key={c.id}
+                className="relative flex min-h-[60px] items-center gap-3 px-4 py-2.5 active:bg-surface-2 md:min-h-0 md:hover:bg-surface-2/40"
+              >
                 <ContactAvatar contact={c} />
                 <div className="min-w-0 flex-1">
                   <Link
@@ -966,14 +959,11 @@ function DeleteConfirm({ contact, cancelHref }: { contact: Contact; cancelHref: 
       <div className="rounded-xl border border-border bg-surface p-4 md:rounded-lg">
         <p className="text-[15px] font-medium text-fg md:text-sm">Delete {contact.displayName}?</p>
         <p className="mt-2 text-[15px] text-muted md:text-sm">
-          The contact, its addresses, notes and project memberships are removed. Emails stay searchable, and goals are kept
-          without a contact.
+          The contact, its addresses, notes and project memberships are removed. Emails stay searchable, and goals are kept without a contact.
           {contact.source === "gmail" ? " If you email them again, a new contact is created." : null}
         </p>
         {contact.status !== "archived" ? (
-          <p className="mt-2 text-[15px] text-muted md:text-sm">
-            To just hide them from lists and follow-ups, archive instead.
-          </p>
+          <p className="mt-2 text-[15px] text-muted md:text-sm">To just hide them from lists and follow-ups, archive instead.</p>
         ) : null}
       </div>
       <FormActions>

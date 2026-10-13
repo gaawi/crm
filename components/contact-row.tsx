@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ContactAvatar } from "@/components/contact-avatar";
+import { ContactOrgAvatar } from "@/components/contact-org-avatar";
 import type { ReactNode } from "react";
 import { ProjectDot, StatusBadge } from "@/components/ui/badge";
 import { formatDue, formatRelative } from "@/lib/dates";
@@ -46,7 +46,7 @@ export function ContactRow({
 
   return (
     <li className="group relative flex min-h-[60px] items-center gap-3 px-4 py-2.5 active:bg-surface-2 md:min-h-0 md:active:bg-transparent">
-      <ContactAvatar contact={contact} zoomable />
+      <ContactOrgAvatar contact={contact} organization={contact.organization} layout="badge" size="sm" zoomable />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <Link
@@ -75,8 +75,6 @@ export function ContactRow({
 /** Bordered list container for ContactRow / other rows. */
 export function RowList({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <ul className={cn("divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface md:rounded-lg", className)}>
-      {children}
-    </ul>
+    <ul className={cn("divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface md:rounded-lg", className)}>{children}</ul>
   );
 }

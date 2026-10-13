@@ -26,7 +26,7 @@ export const opportunityColumns = () => sql`
     'whatsapp', c.whatsapp,
     'photoUrl', c.photo_url
   ) end as contact,
-  case when o.id is null then null else json_build_object('id', o.id, 'name', o.name) end as organization,
+  case when o.id is null then null else json_build_object('id', o.id, 'name', o.name, 'logo', o.profile->>'logo') end as organization,
   case when p.id is null then null else json_build_object('id', p.id, 'name', p.name, 'color', p.color, 'sheet', p.sheet) end as project
 `;
 
@@ -161,7 +161,11 @@ export async function updateOpportunity(id: string, patch: OpportunityInput): Pr
 }
 
 /** "Get booked · Teatro Campoamor": a title for a goal created without one (null when it is with nobody). */
-export async function defaultGoalTitle(input: { kind?: OpportunityKind | null; contactId?: string | null; organizationId?: string | null }): Promise<string | null> {
+export async function defaultGoalTitle(input: {
+  kind?: OpportunityKind | null;
+  contactId?: string | null;
+  organizationId?: string | null;
+}): Promise<string | null> {
   let who: string | null = null;
   if (input.organizationId) {
     const [org] = await sql<{ name: string }[]>`select name from organizations where id = ${input.organizationId}`;

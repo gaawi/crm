@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ContactAvatar } from "@/components/contact-avatar";
+import { ContactOrgAvatar } from "@/components/contact-org-avatar";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { Archive, Check, ChevronLeft, ChevronRight, SlidersHorizontal, X } from "lucide-react";
@@ -117,7 +117,13 @@ export default async function ContactsPage({ searchParams }: PageProps<"/contact
 
       {/* Desktop: one compact row. */}
       <FilterForm action="/contacts" className="mb-4 hidden flex-wrap items-center gap-2 md:flex" role="search" aria-label="Filter contacts">
-        <SearchInput name="q" defaultValue={q} placeholder="Search name, email, organization or tag" aria-label="Search contacts" className="min-w-64 flex-1" />
+        <SearchInput
+          name="q"
+          defaultValue={q}
+          placeholder="Search name, email, organization or tag"
+          aria-label="Search contacts"
+          className="min-w-64 flex-1"
+        />
         {selects}
         {filtered || sort ? (
           <Link href="/contacts" className="shrink-0 px-1 text-sm text-muted hover:text-fg">
@@ -172,9 +178,9 @@ export default async function ContactsPage({ searchParams }: PageProps<"/contact
       {triage && contacts.length ? (
         <div className="mb-4">
           <Notice>
-            These contacts were created automatically from your email. <span className="text-fg">Keep</span> the people who
-            matter (they become Active) and <span className="text-fg">archive</span> the rest — archived contacts are hidden
-            from lists and follow-ups, but their email stays searchable.
+            These contacts were created automatically from your email. <span className="text-fg">Keep</span> the people who matter (they become
+            Active) and <span className="text-fg">archive</span> the rest — archived contacts are hidden from lists and follow-ups, but their email
+            stays searchable.
           </Notice>
         </div>
       ) : null}
@@ -187,10 +193,7 @@ export default async function ContactsPage({ searchParams }: PageProps<"/contact
             </p>
           ) : null}
           <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface md:rounded-lg">
-            <li
-              aria-hidden
-              className="hidden items-center gap-3 px-4 py-2 text-xs font-medium text-subtle md:flex"
-            >
+            <li aria-hidden className="hidden items-center gap-3 px-4 py-2 text-xs font-medium text-subtle md:flex">
               <span className="flex-1 pl-11">Name</span>
               <span className="hidden w-44 shrink-0 lg:block">Projects</span>
               <span className="w-24 shrink-0">Last contact</span>
@@ -235,8 +238,7 @@ export default async function ContactsPage({ searchParams }: PageProps<"/contact
         </EmptyState>
       ) : filtered ? (
         <EmptyState title="No contacts match" action={<ButtonLink href="/contacts">Clear filters</ButtonLink>}>
-          {q ? <>Nothing matches “{q}” with these filters. </> : null}Try a different search, or include archived contacts
-          with the “All” status.
+          {q ? <>Nothing matches “{q}” with these filters. </> : null}Try a different search, or include archived contacts with the “All” status.
         </EmptyState>
       ) : (
         <EmptyState
@@ -250,8 +252,7 @@ export default async function ContactsPage({ searchParams }: PageProps<"/contact
             </div>
           }
         >
-          Contacts are created automatically from the people you email once a Gmail account is connected. You can also add
-          one by hand.
+          Contacts are created automatically from the people you email once a Gmail account is connected. You can also add one by hand.
         </EmptyState>
       )}
     </>
@@ -291,13 +292,7 @@ function FilterSelects({
 
   if (!stacked) {
     return controls.map((c) => (
-      <Select
-        key={c.name}
-        name={c.name}
-        defaultValue={current[c.name]}
-        aria-label={c.label}
-        className="w-auto max-w-48 shrink-0"
-      >
+      <Select key={c.name} name={c.name} defaultValue={current[c.name]} aria-label={c.label} className="w-auto max-w-48 shrink-0">
         {c.options.map((o) => (
           <option key={o.value} value={o.value}>
             {c.name === "sort" ? `Sort: ${o.label}` : o.label}
@@ -326,17 +321,7 @@ function FilterSelects({
   ));
 }
 
-function ContactListRow({
-  contact: c,
-  timezone,
-  today,
-  triage,
-}: {
-  contact: ContactSummary;
-  timezone: string;
-  today: string;
-  triage: boolean;
-}) {
+function ContactListRow({ contact: c, timezone, today, triage }: { contact: ContactSummary; timezone: string; today: string; triage: boolean }) {
   const subtitle =
     [c.role, c.organization?.name].filter(Boolean).join(" · ") ||
     (c.primaryEmail && c.primaryEmail !== c.displayName ? c.primaryEmail : "") ||
@@ -346,7 +331,7 @@ function ContactListRow({
 
   return (
     <li className="relative flex min-h-[60px] items-center gap-3 px-4 py-2.5 active:bg-surface-2 md:min-h-0 md:hover:bg-surface-2/40 md:active:bg-surface-2/40">
-      <ContactAvatar contact={c} zoomable />
+      <ContactOrgAvatar contact={c} organization={c.organization} layout="badge" size="sm" zoomable />
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-1.5">
           <Link
@@ -378,7 +363,13 @@ function ContactListRow({
           </span>
         ))}
         {extraProjects > 0 ? (
-          <span className="text-xs text-subtle" title={c.projects.slice(3).map((p) => p.name).join(", ")}>
+          <span
+            className="text-xs text-subtle"
+            title={c.projects
+              .slice(3)
+              .map((p) => p.name)
+              .join(", ")}
+          >
             +{extraProjects}
           </span>
         ) : null}
@@ -406,7 +397,12 @@ function ContactListRow({
             <Check className="size-5 md:size-3.5" strokeWidth={1.75} />
             <span className="hidden md:inline">Keep</span>
           </TriageButton>
-          <TriageButton action={triageContact.bind(null, c.id, "archived")} label={`Archive ${c.displayName}`} title="Archive — hide from lists" quiet>
+          <TriageButton
+            action={triageContact.bind(null, c.id, "archived")}
+            label={`Archive ${c.displayName}`}
+            title="Archive — hide from lists"
+            quiet
+          >
             <Archive className="size-5 md:size-3.5" strokeWidth={1.75} />
             <span className="hidden md:inline">Archive</span>
           </TriageButton>
@@ -437,9 +433,7 @@ function TriageButton({
         title={title}
         className={cn(
           "inline-flex size-10 items-center justify-center rounded-full transition-colors active:opacity-60 md:h-7 md:w-auto md:gap-1.5 md:rounded-md md:px-2.5 md:text-xs md:font-medium",
-          quiet
-            ? "text-muted md:hover:bg-surface-2 md:hover:text-fg"
-            : "border border-border bg-surface text-fg md:hover:bg-surface-2",
+          quiet ? "text-muted md:hover:bg-surface-2 md:hover:text-fg" : "border border-border bg-surface text-fg md:hover:bg-surface-2",
         )}
       >
         {children}
