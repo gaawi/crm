@@ -5,6 +5,7 @@ import { z } from "zod";
 import { requireSession } from "@/lib/auth";
 import { TEMPLATE_TRIGGERS } from "@/lib/constants";
 import type { ActionOutcome, SheetSettingsInput, TemplateFormInput } from "@/lib/booking/types";
+import { moveCampaignDrafts } from "@/lib/ai/approvals";
 import { getSheet, updateSheetSettings } from "@/lib/queries/booking";
 import {
   addStarterTemplates,
@@ -40,13 +41,17 @@ export async function updateSheetSettingsAction(projectId: string, input: SheetS
   const parsed = settingsSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Some fields are invalid." };
   try {
+    const before = (await getSheet(id))?.sendAccountId ?? null;
+    const sendAccountId = parsed.data.sendAccountId || null;
     await updateSheetSettings(id, {
       name: parsed.data.name,
       currency: parsed.data.currency,
       phonePrefix: parsed.data.phonePrefix || null,
-      sendAccountId: parsed.data.sendAccountId || null,
+      sendAccountId,
       description: parsed.data.description || null,
     });
+    // The emails still waiting follow the campaign to its new mailbox.
+    if (sendAccountId && sendAccountId !== before) await moveCampaignDrafts(id, sendAccountId);
   } catch (error) {
     const message = errorMessage(error);
     return { ok: false, error: /duplicate|unique|already exists/i.test(message) ? "A project with that name already exists." : message };

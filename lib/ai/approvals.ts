@@ -220,6 +220,62 @@ export async function reviseDraft(id: string, note: string): Promise<EmailDraft>
   return (await getDraft(id))!;
 }
 
+/** Statuses whose sending mailbox may still change (not yet being sent, sent or discarded). */
+const MOVABLE: DraftStatus[] = ["proposed", "queued", "failed", "postponed", "changes_requested"];
+
+/**
+ * Send an email from another of our mailboxes: its Gmail draft moves there
+ * (deleted in the old mailbox, saved in the new one). A reply stays in the
+ * mailbox of its conversation, since Gmail threads live in one mailbox.
+ */
+export async function changeDraftAccount(id: string, accountId: string): Promise<EmailDraft> {
+  const draft = await getDraft(id);
+  if (!draft) throw new DraftError("Draft not found.");
+  if (!MOVABLE.includes(draft.status)) throw new DraftError("This email can no longer change mailbox.");
+  const [account] = await sql<{ email: string; usable: boolean }[]>`
+    select email, (status = 'active' and not monitor_only) as usable from gmail_accounts where id = ${accountId}`;
+  if (!account) throw new DraftError("That Gmail account is not connected.");
+  if (!account.usable) throw new DraftError(`${account.email} cannot send (monitor-only or disconnected).`);
+  if (draft.accountId === accountId) return draft;
+  if (draft.replyToMessageId) {
+    const [thread] = await sql<{ accountId: string; email: string }[]>`
+      select m.account_id, a.email from messages m join gmail_accounts a on a.id = m.account_id where m.id = ${draft.replyToMessageId}`;
+    if (thread && thread.accountId !== accountId)
+      throw new DraftError(`This email replies in a conversation of ${thread.email}: it can only be sent from that mailbox.`);
+  }
+  const moved = await sql`
+    update email_drafts set account_id = ${accountId}, gmail_draft_id = null
+     where id = ${id} and status = any(${MOVABLE}::text[])`;
+  if (!moved.count) throw new DraftError("This email can no longer change mailbox.");
+  if (draft.gmailDraftId) await deleteGmailDraft(draft.accountId, draft.gmailDraftId).catch(() => {});
+  await syncGmailDraft(id);
+  return (await getDraft(id))!;
+}
+
+/**
+ * A campaign now sends from another mailbox: its emails still waiting move
+ * there too, except replies, which stay with their conversation.
+ */
+export async function moveCampaignDrafts(projectId: string, accountId: string): Promise<{ moved: number; kept: number }> {
+  const drafts = await sql<{ id: string }[]>`
+    select distinct d.id from email_drafts d
+      left join opportunities op on op.id = d.opportunity_id
+     where d.status = any(${MOVABLE}::text[]) and d.account_id <> ${accountId}
+       and (op.project_id = ${projectId}
+            or exists (select 1 from assistant_actions aa where aa.draft_id = d.id and aa.project_id = ${projectId}))`;
+  let moved = 0;
+  let kept = 0;
+  for (const { id } of drafts) {
+    try {
+      await changeDraftAccount(id, accountId);
+      moved += 1;
+    } catch {
+      kept += 1;
+    }
+  }
+  return { moved, kept };
+}
+
 /** The Gmail draft is gone: deleted, or sent from Gmail itself. */
 function isGone(e: unknown): boolean {
   return (e instanceof GmailApiError && e.status === 404) || (e instanceof GmailDraftError && /no longer exists/i.test(e.message));
@@ -345,7 +401,10 @@ export async function approveAndSend(id: string, options: SendOptions = {}): Pro
     await updateDraft(id, { gmailDraftId, error: null });
   } catch (e) {
     if (e instanceof DraftError) throw e;
-    await updateDraft(id, { status: "failed", error: `Not sent: Gmail could not be updated with your latest version (${errorMessage(e)}). Try again.` });
+    await updateDraft(id, {
+      status: "failed",
+      error: `Not sent: Gmail could not be updated with your latest version (${errorMessage(e)}). Try again.`,
+    });
     throw new DraftError(`Not sent: Gmail could not be updated with your latest version. Try again.`);
   }
 

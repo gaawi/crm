@@ -38,6 +38,7 @@ import { GET as historyRoute } from "@/app/api/assistant-agent/history/route";
 import { GET as rowsListRoute, POST as rowsRoute } from "@/app/api/assistant-agent/rows/route";
 import { GET as prospectsRoute } from "@/app/api/assistant-agent/prospects/route";
 import { listAssistantRuns } from "@/lib/assistant/runs";
+import { changeDraftAccount, moveCampaignDrafts } from "@/lib/ai/approvals";
 import { postponeDraft, requestDraftChanges } from "@/lib/assistant/drafts";
 import { addSheetRow, createSheet } from "@/lib/queries/booking";
 import { getDraft } from "@/lib/queries/drafts";
@@ -382,6 +383,35 @@ describe("campaign assistant API", () => {
         )
       ).json();
       expect(noPrefix.results[0]).toMatchObject({ ok: false, error: expect.stringMatching(/international prefix/) });
+    });
+
+    it("moves waiting emails to the campaign's new mailbox, but a reply stays with its conversation", async () => {
+      const { projectId, ids } = await seed(2);
+      const [{ id: oldAccount }] = await sql<{ id: string }[]>`select id from gmail_accounts`;
+      const guillermo = await insertAccount("guillermo@example.com");
+      const monitor = await insertAccount("josefina@example.com", { monitor_only: true });
+      const [msg] = await sql<{ id: string }[]>`
+        insert into messages (account_id, gmail_message_id, gmail_thread_id, rfc822_message_id, direction, from_email, subject, snippet, sent_at)
+        values (${oldAccount}, 'r9', 't-r9', '<r9@test>', 'inbound', 'booker1@venue1.org', 'Dates', 'Hi', now() - interval '1 day')
+        returning id`;
+      await sql`insert into message_participants (message_id, role, email) values (${msg.id}, 'from', 'booker1@venue1.org'), (${msg.id}, 'to', 'me@example.com')`;
+      const made = await (await post({ projectId, emails: [email(ids[0]), { ...email(ids[1], 1), subject: "Re: Dates" }] })).json();
+      const [fresh, reply] = made.created.emails.map((e: { draftId: string }) => e.draftId);
+      const before = await getDraft(fresh);
+      expect(before?.accountId).toBe(oldAccount);
+
+      await expect(changeDraftAccount(fresh, monitor)).rejects.toThrow(/cannot send/);
+      await expect(changeDraftAccount(reply, guillermo)).rejects.toThrow(/conversation of me@example.com/);
+
+      const result = await moveCampaignDrafts(projectId, guillermo);
+      expect(result).toEqual({ moved: 1, kept: 1 });
+      const after = await getDraft(fresh);
+      expect(after).toMatchObject({ accountId: guillermo, status: "proposed" });
+      expect(after?.gmailDraftId).toBeTruthy();
+      expect(after?.gmailDraftId).not.toBe(before?.gmailDraftId);
+      expect(state.drafts.has(before!.gmailDraftId!)).toBe(false);
+      expect((await getDraft(reply))?.accountId).toBe(oldAccount);
+      expect(state.sent).toHaveLength(0);
     });
 
     it("answers the owner's comments on actions before any new email, and updates or closes the action", async () => {
