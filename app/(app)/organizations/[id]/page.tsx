@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { cache, type ReactNode } from "react";
 import { Ellipsis, ExternalLink, Pencil, Plus, Sparkles, Trash2, UserPlus } from "lucide-react";
 import { PlaceLink } from "@/components/organizations/place-link";
+import { OrgLogo } from "@/components/organizations/org-logo";
 import { OrgProfileLine } from "@/components/organizations/profile-card";
 import { PhoneActions } from "@/components/booking/phone-actions";
 import { ContactRow, RowList } from "@/components/contact-row";
@@ -112,9 +113,7 @@ export default async function OrganizationPage({ params, searchParams }: PagePro
   const headerPlace = orgPlace(organization, profile);
   const openDeals = deals.filter((d) => d.stage !== "won" && d.stage !== "lost");
   const olderHref =
-    history.length === HISTORY_PAGE
-      ? hrefWith(base, { tab: "email", q, before: history[history.length - 1].sentAt.toISOString() })
-      : null;
+    history.length === HISTORY_PAGE ? hrefWith(base, { tab: "email", q, before: history[history.length - 1].sentAt.toISOString() }) : null;
   const show = (t: Tab) => (tab === t ? "flex" : "hidden md:flex");
   const addPersonHref = hrefWith("/contacts/new", { org: organization.name });
   const addGoalHref = hrefWith("/pipeline", { new: 1, organization: organization.id, return: `${base}?tab=goals` });
@@ -146,6 +145,7 @@ export default async function OrganizationPage({ params, searchParams }: PagePro
           </Dropdown>
         </div>
         <div className="min-w-0">
+          {profile?.logo ? <OrgLogo name={organization.name} logo={profile.logo} size="lg" className="mb-3 md:size-14" /> : null}
           <h1 className="text-[28px] font-bold leading-tight tracking-tight text-fg [overflow-wrap:anywhere] md:text-xl md:font-semibold">
             {organization.name}
           </h1>
@@ -264,7 +264,9 @@ export default async function OrganizationPage({ params, searchParams }: PagePro
                     contact={c}
                     timezone={timezone}
                     today={today}
-                    note={[c.role ?? (c.phone ? null : c.primaryEmail), c.phone ? formatPhone(c.phone) : null].filter(Boolean).join(" · ") || undefined}
+                    note={
+                      [c.role ?? (c.phone ? null : c.primaryEmail), c.phone ? formatPhone(c.phone) : null].filter(Boolean).join(" · ") || undefined
+                    }
                     actions={
                       <PhoneActions
                         phone={c.phone}
@@ -400,14 +402,7 @@ function EditOrganization({ organization: o, cancelHref }: { organization: Organ
           <Input id="org-city" name="city" defaultValue={o.city ?? ""} autoComplete="off" />
         </Field>
         <Field label="Email domains" htmlFor="org-domains" hint="Comma separated. People writing from these domains are linked automatically.">
-          <Input
-            id="org-domains"
-            name="domains"
-            defaultValue={o.domains.join(", ")}
-            autoComplete="off"
-            autoCapitalize="off"
-            spellCheck={false}
-          />
+          <Input id="org-domains" name="domains" defaultValue={o.domains.join(", ")} autoComplete="off" autoCapitalize="off" spellCheck={false} />
         </Field>
         <Field label="Website" htmlFor="org-website">
           <Input

@@ -224,6 +224,13 @@ describe("profile parsing", () => {
     });
   });
 
+  it("keeps an https logo and drops anything else without losing the profile", () => {
+    expect(readProfile({ summary: "A series.", logo: "https://fest.org/logo.svg" })?.logo).toBe("https://fest.org/logo.svg");
+    expect(readProfile({ summary: "A series.", logo: "http://fest.org/logo.png" })).toMatchObject({ summary: "A series." });
+    expect(readProfile({ summary: "A series.", logo: "http://fest.org/logo.png" })?.logo).toBeUndefined();
+    expect(readProfile({ summary: "A series.", logo: "javascript:alert(1)" })?.logo).toBeUndefined();
+  });
+
   it("reads stored values defensively", () => {
     expect(readProfile(null)).toBeNull();
     expect(readProfile({ nope: 1 })).toBeNull();

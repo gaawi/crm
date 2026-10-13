@@ -396,7 +396,7 @@ export function Flashcards({
           {draft ? (
             <>
               <header className="flex items-start gap-3 border-b border-border px-4 pb-3 pt-3.5">
-                {draft.contact ? <ContactAvatar contact={draft.contact} size="md" /> : null}
+                {draft.contact && !flipped ? <ContactAvatar contact={draft.contact} size="md" /> : null}
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline gap-2">
                     <span className="min-w-0 flex-1 truncate text-[16px] font-semibold leading-tight md:text-[15px]">
@@ -423,9 +423,11 @@ export function Flashcards({
                       {flipped ? "Email" : "Info"}
                     </button>
                   </div>
-                  {org ? (
+                  {org && !flipped ? (
                     <p className="truncate text-[12px] text-muted">
-                      {org.name}
+                      <Link href={`/organizations/${org.id}`} className="font-medium text-fg/80 hover:underline">
+                        {org.name}
+                      </Link>
                       {tagline ? ` · ${tagline}` : ""}
                     </p>
                   ) : null}

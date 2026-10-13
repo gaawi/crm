@@ -32,6 +32,7 @@ import {
   type OrgProfileOwner,
   type ProfileKind,
 } from "@/lib/organizations/profile";
+import { OrgLogo } from "@/components/organizations/org-logo";
 import { cn } from "@/lib/utils";
 
 /**
@@ -390,7 +391,9 @@ export function OrgProfileCard({
         <div className="flex flex-col gap-2">
           {showName && name ? (
             <div className="flex items-center gap-2">
-              {!hero ? (
+              {p.logo ? (
+                <OrgLogo name={name} logo={p.logo} className="size-9" />
+              ) : !hero ? (
                 <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-2 text-muted" aria-hidden>
                   <KindIcon className="size-5" strokeWidth={1.5} />
                 </span>

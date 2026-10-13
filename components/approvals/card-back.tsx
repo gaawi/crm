@@ -4,6 +4,7 @@ import Link from "next/link";
 import {
   ArrowDownLeft,
   ArrowUpRight,
+  ChevronRight,
   ExternalLink,
   Landmark,
   Mail,
@@ -16,6 +17,7 @@ import {
   Users,
 } from "lucide-react";
 import { ContactAvatar } from "@/components/contact-avatar";
+import { OrgLogo } from "@/components/organizations/org-logo";
 import { OrgProfileCard } from "@/components/organizations/profile-card";
 import { ProjectDot, StatusBadge, TagBadge } from "@/components/ui/badge";
 import { formatPhone, telHref, whatsappUrl } from "@/lib/booking/phone";
@@ -41,43 +43,7 @@ export function CardBack({ draft, info, timezone }: { draft: EmailDraft; info: C
   const wa = c ? whatsappUrl({ phone: c.phone, whatsapp: c.whatsapp }) : null;
   return (
     <div className="flex flex-col gap-4 px-4 py-3 text-[13px] leading-snug">
-      {c ? (
-        <section className="flex items-start gap-3">
-          <ContactAvatar contact={c} size="lg" zoomable photoSource={c.photoSource} className="md:size-16" />
-          <div className="min-w-0 flex-1">
-            <Link href={`/contacts/${c.id}`} className="text-[17px] font-semibold leading-tight hover:underline">
-              {c.displayName}
-            </Link>
-            {c.role || c.organization ? (
-              <p className="text-muted">
-                {c.role}
-                {c.role && c.organization ? " · " : ""}
-                {c.organization ? (
-                  <Link href={`/organizations/${c.organization.id}`} className="hover:underline">
-                    {c.organization.name}
-                  </Link>
-                ) : null}
-              </p>
-            ) : null}
-            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-              <StatusBadge status={c.status} />
-              {c.projects.map((p) => (
-                <span key={p.id} className="inline-flex items-center gap-1 text-[12px] text-muted">
-                  <ProjectDot color={p.color} />
-                  {p.name}
-                </span>
-              ))}
-            </div>
-            <p className="mt-1 text-[12px] text-subtle">
-              {c.messageCount} {c.messageCount === 1 ? "email" : "emails"} · last{" "}
-              {c.lastContactedAt ? formatRelative(new Date(c.lastContactedAt), timezone) : "never"}
-              {c.followUpAt ? ` · follow up ${formatDate(new Date(`${c.followUpAt}T12:00:00Z`), timezone)}` : ""}
-            </p>
-          </div>
-        </section>
-      ) : (
-        <p className="text-muted">To {draft.to.join(", ")}, not linked to a contact yet.</p>
-      )}
+      <CardHero draft={draft} info={info} timezone={timezone} />
 
       {c ? (
         <section className="flex flex-col gap-1">
@@ -230,6 +196,73 @@ export function CardBack({ draft, info, timezone }: { draft: EmailDraft; info: C
 }
 
 /**
+ * The top of the back: the contact's photo with the organization's logo on
+ * its right, then the organization (tap it to open its page) with what kind
+ * it is, and the contact's role and standing. The name is in the card's
+ * header already, so it is not repeated here.
+ */
+function CardHero({ draft, info, timezone }: { draft: EmailDraft; info: CardInfo; timezone: string }) {
+  const c = info.contact;
+  const org = draft.organization ?? c?.organization ?? null;
+  const profile = draft.organization?.profile;
+  if (!c && !org) return <p className="text-muted">To {draft.to.join(", ")}, not linked to a contact yet.</p>;
+  const orgHref = org ? `/organizations/${org.id}` : null;
+  return (
+    <section className="flex flex-col gap-2.5" data-testid="card-hero">
+      <div className="flex items-center gap-2">
+        {c ? <ContactAvatar contact={c} size="lg" zoomable photoSource={c.photoSource} className="md:size-16" /> : null}
+        {org && orgHref ? (
+          <Link href={orgHref} aria-label={`Open ${org.name}`} className="rounded-xl active:opacity-80">
+            <OrgLogo name={org.name} logo={profile?.logo} size="lg" className="md:size-16" />
+          </Link>
+        ) : null}
+      </div>
+      {org && orgHref ? (
+        <div>
+          <Link href={orgHref} className="group inline-flex max-w-full items-start gap-1">
+            <span className="min-w-0 text-[17px] font-semibold leading-tight group-hover:underline">{org.name}</span>
+            <ChevronRight className="mt-0.5 size-4 shrink-0 text-subtle" aria-hidden />
+          </Link>
+          <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1">
+            {profile?.kind ? (
+              <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-brand">
+                {PROFILE_KIND_LABEL[profile.kind]}
+              </span>
+            ) : null}
+            {profile?.tagline ? <span className="text-muted">{profile.tagline}</span> : null}
+          </p>
+        </div>
+      ) : null}
+      {c ? (
+        <div>
+          <p className="text-fg/90">
+            {c.role || (
+              <Link href={`/contacts/${c.id}`} className="hover:underline">
+                {c.displayName}
+              </Link>
+            )}
+          </p>
+          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+            <StatusBadge status={c.status} />
+            {c.projects.map((p) => (
+              <span key={p.id} className="inline-flex items-center gap-1 text-[12px] text-muted">
+                <ProjectDot color={p.color} />
+                {p.name}
+              </span>
+            ))}
+          </div>
+          <p className="mt-1 text-[12px] text-subtle">
+            {c.messageCount} {c.messageCount === 1 ? "email" : "emails"} · last{" "}
+            {c.lastContactedAt ? formatRelative(new Date(c.lastContactedAt), timezone) : "never"}
+            {c.followUpAt ? ` · follow up ${formatDate(new Date(`${c.followUpAt}T12:00:00Z`), timezone)}` : ""}
+          </p>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+/**
  * What the owner checks before approving: what kind of series it is, the
  * hall (type, size, piano), which kinds of groups they present and who has
  * played there. Says plainly what is still unknown.
@@ -249,18 +282,6 @@ function SeriesAtAGlance({ organization }: { organization: EmailDraft["organizat
   ) as string[];
   return (
     <section className="flex flex-col gap-2 rounded-lg bg-surface-2 px-3 py-2.5">
-      <div>
-        <p className="flex flex-wrap items-baseline gap-x-1.5">
-          <span className="text-[15px] font-semibold">{organization.name}</span>
-          {p.kind ? (
-            <span className="rounded-full bg-surface px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-brand">
-              {PROFILE_KIND_LABEL[p.kind]}
-            </span>
-          ) : null}
-        </p>
-        {p.tagline ? <p className="text-muted">{p.tagline}</p> : null}
-      </div>
-
       {p.venues?.length ? (
         <div>
           <p className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-subtle">

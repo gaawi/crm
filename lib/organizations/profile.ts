@@ -123,6 +123,14 @@ export const orgProfileSchema = z.object({
     }),
     20,
   ),
+  /** The organization's logo from its official site (https). Anything else is dropped rather than failing the profile. */
+  logo: z
+    .string()
+    .trim()
+    .max(2048)
+    .nullish()
+    .transform((v) => (v && isHttpsUrl(v) ? v : undefined))
+    .optional(),
   images: optList(z.object({ url: httpsUrl, caption: optText(300), source: optText(2048) }), MAX_PROFILE_IMAGES),
   links: optList(z.object({ label: text(120), url: httpsUrl }), 20),
   sources: optList(httpsUrl, 30),
