@@ -26,14 +26,7 @@ export function ProfileForm({ organizationId, profile, cancelHref }: { organizat
           htmlFor="p-tagline"
           hint="What they are, e.g. Chamber music festival. Shown in lists with the city and country; empty = the kind."
         >
-          <Input
-            id="p-tagline"
-            name="tagline"
-            maxLength={MAX_TAGLINE}
-            defaultValue={v.tagline}
-            placeholder="Chamber music festival"
-            {...text}
-          />
+          <Input id="p-tagline" name="tagline" maxLength={MAX_TAGLINE} defaultValue={v.tagline} placeholder="Chamber music festival" {...text} />
         </Field>
         <Field label="Summary" htmlFor="p-summary" hint="Two to four sentences: who they are and what they do.">
           <Textarea id="p-summary" name="summary" rows={4} required maxLength={1500} defaultValue={v.summary} />
@@ -71,7 +64,11 @@ export function ProfileForm({ organizationId, profile, cancelHref }: { organizat
         <Field label="Programs" htmlFor="p-programming" hint="What they program: genres, formats.">
           <Textarea id="p-programming" name="programming" rows={3} maxLength={2000} defaultValue={v.programming} />
         </Field>
-        <Field label="Venues" htmlFor="p-venues" hint="One per line: Name — type — capacity — @ address (e.g. Main hall — black box theatre — 450 — @ Calle Mayor 1). Each links to Google Maps.">
+        <Field
+          label="Venues"
+          htmlFor="p-venues"
+          hint="One per line: Name — type — capacity — @ address — photo https:// link (e.g. Main hall — black box theatre — 450 — @ Calle Mayor 1). Each links to Google Maps."
+        >
           <Textarea id="p-venues" name="venues" rows={3} defaultValue={v.venues} {...text} />
         </Field>
         <Field label="Audience" htmlFor="p-audience">
@@ -86,7 +83,11 @@ export function ProfileForm({ organizationId, profile, cancelHref }: { organizat
         <Field label="Ideas" htmlFor="p-ideas" hint="Concrete collaboration ideas, one per line.">
           <Textarea id="p-ideas" name="ideas" rows={3} defaultValue={v.ideas} />
         </Field>
-        <Field label="Image URLs" htmlFor="p-images" hint="Up to 8, one per line, https:// only. Optional caption after a dash: https://… — Main hall.">
+        <Field
+          label="Image URLs"
+          htmlFor="p-images"
+          hint="Up to 8, one per line, https:// only. Optional caption after a dash: https://… — Main hall."
+        >
           <Textarea id="p-images" name="images" rows={3} defaultValue={v.images} {...url} />
         </Field>
         <Field label="Links" htmlFor="p-links" hint="One per line: Label — https://…">

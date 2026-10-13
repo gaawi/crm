@@ -104,7 +104,7 @@ export function ContactAvatar({
 }
 
 /** Full-screen photo: tap anywhere, ✕ or Escape closes it. */
-function PhotoViewer({ url, name, source, onClose }: { url: string; name: string; source: string | null; onClose: () => void }) {
+export function PhotoViewer({ url, name, source, onClose }: { url: string; name: string; source: string | null; onClose: () => void }) {
   const closeRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     const previous = document.documentElement.style.overflow;
@@ -147,12 +147,7 @@ function PhotoViewer({ url, name, source, onClose }: { url: string; name: string
         <X className="size-6" />
       </button>
       {/* eslint-disable-next-line @next/next/no-img-element -- same remote photo as the avatar */}
-      <img
-        src={url}
-        alt={name}
-        referrerPolicy="no-referrer"
-        className="max-h-[78dvh] max-w-full rounded-xl object-contain shadow-2xl"
-      />
+      <img src={url} alt={name} referrerPolicy="no-referrer" className="max-h-[78dvh] max-w-full rounded-xl object-contain shadow-2xl" />
       <div className="flex flex-col items-center gap-0.5 text-center" onClick={(event) => event.stopPropagation()}>
         <p className="text-[17px] font-semibold text-white">{name}</p>
         {source && host ? (

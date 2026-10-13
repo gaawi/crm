@@ -17,6 +17,7 @@ import {
   Theater,
   Users,
 } from "lucide-react";
+import { VenuePhoto } from "@/components/organizations/venue-photo";
 import { PlaceLink } from "@/components/organizations/place-link";
 import { Sheet } from "@/components/ui/sheet";
 import {
@@ -460,6 +461,7 @@ export function OrgProfileCard({
             <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border">
               {p.venues.map((v, i) => (
                 <li key={`${v.name}-${i}`} className="flex items-start gap-3 px-3 py-2">
+                  <VenuePhoto name={v.name} photo={v.photo} source={v.photoSource} className="mt-0.5 aspect-[4/3] w-24 md:w-20" />
                   <span className="min-w-0 flex-1">
                     <span className="flex min-w-0">
                       <PlaceLink

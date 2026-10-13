@@ -19,6 +19,7 @@ import {
 import { ContactAvatar } from "@/components/contact-avatar";
 import { OrgLogo } from "@/components/organizations/org-logo";
 import { OrgProfileCard } from "@/components/organizations/profile-card";
+import { VenuePhoto } from "@/components/organizations/venue-photo";
 import { ProjectDot, StatusBadge, TagBadge } from "@/components/ui/badge";
 import { formatPhone, telHref, whatsappUrl } from "@/lib/booking/phone";
 import { CARD_FIELD_LABEL } from "@/lib/contacts/card";
@@ -272,7 +273,7 @@ function SeriesAtAGlance({ organization }: { organization: EmailDraft["organizat
   const p = organization?.profile;
   if (!organization || !p) {
     return (
-      <section className="rounded-lg border border-dashed border-border px-3 py-2 text-[12.5px] text-muted">
+      <section className="rounded-lg border border-dashed border-border px-3 py-2 text-[14px] text-muted md:text-[12.5px]">
         No profile of {organization?.name ?? "the organization"} yet: the kind of series, the hall and who has played there appear here once
         researched.
       </section>
@@ -282,22 +283,25 @@ function SeriesAtAGlance({ organization }: { organization: EmailDraft["organizat
     Boolean,
   ) as string[];
   return (
-    <section className="flex flex-col gap-2 rounded-lg bg-surface-2 px-3 py-2.5">
+    <section className="flex flex-col gap-2.5 rounded-lg bg-surface-2 px-3 py-2.5 text-[15px] leading-snug md:gap-2 md:text-[13px]">
       {p.venues?.length ? (
         <div>
-          <p className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-subtle">
+          <p className="flex items-center gap-1 text-[12px] font-medium uppercase tracking-wide text-subtle md:text-[11px]">
             <Landmark className="size-3.5" aria-hidden /> {p.venues.length === 1 ? "Hall" : "Halls"}
           </p>
-          <ul className="mt-0.5 flex flex-col gap-0.5">
+          <ul className="mt-1 flex flex-col gap-2 md:mt-0.5 md:gap-1">
             {p.venues.map((v, i) => (
-              <li key={i}>
-                <span className="font-medium">{v.name}</span>
-                {[v.type, v.capacity ? `${v.capacity} seats` : null, v.notes].filter(Boolean).map((x, j) => (
-                  <span key={j} className="text-muted">
-                    {" · "}
-                    {x}
-                  </span>
-                ))}
+              <li key={i} className="flex items-start gap-2.5">
+                <VenuePhoto name={v.name} photo={v.photo} source={v.photoSource} className="mt-0.5 aspect-[4/3] w-24 md:w-20" />
+                <span className="min-w-0 flex-1">
+                  <span className="font-medium">{v.name}</span>
+                  {[v.type, v.capacity ? `${v.capacity} seats` : null, v.notes].filter(Boolean).map((x, j) => (
+                    <span key={j} className="text-muted">
+                      {" · "}
+                      {x}
+                    </span>
+                  ))}
+                </span>
               </li>
             ))}
           </ul>
@@ -306,12 +310,12 @@ function SeriesAtAGlance({ organization }: { organization: EmailDraft["organizat
 
       {p.formats?.length ? (
         <div>
-          <p className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-subtle">
+          <p className="flex items-center gap-1 text-[12px] font-medium uppercase tracking-wide text-subtle md:text-[11px]">
             <Users className="size-3.5" aria-hidden /> Groups they present
           </p>
           <ul className="mt-1 flex flex-wrap gap-1">
             {p.formats.map((f, i) => (
-              <li key={i} className="rounded-full bg-surface px-2 py-0.5 text-[12px]">
+              <li key={i} className="rounded-full bg-surface px-2.5 py-0.5 text-[14px] md:px-2 md:text-[12px]">
                 {f}
               </li>
             ))}
@@ -321,7 +325,7 @@ function SeriesAtAGlance({ organization }: { organization: EmailDraft["organizat
 
       {p.artists?.length ? (
         <div>
-          <p className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-subtle">
+          <p className="flex items-center gap-1 text-[12px] font-medium uppercase tracking-wide text-subtle md:text-[11px]">
             <Music className="size-3.5" aria-hidden /> Who has played
           </p>
           <ul className="mt-0.5 flex flex-col gap-0.5">
@@ -336,7 +340,7 @@ function SeriesAtAGlance({ organization }: { organization: EmailDraft["organizat
         </div>
       ) : null}
 
-      {missing.length ? <p className="text-[12px] text-warning">Not researched yet: {missing.join(", ")}.</p> : null}
+      {missing.length ? <p className="text-[13px] text-warning md:text-[12px]">Not researched yet: {missing.join(", ")}.</p> : null}
     </section>
   );
 }

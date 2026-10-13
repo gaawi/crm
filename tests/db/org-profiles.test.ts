@@ -205,6 +205,23 @@ describe("profile parsing", () => {
     });
   });
 
+  it("keeps a hall's https photo and drops any other", () => {
+    const profile = readProfile({
+      summary: "A chamber series.",
+      venues: [
+        { name: "Main hall", photo: "https://example.org/hall.jpg", photoSource: "https://example.org/venue" },
+        { name: "Studio", photo: "http://example.org/studio.jpg", photoSource: "not a url" },
+      ],
+    });
+    expect(profile!.venues).toEqual([
+      { name: "Main hall", photo: "https://example.org/hall.jpg", photoSource: "https://example.org/venue" },
+      { name: "Studio" },
+    ]);
+    expect(parseVenueLines("Main hall — 450 — https://example.org/hall.jpg")).toEqual([
+      { name: "Main hall", capacity: 450, photo: "https://example.org/hall.jpg" },
+    ]);
+  });
+
   it("reads a profile written straight to the database without hiding it for one bad field", () => {
     const profile = readProfile({
       summary: "A chamber series.",

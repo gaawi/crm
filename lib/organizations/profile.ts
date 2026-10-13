@@ -53,6 +53,15 @@ const optList = <T extends z.ZodType>(item: T, max: number) =>
     .transform((v) => (v && v.length ? v : undefined))
     .optional();
 
+/** An https URL, or undefined: anything else is dropped rather than failing the profile. */
+const tolerantHttps = z
+  .string()
+  .trim()
+  .max(2048)
+  .nullish()
+  .transform((v) => (v && isHttpsUrl(v) ? v : undefined))
+  .optional();
+
 export const venueSchema = z.object({
   name: text(200),
   type: optText(120),
@@ -60,6 +69,10 @@ export const venueSchema = z.object({
   notes: optText(500),
   /** Street address; its Maps link uses it instead of the venue's name. */
   address: optText(200),
+  /** A photo of the hall from an official site (https). */
+  photo: tolerantHttps,
+  /** The page the photo comes from. */
+  photoSource: tolerantHttps,
 });
 
 export const artistSchema = z.object({
@@ -124,13 +137,7 @@ export const orgProfileSchema = z.object({
     20,
   ),
   /** The organization's logo from its official site (https). Anything else is dropped rather than failing the profile. */
-  logo: z
-    .string()
-    .trim()
-    .max(2048)
-    .nullish()
-    .transform((v) => (v && isHttpsUrl(v) ? v : undefined))
-    .optional(),
+  logo: tolerantHttps,
   images: optList(z.object({ url: httpsUrl, caption: optText(300), source: optText(2048) }), MAX_PROFILE_IMAGES),
   links: optList(z.object({ label: text(120), url: httpsUrl }), 20),
   sources: optList(httpsUrl, 30),
@@ -364,6 +371,10 @@ export function parseVenueLines(value: string): OrgProfileVenue[] {
         venue.address = p.slice(1).trim() || undefined;
         continue;
       }
+      if (/^https:\/\/\S+$/i.test(p) && isHttpsUrl(p) && !venue.photo) {
+        venue.photo = p;
+        continue;
+      }
       const capacity = capacityOf(p);
       if (capacity !== null && venue.capacity == null) venue.capacity = capacity;
       else if (!venue.type) venue.type = p;
@@ -375,7 +386,9 @@ export function parseVenueLines(value: string): OrgProfileVenue[] {
 }
 
 export function venueLine(v: OrgProfileVenue): string {
-  return [v.name, v.type, v.capacity != null ? String(v.capacity) : null, v.notes, v.address ? `@ ${v.address}` : null].filter(Boolean).join(" — ");
+  return [v.name, v.type, v.capacity != null ? String(v.capacity) : null, v.notes, v.address ? `@ ${v.address}` : null, v.photo]
+    .filter(Boolean)
+    .join(" — ");
 }
 
 /** "https://… — caption" per line. Non-https lines are reported, not kept. */
