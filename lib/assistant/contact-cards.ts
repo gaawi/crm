@@ -130,8 +130,10 @@ export async function applyContactCards(body: unknown, now: Date = new Date()): 
     let phone: string | null = null;
     let whatsapp: string | null = null;
     try {
-      phone = input.phone ? cleanPhone(input.phone) : null;
-      whatsapp = input.whatsapp ? cleanPhone(input.whatsapp) : null;
+      // Always international: a number without "+" gets the prefix of the contact's campaign, else it is refused.
+      const prefix = input.phone || input.whatsapp ? await campaignPrefix(target.id) : null;
+      phone = input.phone ? internationalPhone(input.phone, prefix) : null;
+      whatsapp = input.whatsapp ? internationalPhone(input.whatsapp, prefix) : null;
     } catch (e) {
       results.push({ index, ok: false, contactId: target.id, error: e instanceof Error ? e.message : "Invalid phone number." });
       continue;
@@ -190,4 +192,21 @@ export async function applyContactCards(body: unknown, now: Date = new Date()): 
   }
   const updated = results.filter((r) => r.ok).length;
   return { ok: true, updated, failed: results.length - updated, results };
+}
+
+/** The phone prefix of a campaign the contact is a row of ("+1" for Booking USA), if any. */
+async function campaignPrefix(contactId: string): Promise<string | null> {
+  const [row] = await sql<{ prefix: string }[]>`
+    select p.phone_prefix as prefix from opportunities op join projects p on p.id = op.project_id
+     where op.contact_id = ${contactId} and p.phone_prefix is not null
+     order by op.updated_at desc limit 1`;
+  return row?.prefix ?? null;
+}
+
+/** A stored number always carries its country code. */
+function internationalPhone(value: string, prefix: string | null): string | null {
+  const phone = cleanPhone(value, prefix);
+  if (phone && !phone.startsWith("+"))
+    throw new Error(`Give the number with its international prefix (e.g. +1 269 382 7774, +34 612 345 678): ${value.trim()}`);
+  return phone;
 }

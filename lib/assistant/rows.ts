@@ -100,8 +100,8 @@ export async function applyRows(body: unknown): Promise<{ ok: true; created: num
     );
   }
   const { projectId } = parsed.data;
-  const [project] = await sql<{ id: string; kind: string | null }[]>`
-    select p.id,
+  const [project] = await sql<{ id: string; kind: string | null; phonePrefix: string | null }[]>`
+    select p.id, p.phone_prefix,
            (select op.kind from opportunities op where op.project_id = p.id group by op.kind order by count(*) desc limit 1) as kind
       from projects p where p.id = ${projectId} and p.sheet and not p.archived`;
   if (!project) throw new RowsError("Campaign not found.", 404);
@@ -142,6 +142,11 @@ export async function applyRows(body: unknown): Promise<{ ok: true; created: num
        limit 1`;
     if (duplicate) {
       results.push({ index, ok: false, error: `Already in this campaign (same ${duplicate.why}).`, existingOpportunityId: duplicate.id });
+      continue;
+    }
+    // Phones are stored with their country code: without "+", only when the campaign has a prefix to add.
+    if (row.phone && !row.phone.trim().startsWith("+") && !row.phone.trim().startsWith("00") && !project.phonePrefix) {
+      results.push({ index, ok: false, error: `phone: give it with its international prefix (e.g. +44 20 7946 0958): ${row.phone}` });
       continue;
     }
     try {

@@ -335,6 +335,55 @@ describe("campaign assistant API", () => {
       expect(logged.calls[1].response).toMatchObject({ pendingRevisions: [{ draftId }] });
     });
 
+    it("stores phones with their international prefix: the campaign's, or refused without one", async () => {
+      const { projectId } = await seed(1, true, false);
+      await sql`update contacts set phone = null, whatsapp = null`;
+      const cards = (body: unknown) =>
+        contactsPost(
+          new Request(`${URL_BASE}/contacts`, {
+            method: "POST",
+            headers: { "content-type": "application/json", authorization: `Bearer ${TOKEN}` },
+            body: JSON.stringify(body),
+          }),
+        );
+      const card = (phone: string) => ({ contacts: [{ email: "booker0@venue0.org", phone, sources: ["https://venue0.org/team"] }] });
+
+      await sql`update projects set phone_prefix = null where id = ${projectId}`;
+      const refused = await (await cards(card("269 382 7774"))).json();
+      expect(refused.results[0]).toMatchObject({ ok: false, error: expect.stringMatching(/international prefix/) });
+
+      await sql`update projects set phone_prefix = '+1' where id = ${projectId}`;
+      const usa = await (await cards(card("(269) 382-7774"))).json();
+      expect(usa.results[0]).toMatchObject({ ok: true });
+      const [c] = await sql<{ phone: string }[]>`select phone from contacts`;
+      expect(c.phone).toBe("+12693827774");
+
+      const rows = await (
+        await rowsRoute(
+          new Request(`${URL_BASE}/rows`, {
+            method: "POST",
+            headers: { "content-type": "application/json", authorization: `Bearer ${TOKEN}` },
+            body: JSON.stringify({
+              projectId,
+              rows: [{ organization: "Hall X", source: "research", reason: "Fits", phone: "612 345 678", email: "x@hallx.org", contactName: "X" }],
+            }),
+          }),
+        )
+      ).json();
+      expect(rows.results[0]).toMatchObject({ ok: true });
+      await sql`update projects set phone_prefix = null where id = ${projectId}`;
+      const noPrefix = await (
+        await rowsRoute(
+          new Request(`${URL_BASE}/rows`, {
+            method: "POST",
+            headers: { "content-type": "application/json", authorization: `Bearer ${TOKEN}` },
+            body: JSON.stringify({ projectId, rows: [{ organization: "Hall Y", source: "research", reason: "Fits", phone: "612 345 678" }] }),
+          }),
+        )
+      ).json();
+      expect(noPrefix.results[0]).toMatchObject({ ok: false, error: expect.stringMatching(/international prefix/) });
+    });
+
     it("answers the owner's comments on actions before any new email, and updates or closes the action", async () => {
       const { projectId, ids } = await seed(3);
       const made = await (
