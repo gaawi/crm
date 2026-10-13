@@ -71,7 +71,12 @@ function Chip({ icon: Icon, children }: { icon?: typeof Building2; children: Rea
 }
 
 function researchedLine(p: OrgProfile): string {
-  const who = p.researchedBy === "owner" ? "Edited by you" : "Researched by Claude";
+  const who =
+    p.researchedBy === "owner"
+      ? "Edited by you"
+      : !p.researchedBy || p.researchedBy === "claude"
+        ? "Researched by Claude"
+        : `Researched by ${p.researchedBy}`;
   if (!p.researchedAt) return who;
   const at = new Date(p.researchedAt);
   if (Number.isNaN(at.getTime())) return who;

@@ -205,6 +205,32 @@ describe("profile parsing", () => {
     });
   });
 
+  it("reads a profile written straight to the database without hiding it for one bad field", () => {
+    const profile = readProfile({
+      summary: "A chamber series.",
+      kind: "concert hall",
+      researchedBy: "ChatGPT",
+      formats: ["String quartets", "x".repeat(200)],
+      artists: [{ name: "Merz Trio", formation: "Piano trio" }, { name: "" }, ...Array.from({ length: 45 }, (_, i) => ({ name: `Group ${i}` }))],
+      venues: [
+        { name: "Main hall", capacity: "450" },
+        { name: "Studio", capacity: 80 },
+      ],
+      sources: ["http://example.org", "https://example.org/about"],
+      links: "https://example.org",
+    });
+    expect(profile).not.toBeNull();
+    expect(profile!.kind).toBeUndefined();
+    expect(profile!.researchedBy).toBe("ChatGPT");
+    expect(profile!.formats).toEqual(["String quartets"]);
+    expect(profile!.artists).toHaveLength(40);
+    expect(profile!.artists![0]).toEqual({ name: "Merz Trio", formation: "Piano trio" });
+    expect(profile!.venues).toEqual([{ name: "Studio", capacity: 80 }]);
+    expect(profile!.sources).toEqual(["https://example.org/about"]);
+    expect(profile!.links).toBeUndefined();
+    expect(readProfile({ summary: "", artists: [{ name: "Merz Trio" }] })).toBeNull();
+  });
+
   it("keeps what the owner checks: series kind, groups they present, who has played", () => {
     const profile = readProfile({
       summary: "A chamber series.",

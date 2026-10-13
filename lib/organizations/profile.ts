@@ -143,11 +143,8 @@ export const orgProfileSchema = z.object({
     .refine((v) => !v || !Number.isNaN(Date.parse(v)), "Must be an ISO date.")
     .transform((v) => (v ? new Date(v).toISOString() : undefined))
     .optional(),
-  researchedBy: z
-    .enum(["claude", "owner"])
-    .nullish()
-    .transform((v) => v ?? undefined)
-    .optional(),
+  /** "claude", "owner", or another researcher's name ("ChatGPT"). */
+  researchedBy: optText(60),
 });
 
 /** A stored profile (what the card renders). */
@@ -169,11 +166,45 @@ export interface OrgWithProfile extends OrgProfileOwner {
   profile: OrgProfile;
 }
 
-/** A stored value as a profile, or null when it is missing or no longer valid. */
+/**
+ * A stored value as a profile, or null when it is missing or has no valid
+ * summary. Profiles written straight to the database skip validation, so an
+ * invalid list item is dropped, an over-long list cut and any other invalid
+ * field left out, rather than hiding the whole profile.
+ */
 export function readProfile(value: unknown): OrgProfile | null {
-  if (!value || typeof value !== "object") return null;
-  const parsed = orgProfileSchema.safeParse(value);
-  return parsed.success ? parsed.data : null;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  let current: Record<string, unknown> = { ...(value as Record<string, unknown>) };
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const parsed = orgProfileSchema.safeParse(current);
+    if (parsed.success) return parsed.data;
+    const next: Record<string, unknown> = { ...current };
+    const dropItems = new Map<string, Set<number>>();
+    const caps = new Map<string, number>();
+    for (const issue of parsed.error.issues) {
+      const [key, index] = issue.path;
+      if (typeof key !== "string" || key === "summary") return null;
+      const field = next[key];
+      if (Array.isArray(field) && typeof index === "number") {
+        dropItems.set(key, (dropItems.get(key) ?? new Set()).add(index));
+      } else if (Array.isArray(field) && issue.code === "too_big" && typeof issue.maximum === "number") {
+        caps.set(key, issue.maximum);
+      } else {
+        delete next[key];
+      }
+    }
+    // Invalid items go first, then the list is cut to its maximum.
+    for (const [key, indexes] of dropItems) {
+      const field = next[key];
+      if (Array.isArray(field)) next[key] = field.filter((_, i) => !indexes.has(i));
+    }
+    for (const [key, max] of caps) {
+      const field = next[key];
+      if (Array.isArray(field)) next[key] = field.slice(0, max);
+    }
+    current = next;
+  }
+  return null;
 }
 
 /** The first sentence of a text, cut to `max` characters with an ellipsis. */
