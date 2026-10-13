@@ -18,6 +18,9 @@ export interface AssistantActionComment {
   text: string;
 }
 
+/** Longest campaign brief (the owner's instructions, lists and dates included). */
+export const MAX_BRIEF = 20_000;
+
 /** Longest comment the owner can write on an action. */
 export const MAX_ACTION_COMMENT = 2000;
 

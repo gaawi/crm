@@ -5,7 +5,7 @@ import { z } from "zod";
 import { requireSession } from "@/lib/auth";
 import { approveAndSend, discardDraft, DraftError, saveDraftEdits } from "@/lib/ai/approvals";
 import { draftErrorMessage } from "@/lib/ai/draft";
-import { DEFAULT_POSTPONE_DAYS, MAX_ACTION_COMMENT } from "@/lib/assistant/types";
+import { DEFAULT_POSTPONE_DAYS, MAX_ACTION_COMMENT, MAX_BRIEF } from "@/lib/assistant/types";
 import { addDays, todayIn } from "@/lib/dates";
 import { env } from "@/lib/env";
 import { getDraft } from "@/lib/queries/drafts";
@@ -149,7 +149,7 @@ export async function saveAssistantBriefAction(projectId: string, brief: string)
   await requireSession();
   if (!uuid.safeParse(projectId).success) return { ok: false, error: "Campaign not found." };
   try {
-    await updateAssistantSettings(projectId, { brief: String(brief ?? "").slice(0, 5000) });
+    await updateAssistantSettings(projectId, { brief: String(brief ?? "").slice(0, MAX_BRIEF) });
     refresh();
     return { ok: true, message: "Saved" };
   } catch (error) {
