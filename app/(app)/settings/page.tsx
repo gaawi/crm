@@ -11,7 +11,7 @@ import { sql } from "@/lib/db";
 import { formatDateTime, formatRelative } from "@/lib/dates";
 import { env } from "@/lib/env";
 import { listProjects } from "@/lib/queries/projects";
-import { getSettings } from "@/lib/queries/settings";
+import { getSettings, MAX_DAILY_EMAILS } from "@/lib/queries/settings";
 import { listAccountViews } from "@/lib/sync/accounts";
 import type { GmailAccountView } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -20,6 +20,7 @@ import {
   removeAccount,
   restartImport,
   resumeImport,
+  saveAssistant,
   saveAutopilot,
   saveProfile,
   setDefaultProject,
@@ -33,18 +34,20 @@ export const metadata: Metadata = { title: "Settings" };
 const ERRORS: Record<string, string> = {
   state: "The sign-in link expired. Please try connecting again.",
   access_denied: "Access was not granted.",
-  scopes: "Gmail access is required — please tick every permission on Google's screen.",
+  scopes: "Gmail access is required: please tick every permission on Google's screen.",
   confirm: "Tick the confirmation box to remove the account and its emails.",
   code: "Google did not return an authorization code. Please try connecting again.",
   token: "Google did not issue a token. Please try connecting again.",
   profile: "Could not read the Gmail profile. Please try connecting again.",
   autopilot: "The autopilot settings could not be saved. Please try again.",
+  assistant: "The campaign assistant setting could not be saved. Please try again.",
 };
 
 const numberFormat = new Intl.NumberFormat("en-US");
 
 function StatusLabel({ account }: { account: GmailAccountView }) {
-  if (account.status === "reauth_required") return <Badge className="bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-300">Needs reconnect</Badge>;
+  if (account.status === "reauth_required")
+    return <Badge className="bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-300">Needs reconnect</Badge>;
   if (account.status === "disconnected") return <Badge>Disconnected</Badge>;
   return <Badge className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">Connected</Badge>;
 }
@@ -75,11 +78,12 @@ function ImportState({ account }: { account: GmailAccountView }) {
 export default async function SettingsPage({ searchParams }: PageProps<"/settings">) {
   const params = await searchParams;
   const timezone = env.timezone;
-  const [accounts, projects, profile, autopilot, defaults, [size]] = await Promise.all([
+  const [accounts, projects, profile, autopilot, assistant, defaults, [size]] = await Promise.all([
     listAccountViews(),
     listProjects(),
     getSettings("profile"),
     getSettings("autopilot"),
+    getSettings("assistant"),
     sql<{ id: string; defaultProjectId: string | null }[]>`select id, default_project_id from gmail_accounts`,
     sql<{ mb: number }[]>`select (pg_database_size(current_database()) / 1048576)::int as mb`,
   ]);
@@ -119,7 +123,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
         >
           {accounts.length === 0 ? (
             <div className="flex flex-col items-start gap-3 p-4 text-sm text-muted">
-              <p>No mailbox connected yet. Connect each Gmail or Google Workspace account you use — the first import runs in the background.</p>
+              <p>No mailbox connected yet. Connect each Gmail or Google Workspace account you use. The first import runs in the background.</p>
               <ButtonLink href="/api/google/connect" variant="primary" prefetch={false}>
                 Connect Gmail account
               </ButtonLink>
@@ -159,14 +163,15 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
                     <p className="text-[13px] text-muted md:text-xs">
                       {account.monitorOnly ? (
                         <>
-                          <span className="font-medium text-fg">Monitor only.</span> Its emails are imported and show in contacts, history and
-                          search, but Vela never changes this mailbox: nothing is marked as read, archived, labelled, drafted or sent. Its owner
-                          finds everything exactly as they left it. Not shown in All Inboxes.
+                          <span className="font-medium text-fg">Monitor only.</span> Its emails are imported and show in contacts, history and search,
+                          but Vela never changes this mailbox: nothing is marked as read, archived, labelled, drafted or sent. Its owner finds
+                          everything exactly as they left it. Not shown in All Inboxes.
                         </>
                       ) : (
                         <>
-                          Someone else&apos;s mailbox (e.g. a partner who also does booking)? Make it <span className="font-medium text-fg">monitor only</span>:
-                          Vela keeps watching it but never marks, moves, drafts or sends anything in it.
+                          Someone else&apos;s mailbox (e.g. a partner who also does booking)? Make it{" "}
+                          <span className="font-medium text-fg">monitor only</span>: Vela keeps watching it but never marks, moves, drafts or sends
+                          anything in it.
                         </>
                       )}
                     </p>
@@ -277,7 +282,10 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
               </form>
             </Card>
 
-            <Card title="Autopilot" description="Claude prepares replies and follow-ups every day. They wait in Approvals — nothing is sent without you.">
+            <Card
+              title="Autopilot"
+              description="Claude prepares replies and follow-ups every day. They wait in Approvals: nothing is sent without you."
+            >
               <form action={saveAutopilot} className="flex flex-col gap-3">
                 <label className="flex min-h-11 items-center gap-3 text-[15px] md:min-h-0 md:text-sm">
                   <Checkbox name="enabled" defaultChecked={autopilot.enabled} /> Prepare drafts automatically every day
@@ -315,6 +323,20 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
           </>
         ) : null}
 
+        <Card
+          title="Campaign assistant"
+          description="How many new campaign emails the writer routine may propose per day, morning and afternoon runs together. Revisions you ask for do not count."
+        >
+          <form action={saveAssistant} className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+            <Field label="New emails per day">
+              <Input name="dailyEmails" type="number" min={1} max={MAX_DAILY_EMAILS} defaultValue={assistant.dailyEmails} />
+            </Field>
+            <SubmitButton className="w-full md:w-auto" pendingLabel="Saving…">
+              Save
+            </SubmitButton>
+          </form>
+        </Card>
+
         <Card title="About">
           <dl className="flex flex-col gap-2 text-sm">
             <div className="flex flex-col gap-1">
@@ -324,7 +346,10 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
                   {size.mb} MB of {env.dbSizeLimitMb} MB import limit
                 </span>
                 <span className="block h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-surface-2">
-                  <span className={cn("block h-full rounded-full", sizePercent > 85 ? "bg-danger" : "bg-accent")} style={{ width: `${sizePercent}%` }} />
+                  <span
+                    className={cn("block h-full rounded-full", sizePercent > 85 ? "bg-danger" : "bg-accent")}
+                    style={{ width: `${sizePercent}%` }}
+                  />
                 </span>
               </dd>
             </div>
@@ -352,4 +377,3 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
     </>
   );
 }
-

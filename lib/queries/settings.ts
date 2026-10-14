@@ -44,6 +44,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   assistant: { dailyEmails: 10 },
 };
 
+/** Highest daily budget of new campaign emails the owner can set. */
+export const MAX_DAILY_EMAILS = 40;
+
 export async function getSettings<K extends keyof AppSettings>(key: K): Promise<AppSettings[K]> {
   const [row] = await sql<{ value: Partial<AppSettings[K]> }[]>`select value from app_settings where key = ${key}`;
   return { ...DEFAULT_SETTINGS[key], ...(row?.value ?? {}) } as AppSettings[K];

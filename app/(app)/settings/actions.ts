@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireSession } from "@/lib/auth";
 import { sql } from "@/lib/db";
-import { saveSettings } from "@/lib/queries/settings";
+import { MAX_DAILY_EMAILS, saveSettings } from "@/lib/queries/settings";
 import { deleteAccount, disconnectAccount } from "@/lib/sync/accounts";
 import { resetBackfill } from "@/lib/sync/backfill";
 import { triggerAccountJob } from "@/lib/sync/runner";
@@ -93,9 +93,15 @@ export async function setMonitorOnly(id: string, on: boolean): Promise<void> {
 export async function saveProfile(formData: FormData): Promise<void> {
   await requireSession();
   await saveSettings("profile", {
-    name: String(formData.get("name") ?? "").trim().slice(0, 100),
-    signature: String(formData.get("signature") ?? "").trim().slice(0, 1000),
-    style: String(formData.get("style") ?? "").trim().slice(0, 1000),
+    name: String(formData.get("name") ?? "")
+      .trim()
+      .slice(0, 100),
+    signature: String(formData.get("signature") ?? "")
+      .trim()
+      .slice(0, 1000),
+    style: String(formData.get("style") ?? "")
+      .trim()
+      .slice(0, 1000),
   });
   redirect("/settings?saved=profile");
 }
@@ -120,4 +126,18 @@ export async function saveAutopilot(formData: FormData): Promise<void> {
     redirect("/settings?error=autopilot");
   }
   redirect("/settings?saved=autopilot");
+}
+
+export async function saveAssistant(formData: FormData): Promise<void> {
+  await requireSession();
+  const value = Number(formData.get("dailyEmails"));
+  try {
+    await saveSettings("assistant", {
+      dailyEmails: Number.isFinite(value) ? Math.min(MAX_DAILY_EMAILS, Math.max(1, Math.round(value))) : 10,
+    });
+  } catch (error) {
+    console.error("Saving assistant settings failed:", errorMessage(error));
+    redirect("/settings?error=assistant");
+  }
+  redirect("/settings?saved=assistant");
 }
