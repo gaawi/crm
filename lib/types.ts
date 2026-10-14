@@ -304,6 +304,8 @@ export interface EmailDraft {
   replyToMessageId: string | null;
   /** Subject of the message being replied to, for context. */
   replyToSubject: string | null;
+  /** The contact wrote last (automated mail aside): when, and its subject. Null when we wrote last or never heard from them. */
+  theyWrote?: { at: string; subject: string | null } | null;
   purpose: DraftPurpose;
   origin: DraftOrigin;
   status: DraftStatus;

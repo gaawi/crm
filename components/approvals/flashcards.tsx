@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import { CardBack } from "./card-back";
 import { loadCardInfo, loadDraftThread, type CardInfo, type DraftThread } from "./card-info";
 import { MailingFace, type MailingCardData } from "./mailing-card";
+import { TheyWroteBadge } from "./they-wrote";
 import { DraftConversation } from "./thread-face";
 import { discardCampaignAction, startCampaignAction } from "@/app/(app)/approvals/actions";
 
@@ -429,6 +430,7 @@ export function Flashcards({
                       {flipped ? "Email" : "Info"}
                     </button>
                   </div>
+                  {draft.theyWrote ? <TheyWroteBadge at={draft.theyWrote.at} timezone={timezone} className="my-1" /> : null}
                   {org && !flipped ? (
                     <p className="truncate text-[12px] text-muted">
                       <Link href={`/organizations/${org.id}`} className="font-medium text-fg/80 hover:underline">

@@ -25,6 +25,15 @@ const draftColumns = () => sql`
   d.gmail_draft_id, d.gmail_thread_id, d.error, d.created_at, d.updated_at, d.sent_at,
   case when dorg.id is null then null
        else json_build_object('id', dorg.id, 'name', dorg.name, 'website', dorg.website, 'city', dorg.city, 'profile', dorg.profile) end as organization,
+  (select case when lm.direction = 'inbound' then json_build_object('at', lm.sent_at, 'subject', lm.subject) end
+     from (select m.direction, m.sent_at, m.subject
+             from contact_emails ce
+             join message_participants mp on mp.email = ce.email
+             join messages m on m.id = mp.message_id
+            where ce.contact_id = d.contact_id and not m.is_automated
+              and ((m.direction = 'inbound' and mp.role = 'from') or (m.direction = 'outbound' and mp.role in ('to', 'cc', 'bcc')))
+            order by m.sent_at desc
+            limit 1) lm) as they_wrote,
   coalesce(
     (select aa.project_id from assistant_actions aa where aa.draft_id = d.id limit 1),
     (select aop.project_id from opportunities aop join projects ap on ap.id = aop.project_id and ap.sheet where aop.id = d.opportunity_id)

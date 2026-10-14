@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { TheyWroteBadge } from "@/components/approvals/they-wrote";
 import { ContactOrgAvatar } from "@/components/contact-org-avatar";
 import { useClaudeEnabled } from "@/components/features";
 import { useEffect, useState, useTransition } from "react";
@@ -121,6 +122,7 @@ export function DraftCard({
             draft.to.join(", ")
           )}
         </span>
+        {draft.theyWrote ? <TheyWroteBadge at={draft.theyWrote.at} timezone={timezone} /> : null}
         <Badge>{PURPOSE_LABEL[draft.purpose]}</Badge>
         {draft.status === "queued" ? (
           <Badge

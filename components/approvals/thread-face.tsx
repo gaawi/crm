@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown, CornerDownRight } from "lucide-react";
+import { ArrowDownLeft, ChevronDown, CornerDownRight } from "lucide-react";
 import { formatRelative } from "@/lib/dates";
 import type { EmailDraft } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -104,7 +104,7 @@ function Message({
         onClick={() => setOpen(true)}
         className="flex w-full items-baseline gap-2 rounded-lg bg-surface-2/70 px-2.5 py-1.5 text-left text-[12px] leading-snug active:opacity-70"
       >
-        <span className={cn("shrink-0 font-semibold", mine ? "text-brand" : "text-fg")}>{m.from}</span>
+        <span className={cn("shrink-0 font-semibold", mine ? "text-brand" : "text-success")}>{m.from}</span>
         {mine && m.recipients > 3 ? <span className="shrink-0 text-[11px] text-subtle">mass email</span> : null}
         <span className="min-w-0 flex-1 truncate text-muted">{m.body.replace(/\s+/g, " ")}</span>
         <span className="shrink-0 text-[11px] text-subtle">{when}</span>
@@ -113,9 +113,16 @@ function Message({
   }
 
   return (
-    <div className={cn("rounded-lg px-2.5 py-2", mine ? "border border-border bg-surface" : "bg-surface-2", fresh && "ring-1 ring-warning/60")}>
+    <div
+      className={cn(
+        "rounded-lg px-2.5 py-2",
+        mine ? "border border-border bg-surface" : "border-l-[3px] border-success bg-success/[0.07]",
+        fresh && "ring-1 ring-warning/60",
+      )}
+    >
       <button type="button" onClick={() => !latest && setOpen(false)} className="flex w-full items-baseline gap-2 text-left text-[12px] leading-snug">
-        <span className={cn("min-w-0 truncate font-semibold", mine ? "text-brand" : "text-fg")}>{m.from}</span>
+        {mine ? null : <ArrowDownLeft className="size-3.5 shrink-0 self-center text-success" aria-label="From them" />}
+        <span className={cn("min-w-0 truncate font-semibold", mine ? "text-brand" : "text-success")}>{m.from}</span>
         {mine && m.recipients > 3 ? (
           <span className="min-w-0 truncate text-subtle">mass email to {m.recipients} people</span>
         ) : mine && m.to ? (
