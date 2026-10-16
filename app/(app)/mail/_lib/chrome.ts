@@ -1,9 +1,9 @@
 import "server-only";
 import { accountDot } from "@/lib/mail/format";
 import { userLabels, type UserLabel } from "@/lib/mail/gmail";
-import { getMailCounts, unreadLabelCountsByAccount, type MailCounts } from "@/lib/mail/queries";
+import { unreadLabelCountsByAccount, type MailCounts } from "@/lib/mail/queries";
 import type { MailListState } from "@/lib/mail/params";
-import { listAccounts } from "@/lib/sync/accounts";
+import { accountsForRender, mailCountsForRender } from "@/lib/queries/render-cache";
 import type { AccountStatus } from "@/lib/types";
 
 /** Everything the mail sidebar / Mailboxes sheet needs, safe to pass to the client. */
@@ -39,14 +39,14 @@ export interface MailChrome {
 }
 
 export async function loadMailChrome(state: Pick<MailListState, "account">): Promise<MailChrome> {
-  const records = (await listAccounts()).filter((a) => a.status !== "disconnected");
+  const records = (await accountsForRender()).filter((a) => a.status !== "disconnected");
   const account = records.find((a) => a.id === state.account) ?? null;
   const liveIds = records.filter((a) => a.status === "active" && a.refreshTokenEnc).map((a) => a.id);
   const monitorIds = new Set(records.filter((a) => a.monitorOnly).map((a) => a.id));
   const scopeIds = account ? liveIds.filter((id) => id === account.id) : liveIds.filter((id) => !monitorIds.has(id));
   const [all, filtered, labelCounts, labels] = await Promise.all([
-    getMailCounts(),
-    account ? getMailCounts(account.id) : null,
+    mailCountsForRender(null),
+    account ? mailCountsForRender(account.id) : null,
     unreadLabelCountsByAccount(),
     userLabels(scopeIds),
   ]);

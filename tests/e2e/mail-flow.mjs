@@ -34,6 +34,8 @@ async function login(context) {
 
   await row.locator("a").first().click();
   await page.waitForURL(/\/mail\/t\//);
+  // The thread skeleton shows at once; the conversation replaces it when the server answers.
+  await page.getByTestId("thread-loading").waitFor({ state: "detached" }).catch(() => {});
   check(await page.getByRole("heading", { name: "Spring cycle — open call" }).isVisible(), "thread opens with its subject");
   check(await page.getByText("Showing the copy stored in Vela").isVisible(), "stored-copy notice is shown when Gmail is unavailable");
   check((await page.locator("article").count()) >= 1, "latest message is expanded");
@@ -97,6 +99,7 @@ async function login(context) {
 
   await link.click();
   await page.waitForURL(/\/mail\/t\//);
+  await page.getByTestId("thread-loading").waitFor({ state: "detached" }).catch(() => {});
   await page.waitForLoadState("networkidle");
   const threadWidth = await page.evaluate(() => document.documentElement.scrollWidth);
   check(threadWidth <= 393, `thread screen has no horizontal scroll (scrollWidth ${threadWidth})`);

@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { after } from "next/server";
-import { CrmPanel } from "@/components/mail/crm-panel";
+import { CrmPanel, CrmPanelSkeleton } from "@/components/mail/crm-panel";
 import { DesktopSearch } from "@/components/mail/mail-header";
 import { MailSidebar } from "@/components/mail/mail-sidebar";
 import { buildMailboxes } from "@/components/mail/mailboxes";
@@ -10,12 +11,12 @@ import type { ThreadMessageView, ThreadViewData } from "@/components/mail/thread
 import { ThreadView } from "@/components/mail/thread-view";
 import { requireSession } from "@/lib/auth";
 import { env } from "@/lib/env";
-import { applyThreadAction, fetchThread, userLabels, type LiveThread } from "@/lib/mail/gmail";
+import { applyThreadAction, fetchThreadCached, userLabels, type LiveThread } from "@/lib/mail/gmail";
 import { isAccountId, isGmailId, listTitle, mailListHref, parseMailParams } from "@/lib/mail/params";
 import { storedThreadLabels } from "@/lib/mail/queries";
 import { buildSrcDoc } from "@/lib/mail/sanitize";
 import { getThread } from "@/lib/queries/messages";
-import { getOwnAddresses } from "@/lib/queries/stats";
+import { ownAddressesForRender } from "@/lib/queries/render-cache";
 import type { Address } from "@/lib/types";
 import { errorMessage, gmailThreadUrl } from "@/lib/utils";
 import { loadMailChrome, requestTime, type MailAccountInfo } from "../../../_lib/chrome";
@@ -115,7 +116,14 @@ export default async function ThreadPage({ params, searchParams }: PageProps<"/m
   if (!isAccountId(rawAccount) || !isGmailId(threadId)) notFound();
   const accountId = rawAccount.toLowerCase();
   const parsed = parseMailParams(await searchParams);
-  const [chrome, own] = await Promise.all([loadMailChrome(parsed), getOwnAddresses()]);
+  // Gmail is asked for the thread (and its labels) right away, alongside the
+  // sidebar data, instead of after it; the result is used only if the account is live.
+  const liveThread = fetchThreadCached(accountId, threadId).then(
+    (value) => ({ ok: true as const, value }),
+    (error: unknown) => ({ ok: false as const, error }),
+  );
+  const liveLabels = userLabels([accountId]).catch(() => []);
+  const [chrome, own] = await Promise.all([loadMailChrome(parsed), ownAddressesForRender()]);
   const state = { ...parsed, account: chrome.account?.id ?? null };
   const account = chrome.accounts.find((a) => a.id === accountId);
   if (!account) notFound();
@@ -124,12 +132,11 @@ export default async function ThreadPage({ params, searchParams }: PageProps<"/m
   let notice: string | null = null;
   const live = account.live && account.status === "active";
   if (live) {
-    try {
-      const fetched = await fetchThread(accountId, threadId);
-      if (fetched) thread = fromLive(fetched);
-      else notice = "This conversation is no longer in Gmail. Showing the copy stored in Vela.";
-    } catch (error) {
-      console.warn(`Could not load thread ${threadId} from Gmail:`, errorMessage(error));
+    const fetched = await liveThread;
+    if (fetched.ok && fetched.value) thread = fromLive(fetched.value);
+    else if (fetched.ok) notice = "This conversation is no longer in Gmail. Showing the copy stored in Vela.";
+    else {
+      console.warn(`Could not load thread ${threadId} from Gmail:`, errorMessage(fetched.error));
       notice = "Gmail couldn't be reached, so this is the copy stored in Vela (plain text, no attachments to download).";
     }
   } else {
@@ -153,7 +160,7 @@ export default async function ThreadPage({ params, searchParams }: PageProps<"/m
     });
   }
 
-  const labels = live ? (await userLabels([accountId])).map((l) => ({ id: l.id, name: l.name, color: l.color })) : [];
+  const labels = live ? (await liveLabels).map((l) => ({ id: l.id, name: l.name, color: l.color })) : [];
   const label = state.view === "label" ? chrome.labels.find((l) => l.id === state.label) : null;
   const backHref = mailListHref(state);
   const backLabel = listTitle(state, label?.name);
@@ -184,13 +191,16 @@ export default async function ThreadPage({ params, searchParams }: PageProps<"/m
             />
           </div>
           <aside className="border-t border-border bg-bg px-4 pb-[calc(env(safe-area-inset-bottom)+6rem)] pt-6 md:px-6 md:pb-8 xl:overflow-y-auto xl:border-l xl:border-t-0 xl:px-4 xl:pt-4" aria-label="Contact in Vela">
-            <CrmPanel
-              participants={participants(thread, own)}
-              accountId={accountId}
-              threadId={threadId}
-              reply={latest ? composeFor("reply", thread, latest, own, timezone) : null}
-              returnPath={returnPath}
-            />
+            {/* The contact details stream in after the conversation, which never waits for them. */}
+            <Suspense fallback={<CrmPanelSkeleton />}>
+              <CrmPanel
+                participants={participants(thread, own)}
+                accountId={accountId}
+                threadId={threadId}
+                reply={latest ? composeFor("reply", thread, latest, own, timezone) : null}
+                returnPath={returnPath}
+              />
+            </Suspense>
           </aside>
         </div>
       </div>

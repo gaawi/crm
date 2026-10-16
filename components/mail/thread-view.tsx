@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useClaudeEnabled } from "@/components/features";
 import { useRouter } from "next/navigation";
-import { startTransition, useMemo, useState } from "react";
+import { startTransition, useEffect, useMemo, useState } from "react";
 import {
   Archive,
   ArchiveRestore,
@@ -70,7 +70,12 @@ export function ThreadView({
 }) {
   const claude = useClaudeEnabled();
   const router = useRouter();
-  const { act, compose, ownAddresses, timezone, toast } = useMail();
+  const { act, compose, markSeen, ownAddresses, timezone, toast } = useMail();
+  // Opening marks the conversation read on the server; the list shows it read right away.
+  const opensUnread = !readOnly && thread.source === "live" && thread.messages.some((m) => m.unread);
+  useEffect(() => {
+    if (opensUnread) markSeen(thread.key);
+  }, [opensUnread, markSeen, thread.key]);
   const own = useMemo(() => new Set(ownAddresses), [ownAddresses]);
   const nowDate = useMemo(() => new Date(now), [now]);
   const [labels, setLabels] = useState(thread.labelIds);

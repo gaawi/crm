@@ -33,6 +33,7 @@ import { useMail, type ThreadTarget } from "./mail-provider";
 import { MailAvatar } from "./mail-avatar";
 import { SwipeRow } from "./swipe-row";
 import { useShortcuts } from "./use-shortcuts";
+import { warmOnHover, warmThread } from "./warm";
 
 export interface LabelInfo {
   name: string;
@@ -155,6 +156,8 @@ export function ThreadList({
     if (!rows.length) return;
     const next = Math.max(0, Math.min(rows.length - 1, (cursor < 0 ? (delta > 0 ? -1 : rows.length) : cursor) + delta));
     setCursor(next);
+    const row = rows[next];
+    if (row) warmThread(row.accountId, row.threadId);
     listRef.current?.querySelector(`[data-row="${next}"]`)?.scrollIntoView({ block: "nearest" });
   }
 
@@ -388,6 +391,7 @@ export function ThreadList({
                   data-bare
                   className="flex min-w-0 flex-1 items-center gap-3 pl-1 after:absolute after:inset-0"
                   onFocus={() => setCursor(i)}
+                  {...warmOnHover(r.accountId, r.threadId)}
                 >
                   <span className={cn("w-44 shrink-0 truncate lg:w-52", r.unread ? "font-semibold text-fg" : "text-fg/80")}>
                     {toContact ? <span className="font-normal text-muted">To: </span> : null}
@@ -470,7 +474,12 @@ export function ThreadList({
                 }
               >
                 <div className="relative">
-                  <Link href={href(r)} className="flex gap-4 px-4 py-3 active:bg-surface-2" draggable={false}>
+                  <Link
+                    href={href(r)}
+                    className="flex gap-4 px-4 py-3 active:bg-surface-2"
+                    draggable={false}
+                    onTouchStart={() => warmThread(r.accountId, r.threadId)}
+                  >
                     <PhoneAvatar row={r} />
                     <span className="min-w-0 flex-1">
                       <span className="flex items-baseline gap-2">

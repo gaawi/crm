@@ -206,3 +206,22 @@ function UnknownCard({ address }: { address: Address }) {
     </article>
   );
 }
+
+/** Placeholder while the contact details load (the conversation is already shown). */
+export function CrmPanelSkeleton() {
+  return (
+    <div className="flex flex-col gap-3" aria-hidden>
+      <div className="mx-4 h-3 w-16 animate-pulse rounded bg-border/60 md:mx-0" />
+      <div className="mx-4 space-y-3 rounded-xl border border-border bg-surface p-4 md:mx-0">
+        <div className="flex items-center gap-3">
+          <div className="size-10 animate-pulse rounded-full bg-border/60" />
+          <div className="flex-1 space-y-2">
+            <div className="h-3.5 w-32 animate-pulse rounded bg-border/60" />
+            <div className="h-3 w-20 animate-pulse rounded bg-border/50" />
+          </div>
+        </div>
+        <div className="h-3 w-3/4 animate-pulse rounded bg-border/50" />
+      </div>
+    </div>
+  );
+}

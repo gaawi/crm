@@ -35,6 +35,11 @@ const STRICT_CSP = csp("'self' data: blob:");
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   devIndicators: false,
+  experimental: {
+    // A page visited in the last 30 s opens from the browser's copy (Mail list and thread, Today…),
+    // like a mail app; any refresh (after an action, every minute in Mail) replaces it.
+    staleTimes: { dynamic: 30 },
+  },
   // Booking sheets became Campaigns (/campaigns). Old links and bookmarks keep working.
   async redirects() {
     return [

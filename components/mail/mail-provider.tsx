@@ -88,6 +88,8 @@ interface MailContextValue {
   composeOpen: boolean;
   act: (targets: ThreadTarget[], action: ThreadAction, options?: ActOptions) => Promise<boolean>;
   overrides: Record<string, ThreadOverride>;
+  /** The thread was just opened: show it read in the list right away (the server marks it read). */
+  markSeen: (key: string) => void;
   /** Drop overrides that the server data now reflects. */
   settle: (rows: { key: string; lastAt: number; unread: boolean; starred: boolean }[]) => void;
   toast: (toast: Omit<Toast, "id">) => void;
@@ -134,10 +136,27 @@ export function MailProvider({
   const [overrides, setOverrides] = useState<Record<string, ThreadOverride>>({});
   const [toastState, setToast] = useState<Toast | null>(null);
   const dirtyRef = useRef(false);
+  const refreshTimer = useRef<number | null>(null);
   // Undo toasts call act again; the ref avoids a self-referencing callback.
   const actRef = useRef<MailContextValue["act"] | null>(null);
 
   const toast = useCallback((t: Omit<Toast, "id">) => setToast({ ...t, id: nextId++ }), []);
+
+  // After an action the screen already shows the result (optimistic overrides), so the server
+  // copy is re-read once things go quiet: one refresh for a burst of archives, not one each.
+  const scheduleRefresh = useCallback(() => {
+    if (refreshTimer.current !== null) window.clearTimeout(refreshTimer.current);
+    refreshTimer.current = window.setTimeout(() => {
+      refreshTimer.current = null;
+      startTransition(() => router.refresh());
+    }, 2500);
+  }, [router]);
+  useEffect(
+    () => () => {
+      if (refreshTimer.current !== null) window.clearTimeout(refreshTimer.current);
+    },
+    [],
+  );
 
   const compose = useCallback(
     (init: ComposeInit = {}) => {
@@ -213,7 +232,7 @@ export function MailProvider({
         for (const key of keys) if (next[key]) next[key] = { ...next[key], done: true };
         return next;
       });
-      startTransition(() => router.refresh());
+      scheduleRefresh();
       if (options.toast) {
         const undo = options.undo;
         toast({
@@ -233,7 +252,7 @@ export function MailProvider({
       }
       return true;
     },
-    [accounts, router, toast],
+    [accounts, router, toast, scheduleRefresh],
   );
 
   useEffect(() => {
@@ -263,9 +282,13 @@ export function MailProvider({
     });
   }, []);
 
+  const markSeen = useCallback((key: string) => {
+    setOverrides((prev) => (prev[key]?.unread === false ? prev : { ...prev, [key]: { ...prev[key], lastAt: 0, unread: false, done: true } }));
+  }, []);
+
   const value = useMemo<MailContextValue>(
-    () => ({ accounts, timezone, ownAddresses, compose, composeOpen: composeState !== null, act, overrides, settle, toast }),
-    [accounts, timezone, ownAddresses, compose, composeState, act, overrides, settle, toast],
+    () => ({ accounts, timezone, ownAddresses, compose, composeOpen: composeState !== null, act, overrides, markSeen, settle, toast }),
+    [accounts, timezone, ownAddresses, compose, composeState, act, overrides, markSeen, settle, toast],
   );
 
   return (

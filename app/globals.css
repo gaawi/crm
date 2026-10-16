@@ -292,3 +292,20 @@ body {
   overflow-x: clip;
   max-width: 100%;
 }
+
+/*
+ * "Waking up the server" note on loading screens: shows only when a load
+ * takes longer than a moment (a cold server start), never on quick ones.
+ */
+@keyframes vela-late {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.vela-late {
+  animation: vela-late 0.4s ease 1.6s both;
+}

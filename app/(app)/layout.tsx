@@ -1,10 +1,9 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { after, connection } from "next/server";
 import { Search } from "lucide-react";
 import { requireSession } from "@/lib/auth";
-import { getMailCounts } from "@/lib/mail/queries";
-import { countPendingDrafts } from "@/lib/queries/drafts";
-import { getOverviewCounts } from "@/lib/queries/stats";
+import { navCountsForRender } from "@/lib/queries/render-cache";
 import { deadlineFor, syncStaleAccounts } from "@/lib/sync/runner";
 import { VelaLogo } from "@/components/brand/vela-logo";
 import { SendFlourishHost } from "@/components/brand/send-flourish";
@@ -24,7 +23,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // the page is sent (covers missed push notifications; never throws). The
   // deadline keeps a safety margin for the time the render already took.
   after(() => syncStaleAccounts({ deadline: deadlineFor(maxDuration) - 15_000 }));
-  const [approvals, counts, mail] = await Promise.all([countPendingDrafts(), getOverviewCounts(), getMailCounts()]);
+  // The frame is sent right away; the badges and the reconnect banner stream in when their counts are ready.
 
   return (
     <FeaturesProvider claude={env.claudeEnabled}>
@@ -43,7 +42,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               className="h-8 w-full rounded-md border border-border bg-bg pl-8 pr-2 text-sm placeholder:text-subtle focus:border-border-strong focus:outline-none"
             />
           </form>
-          <SideNav approvals={approvals} mail={mail.inbox.primary} />
+          <Suspense fallback={<SideNav approvals={0} mail={0} />}>
+            <CountedSideNav />
+          </Suspense>
           <form action={logout} className="mt-auto">
             <button type="submit" className="px-2.5 text-xs text-subtle hover:text-muted">
               Sign out
@@ -52,24 +53,43 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">
-          {counts.accountsNeedingReauth > 0 ? (
-            <div className="border-b border-amber-200 bg-amber-50 px-4 pb-2 pt-[calc(env(safe-area-inset-top)+0.5rem)] text-sm text-amber-900 md:pt-2 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
-              {counts.accountsNeedingReauth === 1 ? "A Gmail account" : `${counts.accountsNeedingReauth} Gmail accounts`} stopped syncing and
-              must be reconnected.{" "}
-              <Link href="/settings" className="font-medium underline underline-offset-2">
-                Reconnect
-              </Link>
-            </div>
-          ) : null}
+          <Suspense fallback={null}>
+            <ReauthBanner />
+          </Suspense>
           {/* Pages whose root has data-fullbleed (Mail) use the whole width and manage their own padding. */}
           <main className="mx-auto w-full max-w-6xl flex-1 px-4 pb-[calc(env(safe-area-inset-bottom)+5.5rem)] pt-[calc(env(safe-area-inset-top)+1rem)] has-[>[data-fullbleed]]:max-w-none has-[>[data-fullbleed]]:p-0 md:px-8 md:py-8">
             {children}
           </main>
         </div>
 
-        <TabBar approvals={approvals} mail={mail.inbox.primary} />
+        <Suspense fallback={<TabBar approvals={0} mail={0} />}>
+          <CountedTabBar />
+        </Suspense>
         <SendFlourishHost />
       </div>
     </FeaturesProvider>
+  );
+}
+
+async function CountedSideNav() {
+  const counts = await navCountsForRender();
+  return <SideNav approvals={counts.approvals} mail={counts.mail} />;
+}
+
+async function CountedTabBar() {
+  const counts = await navCountsForRender();
+  return <TabBar approvals={counts.approvals} mail={counts.mail} />;
+}
+
+async function ReauthBanner() {
+  const { accountsNeedingReauth } = await navCountsForRender();
+  if (accountsNeedingReauth <= 0) return null;
+  return (
+    <div className="border-b border-amber-200 bg-amber-50 px-4 pb-2 pt-[calc(env(safe-area-inset-top)+0.5rem)] text-sm text-amber-900 md:pt-2 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+      {accountsNeedingReauth === 1 ? "A Gmail account" : `${accountsNeedingReauth} Gmail accounts`} stopped syncing and must be reconnected.{" "}
+      <Link href="/settings" className="font-medium underline underline-offset-2">
+        Reconnect
+      </Link>
+    </div>
   );
 }

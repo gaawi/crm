@@ -227,6 +227,74 @@ export async function fetchThread(accountId: string, threadId: string): Promise<
   };
 }
 
+/* ------------------------------------------------------------------------ */
+/* Recently opened threads                                                  */
+/* ------------------------------------------------------------------------ */
+
+/**
+ * Threads fetched in the last couple of minutes, per server instance, so
+ * going back and forth (and the refresh after an action) does not wait on
+ * Gmail again. Vela's own changes update or drop the entry; a newer stored
+ * message (sync) makes the next open fetch again. Entries hold a promise, so
+ * a warm-up started on hover and the page share one Gmail call.
+ */
+const THREAD_TTL_MS = 2 * 60_000;
+const THREAD_CACHE_MAX = 40;
+/** Threads with more HTML than this (large inline images) are not kept. */
+const THREAD_CACHE_MAX_CHARS = 3_000_000;
+const threadCache = new Map<string, { at: number; promise: Promise<LiveThread | null> }>();
+
+function threadKey(accountId: string, threadId: string): string {
+  return `${accountId.toLowerCase()}:${threadId}`;
+}
+
+export function forgetThread(accountId: string, threadId: string): void {
+  threadCache.delete(threadKey(accountId, threadId));
+}
+
+function rememberThread(key: string, promise: Promise<LiveThread | null>): Promise<LiveThread | null> {
+  const entry = { at: Date.now(), promise };
+  threadCache.set(key, entry);
+  while (threadCache.size > THREAD_CACHE_MAX) threadCache.delete(threadCache.keys().next().value as string);
+  promise.then(
+    (thread) => {
+      const chars = thread?.messages.reduce((n, m) => n + (m.html?.length ?? 0), 0) ?? 0;
+      if (chars > THREAD_CACHE_MAX_CHARS && threadCache.get(key) === entry) threadCache.delete(key);
+    },
+    () => {
+      if (threadCache.get(key) === entry) threadCache.delete(key);
+    },
+  );
+  return promise;
+}
+
+/** fetchThread, served from the recent-threads cache when it is still current. */
+export async function fetchThreadCached(accountId: string, threadId: string): Promise<LiveThread | null> {
+  const key = threadKey(accountId, threadId);
+  const entry = threadCache.get(key);
+  if (entry && Date.now() - entry.at < THREAD_TTL_MS) {
+    const [thread, newest] = await Promise.all([entry.promise.catch(() => undefined), latestMessageId(accountId, threadId)]);
+    if (thread !== undefined && (!newest || !thread || thread.messages.some((m) => m.gmailMessageId === newest))) return thread;
+  }
+  return rememberThread(key, fetchThread(accountId, threadId));
+}
+
+/** Keep a cached thread in step with a change Vela just made: marking read is patched in, anything else drops it. */
+async function patchCachedThread(accountId: string, threadId: string, action: ThreadAction): Promise<void> {
+  const key = threadKey(accountId, threadId);
+  const entry = threadCache.get(key);
+  if (!entry) return;
+  if (action !== "read") {
+    threadCache.delete(key);
+    return;
+  }
+  const thread = await entry.promise.catch(() => null);
+  if (!thread || threadCache.get(key) !== entry) return;
+  const messages = thread.messages.map((m) => (m.unread ? { ...m, unread: false, labelIds: m.labelIds.filter((l) => l !== "UNREAD") } : m));
+  const labelIds = [...new Set(messages.flatMap((m) => m.labelIds))].sort();
+  threadCache.set(key, { at: entry.at, promise: Promise.resolve({ ...thread, messages, labelIds }) });
+}
+
 /** One attachment's bytes (looked up by MIME part id, since attachment ids are not stable). */
 export async function fetchAttachment(
   accountId: string,
@@ -349,6 +417,16 @@ async function latestMessageId(accountId: string, threadId: string): Promise<str
 }
 
 export async function applyThreadAction(accountId: string, threadId: string, action: ThreadAction): Promise<void> {
+  try {
+    await changeThread(accountId, threadId, action);
+  } catch (error) {
+    forgetThread(accountId, threadId);
+    throw error;
+  }
+  await patchCachedThread(accountId, threadId, action);
+}
+
+async function changeThread(accountId: string, threadId: string, action: ThreadAction): Promise<void> {
   const account = await mailAccount(accountId, "modify");
   const client = gmailClientFor(account.id);
   try {
@@ -394,6 +472,7 @@ export async function applyThreadAction(accountId: string, threadId: string, act
 export async function changeThreadLabels(accountId: string, threadId: string, add: string[], remove: string[]): Promise<void> {
   const account = await mailAccount(accountId, "modify");
   const safe = (ids: string[]) => ids.filter((id) => /^[A-Za-z0-9_-]{1,64}$/.test(id));
+  forgetThread(account.id, threadId);
   const thread = await gmailClientFor(account.id).modifyThread(threadId, { addLabelIds: safe(add), removeLabelIds: safe(remove) });
   await storeThreadLabels(account.id, threadId, thread, safe(add), safe(remove));
 }
@@ -575,5 +654,6 @@ export async function sendMail(input: SendInput): Promise<{ gmailMessageId: stri
   } catch (error) {
     console.warn(`Could not store sent message ${sent.id}:`, error);
   }
+  forgetThread(account.id, sent.threadId);
   return { gmailMessageId: sent.id, threadId: sent.threadId };
 }

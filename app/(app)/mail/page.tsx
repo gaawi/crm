@@ -4,6 +4,7 @@ import { ComposeFab } from "@/components/mail/compose-button";
 import { DesktopSearch, PhoneMailHeader } from "@/components/mail/mail-header";
 import { MailSidebar } from "@/components/mail/mail-sidebar";
 import { buildMailboxes } from "@/components/mail/mailboxes";
+import { MailAutoRefresh } from "@/components/mail/mail-auto-refresh";
 import { ThreadList, type LabelInfo, type TabInfo } from "@/components/mail/thread-list";
 import { Notice } from "@/components/ui/layout";
 import { requireSession } from "@/lib/auth";
@@ -117,24 +118,27 @@ export default async function MailPage({ searchParams }: PageProps<"/mail">) {
         {draftList ? (
           <DraftsList drafts={draftList} now={now} showAccount={!state.account && chrome.accounts.length > 1} />
         ) : page ? (
-          <ThreadList
-            threads={page.threads}
-            state={state}
-            now={now}
-            range={{
-              start: pageStart(state, PAGE_SIZE),
-              end: pageStart(state, PAGE_SIZE) + page.threads.length - 1,
-              prevHref: prevPageHref(state),
-              nextHref: page.next ? nextPageHref(state, page.next) : null,
-            }}
-            tabs={tabs}
-            accountDots={accountDots}
-            showAccount={!state.account && chrome.accounts.length > 1}
-            labels={labels}
-            emptyTitle={emptyTitle}
-            emptyText={emptyText}
-            archiveAll={archiveAll}
-          />
+          <>
+            <MailAutoRefresh />
+            <ThreadList
+              threads={page.threads}
+              state={state}
+              now={now}
+              range={{
+                start: pageStart(state, PAGE_SIZE),
+                end: pageStart(state, PAGE_SIZE) + page.threads.length - 1,
+                prevHref: prevPageHref(state),
+                nextHref: page.next ? nextPageHref(state, page.next) : null,
+              }}
+              tabs={tabs}
+              accountDots={accountDots}
+              showAccount={!state.account && chrome.accounts.length > 1}
+              labels={labels}
+              emptyTitle={emptyTitle}
+              emptyText={emptyText}
+              archiveAll={archiveAll}
+            />
+          </>
         ) : null}
       </section>
       <ComposeFab account={state.account} />

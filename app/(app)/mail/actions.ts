@@ -26,6 +26,8 @@ export type MailResult<T = object> = ({ ok: true } & T) | { ok: false; error: st
 const uuid = z.string().regex(/^[0-9a-f-]{36}$/i);
 const gmailId = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
 const threadRef = z.object({ accountId: uuid, threadId: gmailId });
+/** Gmail calls in flight at once for a bulk change (well under Gmail's per-user rate limit). */
+const BULK_CONCURRENCY = 6;
 const actions = ["archive", "inbox", "trash", "untrash", "read", "unread", "star", "unstar"] as const satisfies readonly ThreadAction[];
 
 function failure(error: unknown): { ok: false; error: string } {
@@ -51,14 +53,19 @@ export async function threadAction(
   if (!parsed.success || !actions.includes(action)) return { ok: false, error: "Invalid request" };
   let done = 0;
   const errors: string[] = [];
-  for (const t of parsed.data) {
-    try {
-      await applyThreadAction(t.accountId, t.threadId, action);
-      done++;
-    } catch (error) {
-      errors.push(failure(error).error);
+  // A few Gmail calls at a time: a 50-conversation archive no longer waits for 50 calls in a row.
+  const queue = [...parsed.data];
+  const worker = async () => {
+    for (let t = queue.shift(); t; t = queue.shift()) {
+      try {
+        await applyThreadAction(t.accountId, t.threadId, action);
+        done++;
+      } catch (error) {
+        errors.push(failure(error).error);
+      }
     }
-  }
+  };
+  await Promise.all(Array.from({ length: Math.min(BULK_CONCURRENCY, queue.length) }, worker));
   if (options.refresh !== false) refresh();
   if (errors.length && !done) return { ok: false, error: errors[0] };
   return { ok: true, done };
