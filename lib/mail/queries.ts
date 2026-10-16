@@ -222,16 +222,33 @@ export async function listThreads(params: ThreadListParams): Promise<ThreadPage>
       ? notMonitorOnly()
       : sql`true`;
   const matches = and([shown, account, ...parts]);
-
-  const rows = await sql<ThreadRow[]>`
-    with recent as (
+  const before = cursor ? sql`and m.sent_at <= ${cursor.at}` : sql``;
+  // All Inboxes walks each mailbox's own index: one shared sent_at scan had to step over every
+  // monitor-only inbox email (14k+ after the history import) and took seconds on a cold cache.
+  const perAccount = !params.accountId && params.view === "inbox" && !params.q?.trim();
+  const recentRows = perAccount
+    ? sql`
+      select r.account_id, r.gmail_thread_id
+        from gmail_accounts a
+        cross join lateral (
+          select m.account_id, m.gmail_thread_id, m.sent_at
+            from messages m
+           where m.account_id = a.id and ${matches} ${before}
+           order by m.sent_at desc
+           limit ${SCAN_WINDOW}
+        ) r
+       where not a.monitor_only
+       order by r.sent_at desc
+       limit ${SCAN_WINDOW}`
+    : sql`
       select m.account_id, m.gmail_thread_id
         from messages m
-       where ${matches}
-         ${cursor ? sql`and m.sent_at <= ${cursor.at}` : sql``}
+       where ${matches} ${before}
        order by m.sent_at desc
-       limit ${SCAN_WINDOW}
-    ),
+       limit ${SCAN_WINDOW}`;
+
+  const rows = await sql<ThreadRow[]>`
+    with recent as (${recentRows}),
     hits as (
       select c.account_id, c.gmail_thread_id,
              (select max(m.sent_at) from messages m
