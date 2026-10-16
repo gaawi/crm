@@ -2,6 +2,9 @@ import { loadReviewInbox } from "@/components/assistant/review-inbox";
 import { loadPendingApprovals } from "@/lib/approvals/pending";
 import postgres from "postgres";
 import { assistantApiGuard } from "@/lib/assistant/auth";
+import { listLabels, userLabels } from "@/lib/mail/gmail";
+import { getMailCounts, listThreads, unreadLabelCountsByAccount } from "@/lib/mail/queries";
+import { listAccounts } from "@/lib/sync/accounts";
 import { todayIn } from "@/lib/dates";
 import { getFollowUps, getUpcomingFollowUps } from "@/lib/queries/followups";
 import { recentActivity } from "@/lib/queries/messages";
@@ -81,9 +84,36 @@ async function connectTimings() {
   return out;
 }
 
+/** ?timings=mail: each part of the Mail inbox page, on the real data (labels come from Gmail). */
+async function mailTimings() {
+  const timed = async <T>(name: string, run: () => Promise<T>) => {
+    const start = performance.now();
+    try {
+      const value = await run();
+      return { name, ms: Math.round(performance.now() - start), value };
+    } catch (error) {
+      return { name, ms: Math.round(performance.now() - start), value: null, error: String(error) };
+    }
+  };
+  const accounts = await timed("accounts", () => listAccounts());
+  const ids = (accounts.value ?? []).filter((a) => a.status === "active" && !a.monitorOnly).map((a) => a.id);
+  const parts = await Promise.all([
+    timed("mailCounts", () => getMailCounts()),
+    timed("labelCounts", () => unreadLabelCountsByAccount()),
+    timed("gmailLabels", () => userLabels(ids)),
+    timed("gmailLabelsDirect", () => Promise.all(ids.map((id) => listLabels(id, { fresh: true })))),
+    timed("threads", () =>
+      listThreads({ view: "inbox", category: "primary", labelId: null, accountId: null, q: null, cursor: null, resolveLabel: (n) => [n] }),
+    ),
+  ]);
+  return [accounts, ...parts].map(({ name, ms, ...rest }) => ({ name, ms, ...("error" in rest ? { error: rest.error } : {}) }));
+}
+
 export async function GET(request: Request) {
   const denied = await assistantApiGuard(request);
   if (denied) return denied;
+  if (new URL(request.url).searchParams.get("timings") === "mail")
+    return Response.json(await mailTimings(), { headers: { "Cache-Control": "no-store" } });
   if (new URL(request.url).searchParams.get("timings") === "connect")
     return Response.json(await connectTimings(), { headers: { "Cache-Control": "no-store" } });
   if (new URL(request.url).searchParams.get("timings") === "today")

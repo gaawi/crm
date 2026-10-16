@@ -276,17 +276,45 @@ export interface UserLabel {
 }
 
 /** User labels of every given account; failures (e.g. revoked access) are skipped. */
+/** How long a page waits for Gmail's labels before drawing with the ones it knew (Gmail may be busy, e.g. during an import). */
+const LABEL_WAIT_MS = 1500;
+const labelsInFlight = new Map<string, Promise<GmailLabel[]>>();
+
+/**
+ * The labels to draw now: fresh from cache, else Gmail if it answers within
+ * LABEL_WAIT_MS, else the last known ones (or none). A slow call keeps going
+ * and fills the cache for the next page, so a page never waits on Gmail's
+ * retries and backoff.
+ */
+async function labelsForPage(accountId: string): Promise<GmailLabel[]> {
+  const cached = labelCache.get(accountId);
+  if (cached && Date.now() - cached.at < LABEL_TTL_MS) return cached.labels;
+  let call = labelsInFlight.get(accountId);
+  if (!call) {
+    call = listLabels(accountId).finally(() => labelsInFlight.delete(accountId));
+    labelsInFlight.set(accountId, call);
+  }
+  call.catch(() => undefined);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), LABEL_WAIT_MS);
+  });
+  try {
+    return (await Promise.race([call, late])) ?? cached?.labels ?? [];
+  } catch {
+    return cached?.labels ?? [];
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function userLabels(accountIds: string[]): Promise<UserLabel[]> {
   const lists = await Promise.all(
-    accountIds.map(async (accountId) => {
-      try {
-        return (await listLabels(accountId))
-          .filter((l) => l.type === "user" && l.labelListVisibility !== "labelHide")
-          .map((l) => ({ id: l.id, name: l.name, accountId, color: l.color?.backgroundColor ?? null }));
-      } catch {
-        return [];
-      }
-    }),
+    accountIds.map(async (accountId) =>
+      (await labelsForPage(accountId))
+        .filter((l) => l.type === "user" && l.labelListVisibility !== "labelHide")
+        .map((l) => ({ id: l.id, name: l.name, accountId, color: l.color?.backgroundColor ?? null })),
+    ),
   );
   return lists.flat().sort((a, b) => a.name.localeCompare(b.name));
 }
