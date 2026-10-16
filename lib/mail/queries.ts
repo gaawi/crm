@@ -113,20 +113,12 @@ function visible(scope: Scope): Fragment {
 }
 
 function categoryCondition(category: InboxCategory): Fragment {
-  if (category === "primary") return sql`not (m.label_ids && ${CATEGORY_IDS}::text[])`;
+  // A literal (same constant as messages_inbox_primary_sent_idx) so the planner can use that index.
+  if (category === "primary") return sql.unsafe(`not (m.label_ids && '{${CATEGORY_IDS.join(",")}}')`);
   return sql`m.label_ids @> ${[CATEGORY_LABELS[category]]}::text[]`;
 }
 
-const SYSTEM_LABELS = new Set([
-  "INBOX",
-  "SENT",
-  "STARRED",
-  "IMPORTANT",
-  "UNREAD",
-  "TRASH",
-  "SPAM",
-  ...CATEGORY_IDS,
-]);
+const SYSTEM_LABELS = new Set(["INBOX", "SENT", "STARRED", "IMPORTANT", "UNREAD", "TRASH", "SPAM", ...CATEGORY_IDS]);
 
 function defaultResolveLabel(name: string): string[] {
   const upper = name.toUpperCase().replace(/[\s-]+/g, "_");
@@ -153,8 +145,10 @@ export function filterConditions(filter: MailFilter, resolveLabel: (name: string
   let scope: Scope = "default";
 
   if (filter.text) parts.push(messageMatches(filter.text));
-  for (const v of filter.from) parts.push(v === "me" ? sql`m.direction = 'outbound'` : sql`(${textMatch(sql`m.from_email`, v)} or ${textMatch(sql`m.from_name`, v)})`);
-  for (const v of filter.notFrom) parts.push(v === "me" ? sql`m.direction <> 'outbound'` : sql`not (${textMatch(sql`m.from_email`, v)} or ${textMatch(sql`m.from_name`, v)})`);
+  for (const v of filter.from)
+    parts.push(v === "me" ? sql`m.direction = 'outbound'` : sql`(${textMatch(sql`m.from_email`, v)} or ${textMatch(sql`m.from_name`, v)})`);
+  for (const v of filter.notFrom)
+    parts.push(v === "me" ? sql`m.direction <> 'outbound'` : sql`not (${textMatch(sql`m.from_email`, v)} or ${textMatch(sql`m.from_name`, v)})`);
   for (const v of filter.to) parts.push(v === "me" ? sql`m.direction = 'inbound'` : recipientMatch(v));
   for (const v of filter.notTo) parts.push(v === "me" ? sql`m.direction <> 'inbound'` : sql`not ${recipientMatch(v)}`);
   for (const v of filter.subject) parts.push(textMatch(sql`m.subject`, v));
@@ -341,7 +335,7 @@ export async function getMailCounts(accountId?: string | null): Promise<MailCoun
     sql<{ label: string; count: number }[]>`
       select l as label, count(distinct (m.account_id, m.gmail_thread_id))::int as count
         from messages m, unnest(m.label_ids) l
-       where m.label_ids @> '{UNREAD}' and not (m.label_ids && '{TRASH,SPAM,DELETED}') and l like 'Label\\_%' ${account}
+       where m.label_ids @> '{UNREAD}' and has_user_label(m.label_ids) and not (m.label_ids && '{TRASH,SPAM,DELETED}') and l like 'Label\\_%' ${account}
        group by l
     `,
   ]);
@@ -417,7 +411,7 @@ export async function unreadLabelCountsByAccount(): Promise<Record<string, Recor
   const rows = await sql<{ accountId: string; label: string; count: number }[]>`
     select m.account_id, l as label, count(distinct m.gmail_thread_id)::int as count
       from messages m, unnest(m.label_ids) l
-     where m.label_ids @> '{UNREAD}' and not (m.label_ids && '{TRASH,SPAM,DELETED}') and l like 'Label\\_%'
+     where m.label_ids @> '{UNREAD}' and has_user_label(m.label_ids) and not (m.label_ids && '{TRASH,SPAM,DELETED}') and l like 'Label\\_%'
      group by m.account_id, l
   `;
   const out: Record<string, Record<string, number>> = {};

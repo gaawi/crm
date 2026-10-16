@@ -26,6 +26,12 @@ const PAGE_SIZE = 100;
 const FETCH_BATCH = 25;
 /** Text kept per email by the older-history import (the history views show up to 4000 characters). */
 const LEAN_BODY_MAX = 4000;
+/**
+ * Pause between pages of the older-history import: it can run for days, and
+ * at full speed it kept the database CPU busy enough to slow every page of
+ * the app (and Gmail's quota for the inbox). Tests set it to 0.
+ */
+const LEAN_PAUSE_MS = Number(process.env.LEAN_IMPORT_PAUSE_MS ?? 4000);
 
 /**
  * Gmail search for the mail older than what is stored (the first import of
@@ -193,6 +199,8 @@ export async function runBackfillChunk(accountId: string, options: { deadline: n
       if (done) return { status: "done", scanned, imported, ...(summary ? { error: summary } : {}) };
       await extendLease(accountId, "backfill", LEASE_SECONDS);
       pageToken = next;
+      if (lean && LEAN_PAUSE_MS > 0)
+        await new Promise((resolve) => setTimeout(resolve, Math.min(LEAN_PAUSE_MS, Math.max(0, options.deadline - Date.now()))));
     }
     const summary = summarizeFailures(failures);
     return { status: "progress", scanned, imported, ...(summary ? { error: summary } : {}) };
