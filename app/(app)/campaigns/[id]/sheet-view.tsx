@@ -28,7 +28,8 @@ import { HistoryDrawer } from "./history-drawer";
 import { ImportButton } from "./import-dialog";
 import { RowCard } from "./row-card";
 import { rowSubject, STAGE_DOT, stageOptions, type EmailSuggestion, type RowActions, type RowContext } from "./row-meta";
-import { RowsTable } from "./rows-table";
+import { useIsPhone } from "@/components/ui/sheet";
+import { RowsTable, ShowMoreButton, shownRows, type RowGroup } from "./rows-table";
 import { useSheetToast } from "./sheet-toast";
 import { ConfirmedStrip, StatsStrip, type StatItem } from "./stats";
 
@@ -83,6 +84,9 @@ function useCompact(): [boolean, (on: boolean) => void] {
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
+/** Rows a long section draws before "Show more". */
+const ROWS_PER_SECTION = 25;
+
 export function SheetView({
   sheet,
   rows,
@@ -90,6 +94,7 @@ export function SheetView({
   sendAccountEmail,
   today,
   timezone,
+  phoneHint = false,
 }: {
   sheet: BookingSheet;
   rows: SheetRow[];
@@ -99,8 +104,13 @@ export function SheetView({
   /** 'YYYY-MM-DD' in the owner's timezone (server's today, so server and client agree). */
   today: string;
   timezone: string;
+  /** The server's guess from the user agent: draw the phone cards (true) or the desktop table first. */
+  phoneHint?: boolean;
 }) {
   const searchParams = useSearchParams();
+  const phone = useIsPhone(phoneHint);
+  // Long sections draw their first rows; "Show more" draws the rest (filters and selection still cover every row).
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
   const [filters, setFilters] = useState<SheetFilters>(() => sheetFiltersFromParams(new URLSearchParams(searchParams.toString())));
   const deferredFilters = useDeferredValue(filters);
   const [compact, setCompact] = useCompact();
@@ -120,7 +130,16 @@ export function SheetView({
   const sections = useMemo(() => sheetSections(rows), [rows]);
   const hasUnsectioned = useMemo(() => sections.length > 0 && rows.some((r) => !r.section), [rows, sections]);
   const visible = useMemo(() => filterRows(rows, deferredFilters, today, timezone), [rows, deferredFilters, today, timezone]);
-  const groups = useMemo(() => groupBySection(visible), [visible]);
+  const groups = useMemo<RowGroup[]>(
+    () =>
+      groupBySection(visible).map((g) => {
+        const key = g.section ?? "\u0000other";
+        return expanded.has(key) || g.rows.length <= ROWS_PER_SECTION + 5
+          ? g
+          : { ...g, shown: ROWS_PER_SECTION, onShowAll: () => setExpanded((prev) => new Set(prev).add(key)) };
+      }),
+    [visible, expanded],
+  );
   const confirmed = useMemo(() => rows.filter((r) => r.stage === "won"), [rows]);
   // Sheet-level status names: the booking ones while every row is a booking (or every row shares one goal), generic ones for a mix.
   const labelKind = useMemo(() => labelKindFor(rows.map((r) => r.kind)), [rows]);
@@ -272,7 +291,10 @@ export function SheetView({
     });
   };
 
-  const ctx = useMemo<RowContext>(() => ({ currency: sheet.currency, today, timezone, sectionsListId }), [sheet.currency, today, timezone, sectionsListId]);
+  const ctx = useMemo<RowContext>(
+    () => ({ currency: sheet.currency, today, timezone, sectionsListId }),
+    [sheet.currency, today, timezone, sectionsListId],
+  );
 
   // Counts over the whole sheet; each one filters.
   const stats = useMemo<StatItem[]>(() => {
@@ -285,7 +307,16 @@ export function SheetView({
     const stage = (value: OpportunityStage, always = true): StatItem[] => {
       const n = count(value);
       if (!always && n === 0 && filters.status !== value) return [];
-      return [{ key: value, label: stageLabel(value, labelKind), count: n, dot: STAGE_DOT[value], active: filters.status === value, onClick: setStatus(value) }];
+      return [
+        {
+          key: value,
+          label: stageLabel(value, labelKind),
+          count: n,
+          dot: STAGE_DOT[value],
+          active: filters.status === value,
+          onClick: setStatus(value),
+        },
+      ];
     };
     return [
       {
@@ -303,14 +334,18 @@ export function SheetView({
       ...stage("won"),
       ...stage("lost"),
       { key: "due", label: "Follow-ups due", count: due, tone: "danger", active: filters.flags.includes("due"), onClick: toggleFlag("due") },
-      { key: "no_reply", label: "No reply", count: noReply, tone: "warning", active: filters.flags.includes("no_reply"), onClick: toggleFlag("no_reply") },
+      {
+        key: "no_reply",
+        label: "No reply",
+        count: noReply,
+        tone: "warning",
+        active: filters.flags.includes("no_reply"),
+        onClick: toggleFlag("no_reply"),
+      },
     ];
   }, [rows, today, timezone, filters.status, filters.flags, labelKind]);
 
-  const statusOptions = useMemo(
-    () => sheetStages.map((s) => ({ ...s, count: rows.filter((r) => r.stage === s.value).length })),
-    [rows, sheetStages],
-  );
+  const statusOptions = useMemo(() => sheetStages.map((s) => ({ ...s, count: rows.filter((r) => r.stage === s.value).length })), [rows, sheetStages]);
   // The sheet's goals in GOAL_KINDS order (a filter once there are two).
   const goalOptions = useMemo(
     () =>
@@ -376,64 +411,80 @@ export function SheetView({
 
       {visible.length ? (
         <div className={cn("transition-opacity", stale && "opacity-70")}>
-          <RowsTable
-            groups={groups}
-            showSectionHeaders={showSectionHeaders}
-            ctx={ctx}
-            actions={actions}
-            selected={selected}
-            onSelectMany={selectMany}
-            suggestions={suggestions}
-            preparing={preparing}
-          />
+          {phone ? null : (
+            <RowsTable
+              groups={groups}
+              showSectionHeaders={showSectionHeaders}
+              ctx={ctx}
+              actions={actions}
+              selected={selected}
+              onSelectMany={selectMany}
+              suggestions={suggestions}
+              preparing={preparing}
+            />
+          )}
 
           {/* Phones: cards grouped by section. */}
-          <div className="flex flex-col gap-6 md:hidden">
-            {groups.map((group) => (
-              <section key={group.section ?? "\u0000other"} aria-label={showSectionHeaders ? (group.section ?? "Other") : undefined}>
-                {showSectionHeaders ? (
-                  <h2 className="mb-2 flex items-baseline gap-2 px-1 text-[13px] font-semibold uppercase tracking-wide text-muted">
-                    <span className="min-w-0 truncate">{group.section ?? "Other"}</span>
-                    <span className="font-medium tabular-nums text-subtle">{group.rows.length}</span>
-                    {selectMode ? (
-                      <button
-                        type="button"
-                        onClick={() => selectMany(group.rows.map((r) => r.id), !group.rows.every((r) => selected.has(r.id)))}
-                        className="ml-auto h-8 shrink-0 text-[13px] font-normal normal-case tracking-normal text-blue-600 active:opacity-60 dark:text-blue-400"
-                      >
-                        {group.rows.every((r) => selected.has(r.id)) ? "Unselect" : "Select all"}
-                      </button>
-                    ) : null}
-                  </h2>
-                ) : null}
-                <ul
-                  className={cn(
-                    compact ? "divide-y divide-border overflow-hidden rounded-2xl border border-border bg-surface" : "flex flex-col gap-3",
-                  )}
-                >
-                  {group.rows.map((row) => (
-                    <RowCard
-                      key={row.id}
-                      row={row}
-                      ctx={ctx}
-                      actions={actions}
-                      suggestion={suggestions.get(row.id)!}
-                      preparing={preparing.has(row.id)}
-                      compact={compact}
-                      selectMode={selectMode}
-                      selected={selected.has(row.id)}
-                    />
-                  ))}
-                </ul>
-              </section>
-            ))}
-          </div>
+          {phone ? (
+            <div className="flex flex-col gap-6 md:hidden">
+              {groups.map((group) => (
+                <section key={group.section ?? "\u0000other"} aria-label={showSectionHeaders ? (group.section ?? "Other") : undefined}>
+                  {showSectionHeaders ? (
+                    <h2 className="mb-2 flex items-baseline gap-2 px-1 text-[13px] font-semibold uppercase tracking-wide text-muted">
+                      <span className="min-w-0 truncate">{group.section ?? "Other"}</span>
+                      <span className="font-medium tabular-nums text-subtle">{group.rows.length}</span>
+                      {selectMode ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            selectMany(
+                              group.rows.map((r) => r.id),
+                              !group.rows.every((r) => selected.has(r.id)),
+                            )
+                          }
+                          className="ml-auto h-8 shrink-0 text-[13px] font-normal normal-case tracking-normal text-blue-600 active:opacity-60 dark:text-blue-400"
+                        >
+                          {group.rows.every((r) => selected.has(r.id)) ? "Unselect" : "Select all"}
+                        </button>
+                      ) : null}
+                    </h2>
+                  ) : null}
+                  <ul
+                    className={cn(
+                      compact ? "divide-y divide-border overflow-hidden rounded-2xl border border-border bg-surface" : "flex flex-col gap-3",
+                    )}
+                  >
+                    {shownRows(group).map((row) => (
+                      <RowCard
+                        key={row.id}
+                        row={row}
+                        ctx={ctx}
+                        actions={actions}
+                        suggestion={suggestions.get(row.id)!}
+                        preparing={preparing.has(row.id)}
+                        compact={compact}
+                        selectMode={selectMode}
+                        selected={selected.has(row.id)}
+                      />
+                    ))}
+                  </ul>
+                  {shownRows(group).length < group.rows.length ? (
+                    <ShowMoreButton hidden={group.rows.length - shownRows(group).length} onClick={group.onShowAll} className="mt-2" />
+                  ) : null}
+                </section>
+              ))}
+            </div>
+          ) : null}
         </div>
       ) : (
         <EmptyState
           title="No contacts match"
           action={
-            <button type="button" onClick={() => setFilters(EMPTY_FILTERS)} className="text-sm font-medium text-fg underline-offset-2 hover:underline">
+            <button
+              type="button"
+              onClick={() => setFilters(EMPTY_FILTERS)}
+              className="text-sm font-medium text-fg underline-offset-2 hover:underline"
+            >
               Clear filters
             </button>
           }
@@ -446,7 +497,12 @@ export function SheetView({
         <BulkBar
           count={selectedVisible.length}
           visible={visible.length}
-          onSelectAll={() => selectMany(visible.map((r) => r.id), true)}
+          onSelectAll={() =>
+            selectMany(
+              visible.map((r) => r.id),
+              true,
+            )
+          }
           onClear={clearSelection}
           templates={templates}
           preparing={selectedVisible.some((id) => preparing.has(id))}

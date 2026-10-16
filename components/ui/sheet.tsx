@@ -23,12 +23,12 @@ function subscribePhone(onChange: () => void) {
   return () => mq.removeEventListener("change", onChange);
 }
 
-/** True below the md breakpoint (false on the server). */
-export function useIsPhone(): boolean {
+/** True below the md breakpoint. `serverValue` is the guess used on the server and while hydrating (default false). */
+export function useIsPhone(serverValue = false): boolean {
   return useSyncExternalStore(
     subscribePhone,
     () => window.matchMedia(PHONE_QUERY).matches,
-    () => false,
+    () => serverValue,
   );
 }
 
@@ -55,7 +55,8 @@ const subscribeNothing = () => () => {};
 const stack: string[] = [];
 let lockedOverflow: string | null = null;
 
-const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]):not([type="hidden"]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+const FOCUSABLE =
+  'a[href],button:not([disabled]),input:not([disabled]):not([type="hidden"]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
 
 export interface SheetPrimaryAction {
   label: string;
@@ -96,7 +97,11 @@ export function Sheet({
   bodyClassName?: string;
 }) {
   // Only after hydration: the portal needs document.
-  const mounted = useSyncExternalStore(subscribeNothing, () => true, () => false);
+  const mounted = useSyncExternalStore(
+    subscribeNothing,
+    () => true,
+    () => false,
+  );
   if (!open || !mounted) return null;
   return createPortal(
     <SheetFrame

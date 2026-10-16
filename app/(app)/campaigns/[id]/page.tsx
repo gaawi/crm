@@ -1,3 +1,4 @@
+import { headers } from "next/headers";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
@@ -57,7 +58,9 @@ export default async function CampaignPage({ params, searchParams }: PageProps<"
         title={sheet.name}
         description={
           sheet.description ??
-          (rows.length ? "The organizations and people in this campaign: where each one stands and what comes next." : "Add the organizations and people for this campaign.")
+          (rows.length
+            ? "The organizations and people in this campaign: where each one stands and what comes next."
+            : "Add the organizations and people for this campaign.")
         }
         actions={
           <>
@@ -103,7 +106,15 @@ export default async function CampaignPage({ params, searchParams }: PageProps<"
       {tab === "next" ? (
         <NextActionsPanel sheet={sheet} labelKind={labelKindFor(sheet.kinds)} today={today} timezone={timezone} />
       ) : (
-        <SheetView sheet={sheet} rows={rows} templates={templates} sendAccountEmail={sendAccount?.email ?? null} today={today} timezone={timezone} />
+        <SheetView
+          sheet={sheet}
+          rows={rows}
+          templates={templates}
+          sendAccountEmail={sendAccount?.email ?? null}
+          today={today}
+          timezone={timezone}
+          phoneHint={/iPhone|iPod|Android.*Mobile|Mobile Safari/i.test((await headers()).get("user-agent") ?? "")}
+        />
       )}
     </div>
   );

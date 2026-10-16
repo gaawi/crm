@@ -31,6 +31,14 @@ export interface RowGroup {
   /** null = rows without a section ("Other"). */
   section: string | null;
   rows: SheetRow[];
+  /** How many rows to draw (the rest behind "Show more"); all when missing. Selection still covers every row. */
+  shown?: number;
+  onShowAll?: () => void;
+}
+
+/** The rows of a group to draw now. */
+export function shownRows(group: RowGroup): SheetRow[] {
+  return group.shown === undefined ? group.rows : group.rows.slice(0, group.shown);
 }
 
 /**
@@ -118,7 +126,7 @@ export function RowsTable({
                   </th>
                 </tr>
               ) : null}
-              {group.rows.map((row) => (
+              {shownRows(group).map((row) => (
                 <TableRow
                   key={row.id}
                   row={row}
@@ -129,6 +137,13 @@ export function RowsTable({
                   preparing={preparing.has(row.id)}
                 />
               ))}
+              {shownRows(group).length < group.rows.length ? (
+                <tr>
+                  <td colSpan={8} className="px-3 py-2">
+                    <ShowMoreButton hidden={group.rows.length - shownRows(group).length} onClick={group.onShowAll} />
+                  </td>
+                </tr>
+              ) : null}
             </tbody>
           );
         })}
@@ -227,7 +242,11 @@ const TableRow = memo(function TableRow({
           <span className="font-medium [overflow-wrap:anywhere]">{name}</span>
         )}
         <RowBadges row={row} className="mt-1 flex" />
-        {row.spaces ? <p className="mt-0.5 line-clamp-2 text-xs text-muted" title={row.spaces}>{row.spaces}</p> : null}
+        {row.spaces ? (
+          <p className="mt-0.5 line-clamp-2 text-xs text-muted" title={row.spaces}>
+            {row.spaces}
+          </p>
+        ) : null}
         <RowPlace row={row} block className="mt-0.5 text-xs text-subtle" />
       </td>
       <td className="px-3 py-2.5">
@@ -239,7 +258,11 @@ const TableRow = memo(function TableRow({
                 {c.displayName}
               </Link>
             </span>
-            {c.role ? <p className="truncate text-xs text-muted" title={c.role}>{c.role}</p> : null}
+            {c.role ? (
+              <p className="truncate text-xs text-muted" title={c.role}>
+                {c.role}
+              </p>
+            ) : null}
             {c.email && c.email !== c.displayName ? (
               <a href={`mailto:${c.email}`} className="block truncate text-xs text-subtle hover:text-fg" title={c.email}>
                 {c.email}
@@ -295,3 +318,19 @@ const TableRow = memo(function TableRow({
     </tr>
   );
 });
+
+/** "Show 120 more": draws the rest of a long section. */
+export function ShowMoreButton({ hidden, onClick, className }: { hidden: number; onClick?: () => void; className?: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "min-h-11 w-full rounded-lg text-[15px] font-medium text-blue-600 active:opacity-60 md:min-h-0 md:py-1 md:text-sm dark:text-blue-400",
+        className,
+      )}
+    >
+      Show {hidden} more
+    </button>
+  );
+}
