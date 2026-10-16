@@ -48,6 +48,12 @@ export interface ThreadSummary {
   senders: ThreadSender[];
   /** CRM contact for the conversation (latest external sender, else recipient). */
   contact: { id: string; displayName: string; status: ContactStatus; hasPhoto?: boolean } | null;
+  /** Campaigns (booking sheets) any participant belongs to. */
+  campaigns?: { id: string; name: string; color: string }[];
+  /** Triage of the latest classified email (lib/mail/triage.ts). */
+  triage?: { important: boolean; category: string | null; reason: string | null } | null;
+  /** An open Approvals proposal in this conversation (a reply Claude prepared). */
+  draftId?: string | null;
 }
 
 export interface ThreadPage {
@@ -112,9 +118,17 @@ function visible(scope: Scope): Fragment {
   return sql`not (m.label_ids && '{TRASH,SPAM,DELETED}')`;
 }
 
+/**
+ * Whether an email belongs in the Important inbox: the triage decision
+ * (lib/mail/triage.ts), or, for emails not classified yet, "written by a
+ * person and not in one of Gmail's tabs".
+ */
+const IMPORTANT_SQL = `coalesce((select t.important from message_triage t where t.message_id = m.id),
+  not m.is_automated and not (m.label_ids && '{${CATEGORY_IDS.join(",")}}'))`;
+
 function categoryCondition(category: InboxCategory): Fragment {
-  // A literal (same constant as messages_inbox_primary_sent_idx) so the planner can use that index.
-  if (category === "primary") return sql.unsafe(`not (m.label_ids && '{${CATEGORY_IDS.join(",")}}')`);
+  if (category === "primary") return sql.unsafe(IMPORTANT_SQL);
+  if (category === "other") return sql.unsafe(`not ${IMPORTANT_SQL}`);
   return sql`m.label_ids @> ${[CATEGORY_LABELS[category]]}::text[]`;
 }
 
@@ -292,7 +306,32 @@ export async function listThreads(params: ThreadListParams): Promise<ThreadPage>
               where m.account_id = p.account_id and m.gmail_thread_id = p.gmail_thread_id and ${shown}
               order by (mp.role = 'from') desc, m.sent_at desc, mp.email
               limit 1
-           ) as contact
+           ) as contact,
+           coalesce((
+             select json_agg(json_build_object('id', pr.id, 'name', pr.name, 'color', pr.color) order by pr.name)
+               from projects pr
+              where pr.sheet and not pr.archived and exists (
+                select 1 from messages m
+                  join message_participants mp on mp.message_id = m.id and mp.role in ('from', 'to', 'cc')
+                  join contact_emails ce on ce.email = mp.email
+                 where m.account_id = p.account_id and m.gmail_thread_id = p.gmail_thread_id and ${shown}
+                   and (exists (select 1 from opportunities op where op.project_id = pr.id and op.contact_id = ce.contact_id)
+                        or exists (select 1 from contact_projects cp where cp.project_id = pr.id and cp.contact_id = ce.contact_id)))
+           ), '[]') as campaigns,
+           (
+             select json_build_object('important', t.important, 'category', t.category, 'reason', t.reason)
+               from message_triage t join messages m on m.id = t.message_id
+              where m.account_id = p.account_id and m.gmail_thread_id = p.gmail_thread_id and t.important is not null
+              order by m.sent_at desc
+              limit 1
+           ) as triage,
+           (
+             select d.id from email_drafts d
+              where d.account_id = p.account_id and d.gmail_thread_id = p.gmail_thread_id
+                and d.status in ('proposed', 'revising', 'changes_requested', 'postponed')
+              order by d.created_at desc
+              limit 1
+           ) as draft_id
       from page p
       join gmail_accounts a on a.id = p.account_id
       cross join lateral (
@@ -338,9 +377,10 @@ export interface MailCounts {
 export async function getMailCounts(accountId?: string | null): Promise<MailCounts> {
   const account = accountId ? sql`and m.account_id = ${accountId}` : sql`and ${notMonitorOnly()}`;
   const [inboxRows, labelRows] = await Promise.all([
-    sql<{ accountId: string; primary: number; promotions: number; social: number; updates: number; forums: number }[]>`
+    sql<{ accountId: string; primary: number; other: number; promotions: number; social: number; updates: number; forums: number }[]>`
       select m.account_id,
-             count(distinct m.gmail_thread_id) filter (where not (m.label_ids && ${CATEGORY_IDS}::text[]))::int as primary,
+             count(distinct m.gmail_thread_id) filter (where ${sql.unsafe(IMPORTANT_SQL)})::int as primary,
+             count(distinct m.gmail_thread_id) filter (where not ${sql.unsafe(IMPORTANT_SQL)})::int as other,
              count(distinct m.gmail_thread_id) filter (where m.label_ids @> '{CATEGORY_PROMOTIONS}')::int as promotions,
              count(distinct m.gmail_thread_id) filter (where m.label_ids @> '{CATEGORY_SOCIAL}')::int as social,
              count(distinct m.gmail_thread_id) filter (where m.label_ids @> '{CATEGORY_UPDATES}')::int as updates,
@@ -357,10 +397,11 @@ export async function getMailCounts(accountId?: string | null): Promise<MailCoun
     `,
   ]);
 
-  const inbox: Record<InboxCategory, number> = { primary: 0, promotions: 0, social: 0, updates: 0, forums: 0 };
+  const inbox: Record<InboxCategory, number> = { primary: 0, other: 0, promotions: 0, social: 0, updates: 0, forums: 0 };
   const byAccount: Record<string, number> = {};
   for (const row of inboxRows) {
     inbox.primary += row.primary;
+    inbox.other += row.other;
     inbox.promotions += row.promotions;
     inbox.social += row.social;
     inbox.updates += row.updates;
@@ -387,6 +428,36 @@ export async function countInboxThreads(params: { accountId?: string | null; cat
        ${params.accountId ? sql`and m.account_id = ${params.accountId}` : sql``}
   `;
   return row.count;
+}
+
+/** The open Approvals proposal in a conversation (a reply Claude prepared), if any. */
+export async function openDraftInThread(accountId: string, threadId: string): Promise<string | null> {
+  const [row] = await sql<{ id: string }[]>`
+    select id from email_drafts
+     where account_id = ${accountId} and gmail_thread_id = ${threadId}
+       and status in ('proposed', 'revising', 'changes_requested', 'postponed')
+     order by created_at desc
+     limit 1
+  `;
+  return row?.id ?? null;
+}
+
+/**
+ * Inbox emails of one account in Vela's Important or Other tab (Gmail has no
+ * search for Vela's triage, so "Archive all" in these tabs works from here).
+ */
+export async function inboxMessagesIn(
+  accountId: string,
+  tab: "primary" | "other",
+  limit: number,
+): Promise<{ gmailMessageId: string; gmailThreadId: string }[]> {
+  return sql<{ gmailMessageId: string; gmailThreadId: string }[]>`
+    select m.gmail_message_id, m.gmail_thread_id from messages m
+     where m.account_id = ${accountId} and m.label_ids @> '{INBOX}' and not (m.label_ids && '{TRASH,SPAM,DELETED}')
+       and ${categoryCondition(tab)}
+     order by m.sent_at desc
+     limit ${limit}
+  `;
 }
 
 /**

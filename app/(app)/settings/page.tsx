@@ -11,7 +11,7 @@ import { sql } from "@/lib/db";
 import { formatDateTime, formatRelative } from "@/lib/dates";
 import { env } from "@/lib/env";
 import { listProjects } from "@/lib/queries/projects";
-import { getSettings, MAX_DAILY_EMAILS } from "@/lib/queries/settings";
+import { getSettings, MAX_AUTO_REPLIES_PER_DAY, MAX_DAILY_EMAILS } from "@/lib/queries/settings";
 import { listAccountViews } from "@/lib/sync/accounts";
 import type { GmailAccountView } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -23,6 +23,7 @@ import {
   resumeImport,
   saveAssistant,
   saveAutopilot,
+  saveInbox,
   saveProfile,
   setDefaultProject,
   setMonitorOnly,
@@ -42,6 +43,7 @@ const ERRORS: Record<string, string> = {
   profile: "Could not read the Gmail profile. Please try connecting again.",
   autopilot: "The autopilot settings could not be saved. Please try again.",
   assistant: "The campaign assistant setting could not be saved. Please try again.",
+  inbox: "The smart inbox settings could not be saved. Please try again.",
 };
 
 const numberFormat = new Intl.NumberFormat("en-US");
@@ -79,12 +81,13 @@ function ImportState({ account }: { account: GmailAccountView }) {
 export default async function SettingsPage({ searchParams }: PageProps<"/settings">) {
   const params = await searchParams;
   const timezone = env.timezone;
-  const [accounts, projects, profile, autopilot, assistant, defaults, [size]] = await Promise.all([
+  const [accounts, projects, profile, autopilot, assistant, inbox, defaults, [size]] = await Promise.all([
     listAccountViews(),
     listProjects(),
     getSettings("profile"),
     getSettings("autopilot"),
     getSettings("assistant"),
+    getSettings("inbox"),
     sql<{ id: string; defaultProjectId: string | null }[]>`select id, default_project_id from gmail_accounts`,
     sql<{ mb: number }[]>`select (pg_database_size(current_database()) / 1048576)::int as mb`,
   ]);
@@ -333,6 +336,23 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
             </Card>
           </>
         ) : null}
+
+        <Card
+          title="Smart inbox"
+          description="New emails are sorted as they arrive: Important stays in the Inbox, promotions, newsletters and notifications go to Other (official senders always stay). When an important email needs an answer, Claude writes the reply with time to think and it waits in Approvals: nothing is sent without you."
+        >
+          <form action={saveInbox} className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+            <label className="flex min-h-11 items-center gap-3 text-[15px] md:min-h-0 md:text-sm">
+              <Checkbox name="autoReplies" defaultChecked={inbox.autoReplies} /> Draft replies automatically
+            </label>
+            <Field label="Replies per day">
+              <Input name="autoRepliesPerDay" type="number" min={1} max={MAX_AUTO_REPLIES_PER_DAY} defaultValue={inbox.autoRepliesPerDay} />
+            </Field>
+            <SubmitButton className="w-full md:w-auto" pendingLabel="Saving…">
+              Save
+            </SubmitButton>
+          </form>
+        </Card>
 
         <Card
           title="Campaign assistant"

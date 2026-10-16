@@ -89,6 +89,15 @@ export const env = {
     return Boolean(read("ANTHROPIC_API_KEY"));
   },
 
+  /**
+   * Claude in the smart inbox (sorting new mail, automatic reply drafts). On
+   * whenever Claude is; CLAUDE_INBOX=off keeps the inbox to its rules and
+   * drafts nothing on its own (a cost switch; tests use it).
+   */
+  get claudeInbox(): boolean {
+    return this.claudeEnabled && (read("CLAUDE_INBOX") ?? "on").toLowerCase() !== "off";
+  },
+
   get anthropicApiKey(): string {
     return required("ANTHROPIC_API_KEY");
   },

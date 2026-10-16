@@ -5,12 +5,14 @@ import { z } from "zod";
 import { requireSession } from "@/lib/auth";
 import { draftErrorMessage } from "@/lib/ai/draft";
 import { summarizeThread, writeEmailWithClaude, type ThreadSummaryResult } from "@/lib/ai/mail";
-import { DraftError, proposeEmail } from "@/lib/ai/approvals";
+import { DraftError } from "@/lib/ai/approvals";
+import { proposeThreadReply, ReplyError } from "@/lib/ai/auto-reply";
 import { sql } from "@/lib/db";
 import { GmailApiError } from "@/lib/gmail/client";
 import { canModify } from "@/lib/gmail/oauth";
 import { applyThreadAction, archiveAllInbox, changeThreadLabels, MailError, sendMail, type ThreadAction } from "@/lib/mail/gmail";
 import { countInboxThreads } from "@/lib/mail/queries";
+import { setThreadImportance } from "@/lib/mail/triage";
 import { likePattern } from "@/lib/queries/shared";
 import { AccountAuthError, getAccount, listAccounts } from "@/lib/sync/accounts";
 import { errorMessage } from "@/lib/utils";
@@ -71,9 +73,21 @@ export async function threadAction(
   return { ok: true, done };
 }
 
+/** The owner corrects Vela's triage: the conversation moves to Important or Other, and its senders are remembered. */
+export async function setImportanceAction(accountId: string, threadId: string, important: boolean): Promise<MailResult> {
+  await requireSession();
+  if (!threadRef.safeParse({ accountId, threadId }).success || typeof important !== "boolean") return { ok: false, error: "Invalid request" };
+  try {
+    await setThreadImportance(accountId, threadId, important);
+    return { ok: true };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
 const archiveAllSchema = z.object({
   accountId: uuid.nullish(),
-  category: z.enum(["primary", "social", "promotions", "updates", "forums"]).nullish(),
+  category: z.enum(["primary", "other", "social", "promotions", "updates", "forums"]).nullish(),
 });
 
 /**
@@ -303,45 +317,18 @@ export async function queueReplyAction(accountId: string, threadId: string, inst
   await requireSession();
   if (!threadRef.safeParse({ accountId, threadId }).success) return { ok: false, error: "Invalid request" };
   try {
-    const [latest] = await sql<
-      { id: string; direction: string; fromEmail: string | null; replyTo: string | null; toEmails: string[] | null; contactId: string | null }[]
-    >`
-      select m.id, m.direction, m.from_email,
-             (select array_agg(mp.email order by mp.email) from message_participants mp
-               where mp.message_id = m.id and mp.role = 'to') as to_emails,
-             (select mp.email from message_participants mp where mp.message_id = m.id and mp.role = 'reply_to' limit 1) as reply_to,
-             (select ce.contact_id from message_participants mp join contact_emails ce on ce.email = mp.email
-               where mp.message_id = m.id and mp.role in ('from', 'reply_to', 'to') order by (mp.role = 'from') desc limit 1) as contact_id
-        from messages m
-       where m.account_id = ${accountId} and m.gmail_thread_id = ${threadId}
-         and not (m.label_ids && '{TRASH,SPAM,DELETED}')
-       order by (m.direction = 'inbound') desc, m.sent_at desc
-       limit 1
-    `;
-    if (!latest) return { ok: false, error: "This conversation has not been synced yet." };
-    // Reply to the sender; when only the owner wrote in this thread, follow up with the same recipients.
-    const to = (latest.direction === "inbound" ? [latest.replyTo ?? latest.fromEmail] : (latest.toEmails ?? [])).filter(
-      (e): e is string => Boolean(e),
-    );
-    if (!to.length) return { ok: false, error: "This conversation has no one to reply to." };
-    const written = await writeEmailWithClaude({ kind: "reply", accountId, threadId, to, subject: "", body: "", instructions });
-    const draft = await proposeEmail({
+    const draft = await proposeThreadReply({
       accountId,
-      contactId: latest.contactId,
-      to,
-      subject: written.subject,
-      body: written.body,
-      replyToMessageId: latest.id,
-      purpose: "reply",
+      threadId,
+      instructions,
       origin: "owner",
       rationale: instructions.trim() ? `Reply written from your note: ${instructions.trim().slice(0, 200)}` : "Reply to the latest message in this conversation.",
-      restrictRecipients: true,
     });
     if (!draft) return { ok: false, error: "There is already an open proposal for this person in Approvals." };
     refresh();
     return { ok: true, draftId: draft.id };
   } catch (error) {
-    if (error instanceof DraftError) return { ok: false, error: error.message };
+    if (error instanceof DraftError || error instanceof ReplyError) return { ok: false, error: error.message };
     return { ok: false, error: draftErrorMessage(error) };
   }
 }

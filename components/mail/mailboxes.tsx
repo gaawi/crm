@@ -1,13 +1,14 @@
-import { Bookmark, File, Inbox, Info, Mails, MessagesSquare, Send, Star, Tag, Trash2, Users, type LucideIcon } from "lucide-react";
+import { Bookmark, File, Inbox, Info, Layers, Mails, MessagesSquare, Send, Star, Tag, Trash2, Users, type LucideIcon } from "lucide-react";
 import type { MailChrome } from "@/app/(app)/mail/_lib/chrome";
 import { INBOX_TABS, TAB_TITLES, mailListHref, type MailListState, type MailViewParam } from "@/lib/mail/params";
 
 /** Sidebar / Mailboxes-sheet entries, built once on the server and rendered by both. */
 
-export type MailboxIcon = "inbox" | "starred" | "important" | "sent" | "drafts" | "all" | "trash" | "label" | "promotions" | "social" | "updates" | "forums" | "account";
+export type MailboxIcon = "inbox" | "other" | "starred" | "important" | "sent" | "drafts" | "all" | "trash" | "label" | "promotions" | "social" | "updates" | "forums" | "account";
 
 export const MAILBOX_ICONS: Record<MailboxIcon, LucideIcon> = {
   inbox: Inbox,
+  other: Layers,
   starred: Star,
   important: Bookmark,
   sent: Send,
@@ -45,7 +46,7 @@ export interface MailboxGroups {
 const VIEWS: { view: Exclude<MailViewParam, "label">; label: string }[] = [
   { view: "inbox", label: "Inbox" },
   { view: "starred", label: "Starred" },
-  { view: "important", label: "Important" },
+  { view: "important", label: "Gmail important" },
   { view: "sent", label: "Sent" },
   { view: "drafts", label: "Drafts" },
   { view: "all", label: "All mail" },

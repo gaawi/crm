@@ -8,21 +8,23 @@
 export const MAIL_VIEWS = ["inbox", "starred", "important", "sent", "drafts", "all", "trash", "label"] as const;
 export type MailViewParam = (typeof MAIL_VIEWS)[number];
 
-export const INBOX_TABS = ["primary", "promotions", "social", "updates", "forums"] as const;
+/**
+ * The Inbox tabs: Important (what the triage kept, lib/mail/triage.ts) and
+ * Other (promotions, newsletters, notifications). Gmail's own tabs stay
+ * reachable from search (category:promotions…).
+ */
+export const INBOX_TABS = ["primary", "other"] as const;
 export type InboxTab = (typeof INBOX_TABS)[number];
 
 export const TAB_TITLES: Record<InboxTab, string> = {
-  primary: "Primary",
-  promotions: "Promotions",
-  social: "Social",
-  updates: "Updates",
-  forums: "Forums",
+  primary: "Important",
+  other: "Other",
 };
 
 export const VIEW_TITLES: Record<MailViewParam, string> = {
   inbox: "Inbox",
   starred: "Starred",
-  important: "Important",
+  important: "Gmail important",
   sent: "Sent",
   drafts: "Drafts",
   all: "All mail",

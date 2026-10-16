@@ -3,28 +3,36 @@
 import { useRouter } from "next/navigation";
 import { startTransition, useEffect } from "react";
 
-const EVERY_MS = 60_000;
-const ON_RETURN_AFTER_MS = 20_000;
+const CHECK_EVERY_MS = 30_000;
 
 /**
- * New mail shows up without touching anything: the list re-reads the server
- * every minute while the page is visible, and right away when the app comes
- * back to the foreground after a while.
+ * New mail shows up without touching anything: while the list is visible it
+ * checks a small fingerprint of the mailboxes every 30 seconds (and when the
+ * app comes back to the foreground) and re-reads the page only when it changed.
  */
 export function MailAutoRefresh() {
   const router = useRouter();
   useEffect(() => {
-    let last = Date.now();
-    const refresh = () => {
-      last = Date.now();
-      startTransition(() => router.refresh());
+    let stamp: string | null = null;
+    let busy = false;
+    const check = async () => {
+      if (busy || document.visibilityState !== "visible") return;
+      busy = true;
+      try {
+        const response = await fetch("/api/mail/state", { cache: "no-store" });
+        if (!response.ok) return;
+        const next = ((await response.json()) as { stamp: string }).stamp;
+        if (stamp !== null && next !== stamp) startTransition(() => router.refresh());
+        stamp = next;
+      } catch {
+        // Offline: try again at the next tick.
+      } finally {
+        busy = false;
+      }
     };
-    const id = window.setInterval(() => {
-      if (document.visibilityState === "visible" && Date.now() - last >= EVERY_MS - 1000) refresh();
-    }, EVERY_MS);
-    const onVisible = () => {
-      if (document.visibilityState === "visible" && Date.now() - last >= ON_RETURN_AFTER_MS) refresh();
-    };
+    void check();
+    const id = window.setInterval(check, CHECK_EVERY_MS);
+    const onVisible = () => void check();
     document.addEventListener("visibilitychange", onVisible);
     return () => {
       window.clearInterval(id);

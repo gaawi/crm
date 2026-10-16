@@ -11,7 +11,8 @@
  */
 
 export type SearchIn = "inbox" | "sent" | "trash" | "anywhere" | "starred";
-export type InboxCategory = "primary" | "promotions" | "social" | "updates" | "forums";
+/** primary = Vela's Important inbox, other = everything the triage filtered out; the rest are Gmail's tabs. */
+export type InboxCategory = "primary" | "other" | "promotions" | "social" | "updates" | "forums";
 
 export interface MailFilter {
   /** Free text (words and quoted phrases), matched with full-text search. */
@@ -43,9 +44,9 @@ const IS_LABELS: Record<string, string> = {
   important: "IMPORTANT",
 };
 
-const CATEGORIES = new Set<InboxCategory>(["primary", "promotions", "social", "updates", "forums"]);
+const CATEGORIES = new Set<InboxCategory>(["primary", "other", "promotions", "social", "updates", "forums"]);
 
-export const CATEGORY_LABELS: Record<Exclude<InboxCategory, "primary">, string> = {
+export const CATEGORY_LABELS: Record<Exclude<InboxCategory, "primary" | "other">, string> = {
   promotions: "CATEGORY_PROMOTIONS",
   social: "CATEGORY_SOCIAL",
   updates: "CATEGORY_UPDATES",

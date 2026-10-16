@@ -115,8 +115,10 @@ describe.skipIf(process.env.SKIP_DB_TESTS === "1")("archive all", () => {
     expect(await labelsOf(accountId, "q0")).toEqual(["INBOX"]);
     expect(await countInboxThreads({ category: "primary" })).toBe(2);
 
+    // Vela's Important tab is Vela's triage, not a Gmail search: the stored inbox copies list it.
     await archiveAllInbox({ category: "primary" }, { clientFor: () => client });
-    expect(client.calls.list[1].q).toBe("in:inbox category:primary");
+    expect(client.calls.list).toHaveLength(1);
+    expect(await labelsOf(accountId, "q0")).toEqual([]);
     expect(await countInboxThreads()).toBe(0);
   });
 

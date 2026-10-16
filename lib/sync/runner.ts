@@ -10,6 +10,7 @@ import { describeSyncError } from "@/lib/sync/errors";
 import { runIncrementalSync, type SyncResult } from "@/lib/sync/incremental";
 import { MAX_CHAIN_HOPS, triggerAccountJob } from "@/lib/sync/trigger";
 import { ensureWatch } from "@/lib/sync/watch";
+import { runInboxAssistant } from "@/lib/sync/inbox-assistant";
 
 /**
  * Orchestration shared by the route handlers.
@@ -64,7 +65,9 @@ export async function runAccountJob(
     }
     return result;
   }
-  return runIncrementalSync(accountId, { deadline: options.deadline, fetchImpl: options.fetchImpl, hop });
+  const sync = await runIncrementalSync(accountId, { deadline: options.deadline, fetchImpl: options.fetchImpl, hop });
+  await runInboxAssistant({ deadline: options.deadline });
+  return sync;
 }
 
 export interface CronSummary {
@@ -120,6 +123,14 @@ export async function runCron(options: { deadline: number; fetchImpl?: typeof fe
     summary.errors.push(`link organizations: ${describeSyncError(error)}`);
   }
 
+  try {
+    // Bounded: the campaign sender below needs its time too.
+    const inbox = await runInboxAssistant({ deadline: Math.min(options.deadline, Date.now() + 100_000) });
+    summary.errors.push(...inbox.triage.errors.slice(0, 3).map((e) => `triage: ${e}`), ...inbox.replies.errors.slice(0, 3).map((e) => `auto replies: ${e}`));
+  } catch (error) {
+    summary.errors.push(`inbox: ${describeSyncError(error)}`);
+  }
+
   // Re-read: renewing a watch or refreshing a token may have changed a status.
   const due = await sql<{ id: string; email: string; syncDue: boolean; backfillDue: boolean }[]>`
     select id, email,
@@ -173,6 +184,8 @@ export async function handlePushNotification(
   if (!account || account.status !== "active") return { status: "ignored", account: email };
 
   const sync = await runIncrementalSync(account.id, { deadline: options.deadline, fetchImpl: options.fetchImpl });
+  // New mail: sort it and prepare the replies it needs.
+  await runInboxAssistant({ deadline: options.deadline });
   let backfillTriggered = false;
   if (sync.status !== "recovered") {
     const [row] = await sql<{ stalled: boolean }[]>`
@@ -210,6 +223,7 @@ export async function syncStaleAccounts(options: { deadline: number; maxAgeMinut
         if (row.syncDue) await runIncrementalSync(row.id, { deadline: options.deadline, fetchImpl: options.fetchImpl });
       }),
     );
+    await runInboxAssistant({ deadline: options.deadline });
   } catch (error) {
     console.warn("syncStaleAccounts failed:", describeSyncError(error));
   }

@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireSession } from "@/lib/auth";
 import { sql } from "@/lib/db";
-import { MAX_DAILY_EMAILS, saveSettings } from "@/lib/queries/settings";
+import { MAX_AUTO_REPLIES_PER_DAY, MAX_DAILY_EMAILS, saveSettings } from "@/lib/queries/settings";
 import { deleteAccount, disconnectAccount } from "@/lib/sync/accounts";
 import { resetBackfill, startOlderHistoryImport } from "@/lib/sync/backfill";
 import { triggerAccountJob } from "@/lib/sync/runner";
@@ -134,6 +134,22 @@ export async function saveAutopilot(formData: FormData): Promise<void> {
     redirect("/settings?error=autopilot");
   }
   redirect("/settings?saved=autopilot");
+}
+
+/** Smart inbox: automatic reply drafts on or off, and how many per day. */
+export async function saveInbox(formData: FormData): Promise<void> {
+  await requireSession();
+  const value = Number(formData.get("autoRepliesPerDay"));
+  try {
+    await saveSettings("inbox", {
+      autoReplies: formData.get("autoReplies") === "on",
+      autoRepliesPerDay: Number.isFinite(value) ? Math.min(MAX_AUTO_REPLIES_PER_DAY, Math.max(1, Math.round(value))) : 15,
+    });
+  } catch (error) {
+    console.error("Saving inbox settings failed:", errorMessage(error));
+    redirect("/settings?error=inbox");
+  }
+  redirect("/settings?saved=inbox");
 }
 
 export async function saveAssistant(formData: FormData): Promise<void> {

@@ -56,8 +56,11 @@ export function ThreadView({
   now,
   notice,
   readOnly = false,
+  triageBar,
 }: {
   notice?: string | null;
+  /** Vela's triage and prepared reply for this conversation (TriageBar), under the subject. */
+  triageBar?: React.ReactNode;
   /** A monitor-only mailbox: Vela shows it but never changes it (no actions, no replies from it). */
   readOnly?: boolean;
   thread: ThreadViewData;
@@ -70,12 +73,14 @@ export function ThreadView({
 }) {
   const claude = useClaudeEnabled();
   const router = useRouter();
-  const { act, compose, markSeen, ownAddresses, timezone, toast } = useMail();
-  // Opening marks the conversation read on the server; the list shows it read right away.
+  const { act, compose, ownAddresses, timezone, toast } = useMail();
+  // Opening marks the conversation read, here rather than when the server renders it, so
+  // conversations downloaded ahead of time (prefetched from the list) stay unread until seen.
+  // Never in a monitor-only mailbox: its owner must find it exactly as they left it.
   const opensUnread = !readOnly && thread.source === "live" && thread.messages.some((m) => m.unread);
   useEffect(() => {
-    if (opensUnread) markSeen(thread.key);
-  }, [opensUnread, markSeen, thread.key]);
+    if (opensUnread) void act([{ key: thread.key, accountId: thread.accountId, threadId: thread.threadId, lastAt: 0 }], "read", { silent: true });
+  }, [opensUnread, act, thread.key, thread.accountId, thread.threadId]);
   const own = useMemo(() => new Set(ownAddresses), [ownAddresses]);
   const nowDate = useMemo(() => new Date(now), [now]);
   const [labels, setLabels] = useState(thread.labelIds);
@@ -332,6 +337,7 @@ export function ThreadView({
           ))}
           <span className="text-[13px] text-subtle md:text-xs">{thread.accountEmail}</span>
         </div>
+        {triageBar}
       </div>
 
       <div className="mt-3 border-t border-border md:mx-6 md:mt-4 md:border-t-0">

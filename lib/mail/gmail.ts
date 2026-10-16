@@ -5,7 +5,7 @@ import { buildRawMessage } from "@/lib/gmail/mime";
 import { canCompose, canModify } from "@/lib/gmail/oauth";
 import { decodeMimeWords, extractBodies, getHeader, parseAddressList, parseGmailMessage, stripQuotedText } from "@/lib/gmail/parse";
 import type { GmailLabel, GmailMessage, GmailMessagePart, GmailThread } from "@/lib/gmail/types";
-import { applyLabelChange } from "@/lib/mail/queries";
+import { applyLabelChange, inboxMessagesIn } from "@/lib/mail/queries";
 import type { InboxCategory } from "@/lib/mail/search";
 import { normalizeContentId, sanitizeEmailHtml } from "@/lib/mail/sanitize";
 import { getAccount, getSelfEmails, gmailClientFor, listAccounts, type GmailAccountRecord } from "@/lib/sync/accounts";
@@ -539,21 +539,28 @@ export async function archiveAllInbox(
     const threadOf = new Map<string, string>();
     const archivedThreads = new Set<string>();
     try {
-      // List first, then modify: archiving while paging would shift Gmail's pages.
-      let pageToken: string | undefined;
-      do {
-        const page = await client.listMessages({ q, maxResults: ARCHIVE_LIST_PAGE, pageToken });
-        const listed = page.messages ?? [];
-        for (const m of listed) {
-          if (threadOf.size >= cap) break;
-          threadOf.set(m.id, m.threadId);
-        }
-        pageToken = page.nextPageToken || undefined;
-        if (threadOf.size >= cap) {
-          if (pageToken || listed.some((m) => !threadOf.has(m.id))) result.more = true;
-          break;
-        }
-      } while (pageToken);
+      if (params.category === "primary" || params.category === "other") {
+        // Vela's own tabs (triage): the stored inbox copies say which emails are in them.
+        const rows = await inboxMessagesIn(account.id, params.category, cap + 1);
+        for (const m of rows.slice(0, cap)) threadOf.set(m.gmailMessageId, m.gmailThreadId);
+        if (rows.length > cap) result.more = true;
+      } else {
+        // List first, then modify: archiving while paging would shift Gmail's pages.
+        let pageToken: string | undefined;
+        do {
+          const page = await client.listMessages({ q, maxResults: ARCHIVE_LIST_PAGE, pageToken });
+          const listed = page.messages ?? [];
+          for (const m of listed) {
+            if (threadOf.size >= cap) break;
+            threadOf.set(m.id, m.threadId);
+          }
+          pageToken = page.nextPageToken || undefined;
+          if (threadOf.size >= cap) {
+            if (pageToken || listed.some((m) => !threadOf.has(m.id))) result.more = true;
+            break;
+          }
+        } while (pageToken);
+      }
 
       const ids = [...threadOf.keys()];
       for (let i = 0; i < ids.length; i += ARCHIVE_MODIFY_CHUNK) {

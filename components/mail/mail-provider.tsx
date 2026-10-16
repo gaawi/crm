@@ -78,6 +78,8 @@ interface ActOptions {
   /** Toast after success, with an Undo that runs these actions. */
   toast?: string;
   undo?: ThreadAction[];
+  /** Background change (marking an opened thread read): no error toast, no undo. */
+  silent?: boolean;
 }
 
 interface MailContextValue {
@@ -88,8 +90,6 @@ interface MailContextValue {
   composeOpen: boolean;
   act: (targets: ThreadTarget[], action: ThreadAction, options?: ActOptions) => Promise<boolean>;
   overrides: Record<string, ThreadOverride>;
-  /** The thread was just opened: show it read in the list right away (the server marks it read). */
-  markSeen: (key: string) => void;
   /** Drop overrides that the server data now reflects. */
   settle: (rows: { key: string; lastAt: number; unread: boolean; starred: boolean }[]) => void;
   toast: (toast: Omit<Toast, "id">) => void;
@@ -220,6 +220,7 @@ export function MailProvider({
       }
       if (!result.ok || result.done < targets.length) {
         revert();
+        if (options.silent) return false;
         startTransition(() => router.refresh());
         toast({
           tone: "error",
@@ -282,13 +283,9 @@ export function MailProvider({
     });
   }, []);
 
-  const markSeen = useCallback((key: string) => {
-    setOverrides((prev) => (prev[key]?.unread === false ? prev : { ...prev, [key]: { ...prev[key], lastAt: 0, unread: false, done: true } }));
-  }, []);
-
   const value = useMemo<MailContextValue>(
-    () => ({ accounts, timezone, ownAddresses, compose, composeOpen: composeState !== null, act, overrides, markSeen, settle, toast }),
-    [accounts, timezone, ownAddresses, compose, composeState, act, overrides, markSeen, settle, toast],
+    () => ({ accounts, timezone, ownAddresses, compose, composeOpen: composeState !== null, act, overrides, settle, toast }),
+    [accounts, timezone, ownAddresses, compose, composeState, act, overrides, settle, toast],
   );
 
   return (

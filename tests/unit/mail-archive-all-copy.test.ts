@@ -3,16 +3,16 @@ import { archiveQuestion, archiveScopeLabel, archivedMessage, conversations } fr
 
 describe("Archive all wording", () => {
   it("names the scope: tab or every tab, one account or all", () => {
-    expect(archiveScopeLabel("primary", "all accounts")).toBe("Inbox · Primary · all accounts");
-    expect(archiveScopeLabel("promotions", "me@example.com")).toBe("Inbox · Promotions · me@example.com");
+    expect(archiveScopeLabel("primary", "all accounts")).toBe("Inbox · Important · all accounts");
+    expect(archiveScopeLabel("other", "me@example.com")).toBe("Inbox · Other · me@example.com");
     expect(archiveScopeLabel(null, "all accounts")).toBe("Inbox · all tabs · all accounts");
   });
 
   it("asks with the count (and says where the mail stays)", () => {
     const scope = archiveScopeLabel("primary", "all accounts");
-    expect(archiveQuestion(1234, scope)).toBe("Archive all 1,234 conversations in Inbox · Primary · all accounts? They stay in All Mail and search.");
-    expect(archiveQuestion(1, scope)).toBe("Archive the 1 conversation in Inbox · Primary · all accounts? It stays in All Mail and search.");
-    expect(archiveQuestion(null, scope)).toBe("Archive all conversations in Inbox · Primary · all accounts? They stay in All Mail and search.");
+    expect(archiveQuestion(1234, scope)).toBe("Archive all 1,234 conversations in Inbox · Important · all accounts? They stay in All Mail and search.");
+    expect(archiveQuestion(1, scope)).toBe("Archive the 1 conversation in Inbox · Important · all accounts? It stays in All Mail and search.");
+    expect(archiveQuestion(null, scope)).toBe("Archive all conversations in Inbox · Important · all accounts? They stay in All Mail and search.");
   });
 
   it("counts conversations in English", () => {

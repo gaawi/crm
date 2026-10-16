@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
-import { after } from "next/server";
 import { CrmPanel, CrmPanelSkeleton } from "@/components/mail/crm-panel";
+import { TriageBar } from "@/components/mail/triage-bar";
 import { DesktopSearch } from "@/components/mail/mail-header";
 import { MailSidebar } from "@/components/mail/mail-sidebar";
 import { buildMailboxes } from "@/components/mail/mailboxes";
@@ -11,9 +11,10 @@ import type { ThreadMessageView, ThreadViewData } from "@/components/mail/thread
 import { ThreadView } from "@/components/mail/thread-view";
 import { requireSession } from "@/lib/auth";
 import { env } from "@/lib/env";
-import { applyThreadAction, fetchThreadCached, userLabels, type LiveThread } from "@/lib/mail/gmail";
+import { fetchThreadCached, userLabels, type LiveThread } from "@/lib/mail/gmail";
 import { isAccountId, isGmailId, listTitle, mailListHref, parseMailParams } from "@/lib/mail/params";
-import { storedThreadLabels } from "@/lib/mail/queries";
+import { openDraftInThread, storedThreadLabels } from "@/lib/mail/queries";
+import { threadTriage } from "@/lib/mail/triage";
 import { buildSrcDoc } from "@/lib/mail/sanitize";
 import { getThread } from "@/lib/queries/messages";
 import { ownAddressesForRender } from "@/lib/queries/render-cache";
@@ -123,6 +124,7 @@ export default async function ThreadPage({ params, searchParams }: PageProps<"/m
     (error: unknown) => ({ ok: false as const, error }),
   );
   const liveLabels = userLabels([accountId]).catch(() => []);
+  const smart = Promise.all([threadTriage(accountId, threadId), openDraftInThread(accountId, threadId)]).catch(() => [null, null] as const);
   const [chrome, own] = await Promise.all([loadMailChrome(parsed), ownAddressesForRender()]);
   const state = { ...parsed, account: chrome.account?.id ?? null };
   const account = chrome.accounts.find((a) => a.id === accountId);
@@ -148,18 +150,8 @@ export default async function ThreadPage({ params, searchParams }: PageProps<"/m
   if (!thread) thread = await fromStored(account, threadId);
   if (!thread) notFound();
 
-  // Opening a thread marks it read in Gmail and in the database, after the response is sent
-  // (never in a monitor-only mailbox: its owner must find it exactly as they left it).
-  if (live && !account.monitorOnly && thread.messages.some((m) => m.unread)) {
-    after(async () => {
-      try {
-        await applyThreadAction(accountId, threadId, "read");
-      } catch (error) {
-        console.warn(`Could not mark thread ${threadId} as read:`, errorMessage(error));
-      }
-    });
-  }
-
+  // Opening marks it read from the client (ThreadView), so a prefetched thread stays unread until seen.
+  const [triage, draftId] = await smart;
   const labels = live ? (await liveLabels).map((l) => ({ id: l.id, name: l.name, color: l.color })) : [];
   const label = state.view === "label" ? chrome.labels.find((l) => l.id === state.label) : null;
   const backHref = mailListHref(state);
@@ -178,8 +170,8 @@ export default async function ThreadPage({ params, searchParams }: PageProps<"/m
         <div className="max-md:bg-surface md:min-h-0 md:flex-1 md:overflow-y-auto xl:grid xl:grid-cols-[minmax(0,1fr)_21rem] xl:overflow-hidden">
           <div className="min-w-0 bg-surface max-md:contents xl:overflow-y-auto">
             <ThreadView
-              // A new message or label change (after a refresh) starts from a fresh view state.
-              key={`${thread.key}:${latest?.id}:${thread.labelIds.join(",")}`}
+              // A new message or label change (after a refresh) starts from a fresh view state; being read does not.
+              key={`${thread.key}:${latest?.id}:${thread.labelIds.filter((l) => l !== "UNREAD").join(",")}`}
               thread={thread}
               backHref={backHref}
               backLabel={backLabel}
@@ -188,6 +180,7 @@ export default async function ThreadPage({ params, searchParams }: PageProps<"/m
               now={requestTime()}
               notice={notice}
               readOnly={account.monitorOnly}
+              triageBar={<TriageBar accountId={accountId} threadId={threadId} triage={triage} draftId={draftId} readOnly={account.monitorOnly} />}
             />
           </div>
           <aside className="border-t border-border bg-bg px-4 pb-[calc(env(safe-area-inset-bottom)+6rem)] pt-6 md:px-6 md:pb-8 xl:overflow-y-auto xl:border-l xl:border-t-0 xl:px-4 xl:pt-4" aria-label="Contact in Vela">

@@ -175,12 +175,13 @@ describe("mail params", () => {
     const state = parseMailParams({ view: "starred", account, cursor: "abc_DEF-1", trail: "x1.bad$.y2", q: "  from:maya " });
     expect(state).toEqual({ view: "starred", tab: "primary", account, label: null, q: "from:maya", cursor: "abc_DEF-1", trail: ["x1", "y2"] });
     expect(parseMailParams({ view: "label" }).view).toBe("inbox");
-    expect(parseMailParams({ view: "nope", tab: "social", account: "x" })).toMatchObject({ view: "inbox", tab: "social", account: null });
+    expect(parseMailParams({ view: "nope", tab: "other", account: "x" })).toMatchObject({ view: "inbox", tab: "other", account: null });
+    expect(parseMailParams({ tab: "social" }).tab).toBe("primary");
   });
 
   it("builds list, thread and paging links", () => {
     expect(mailListHref({ view: "inbox", tab: "primary" })).toBe("/mail");
-    expect(mailListHref({ view: "inbox", tab: "promotions", account })).toBe(`/mail?tab=promotions&account=${account}`);
+    expect(mailListHref({ view: "inbox", tab: "other", account })).toBe(`/mail?tab=other&account=${account}`);
     expect(mailListHref({ view: "label", label: "Label_1" })).toBe("/mail?view=label&label=Label_1");
     expect(threadHref(account, "t1", { view: "sent" })).toBe(`/mail/t/${account}/t1?view=sent`);
     const first = parseMailParams({});
@@ -198,7 +199,7 @@ describe("mail params", () => {
   it("titles lists like iPhone Mail", () => {
     expect(listTitle(parseMailParams({}))).toBe("All Inboxes");
     expect(listTitle(parseMailParams({ account }))).toBe("Inbox");
-    expect(listTitle(parseMailParams({ tab: "social" }))).toBe("Social");
+    expect(listTitle(parseMailParams({ tab: "other" }))).toBe("Other");
     expect(listTitle(parseMailParams({ view: "all" }))).toBe("All mail");
     expect(listTitle(parseMailParams({ q: "x" }))).toBe("Search");
   });

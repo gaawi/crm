@@ -28,6 +28,13 @@ export interface AppSettings {
     /** New emails it may propose per day, all campaigns together (new versions the owner asked for do not count). */
     dailyEmails: number;
   };
+  /** Smart inbox (lib/mail/triage.ts, lib/ai/auto-reply.ts). */
+  inbox: {
+    /** Draft a reply automatically for important emails that need one (an Approvals proposal, never sent alone). */
+    autoReplies: boolean;
+    /** Most automatic replies drafted per day. */
+    autoRepliesPerDay: number;
+  };
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -42,7 +49,11 @@ export const DEFAULT_SETTINGS: AppSettings = {
     lastRunAt: null,
   },
   assistant: { dailyEmails: 10 },
+  inbox: { autoReplies: true, autoRepliesPerDay: 15 },
 };
+
+/** Highest daily number of automatic replies the owner can set. */
+export const MAX_AUTO_REPLIES_PER_DAY = 40;
 
 /** Highest daily budget of new campaign emails the owner can set. */
 export const MAX_DAILY_EMAILS = 40;

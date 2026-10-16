@@ -15,6 +15,8 @@ process.env.GOOGLE_CLIENT_ID = "test-client-id.apps.googleusercontent.com";
 process.env.GOOGLE_CLIENT_SECRET = "test-client-secret";
 process.env.CRON_SECRET = "test-cron-secret";
 process.env.ANTHROPIC_API_KEY = "test-anthropic-key";
+// Syncs in tests must not call Claude from the smart inbox (triage tests turn it on themselves).
+process.env.CLAUDE_INBOX = "off";
 process.env.APP_TIMEZONE = "America/New_York";
 delete process.env.GMAIL_PUBSUB_TOPIC;
 delete process.env.PUBSUB_VERIFICATION_TOKEN;

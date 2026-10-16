@@ -85,6 +85,8 @@ export async function writeEmailWithClaude(params: {
   /** What the owner already typed (kept and improved unless the instructions say otherwise). */
   body: string;
   instructions: string;
+  /** How hard Claude thinks (default medium; automatic replies use high). */
+  effort?: "medium" | "high";
 }): Promise<{ subject: string; body: string }> {
   const timezone = env.timezone;
   const [history, self, owner] = await Promise.all([
@@ -123,7 +125,7 @@ Return the email for the composer.`;
     model: model(),
     max_tokens: 16_000,
     thinking: { type: "adaptive" },
-    output_config: { effort: "medium", format: betaZodOutputFormat(ComposeSchema) },
+    output_config: { effort: params.effort ?? "medium", format: betaZodOutputFormat(ComposeSchema) },
     betas: [FALLBACK_BETA],
     fallbacks: "default",
     system: `${DRAFT_SYSTEM}\n- You are filling in the owner's email composer. If the composer already has text, keep its intent and improve it following the instructions.`,
