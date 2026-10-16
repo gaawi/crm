@@ -17,6 +17,7 @@ import type { GmailAccountView } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import {
   disconnect,
+  importOlderHistory,
   removeAccount,
   restartImport,
   resumeImport,
@@ -201,6 +202,16 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
                       <form action={syncNow.bind(null, account.id)}>
                         <SubmitButton variant="secondary" className="w-full" pendingLabel="Syncing…">
                           <RefreshCw className="size-4" /> Sync now
+                        </SubmitButton>
+                      </form>
+                    ) : null}
+                    {account.status === "active" && account.historyLimited && account.backfillStatus === "done" ? (
+                      <form action={importOlderHistory.bind(null, account.id)} className="col-span-2 md:col-auto">
+                        <SubmitButton variant="secondary" className="w-full" pendingLabel="Starting…">
+                          Import older emails
+                          {account.oldestMessageAt
+                            ? ` (before ${new Intl.DateTimeFormat("en-US", { month: "short", year: "numeric", timeZone: timezone }).format(new Date(account.oldestMessageAt))})`
+                            : ""}
                         </SubmitButton>
                       </form>
                     ) : null}

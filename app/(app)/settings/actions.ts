@@ -7,7 +7,7 @@ import { requireSession } from "@/lib/auth";
 import { sql } from "@/lib/db";
 import { MAX_DAILY_EMAILS, saveSettings } from "@/lib/queries/settings";
 import { deleteAccount, disconnectAccount } from "@/lib/sync/accounts";
-import { resetBackfill } from "@/lib/sync/backfill";
+import { resetBackfill, startOlderHistoryImport } from "@/lib/sync/backfill";
 import { triggerAccountJob } from "@/lib/sync/runner";
 import { errorMessage } from "@/lib/utils";
 
@@ -50,6 +50,14 @@ export async function restartImport(id: string): Promise<void> {
   const account = accountId(id);
   await resetBackfill(account);
   await triggerAccountJob(account, "backfill");
+  refresh();
+}
+
+/** Import the mail older than the oldest stored email (lean: real conversations only). */
+export async function importOlderHistory(id: string): Promise<void> {
+  await requireSession();
+  const account = accountId(id);
+  if (await startOlderHistoryImport(account)) await triggerAccountJob(account, "backfill");
   refresh();
 }
 

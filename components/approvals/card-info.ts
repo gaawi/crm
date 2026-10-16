@@ -7,6 +7,7 @@ import { goalLabel, nextActionLabel, OPPORTUNITY_STAGES } from "@/lib/constants"
 import { instrumentLabel, rosterLabel } from "@/lib/musicians/instruments";
 import { listActivities } from "@/lib/queries/activities";
 import { getContact, getContactHistory } from "@/lib/queries/contacts";
+import { getRelatedHistory } from "@/lib/queries/organizations";
 import { getDraft } from "@/lib/queries/drafts";
 import { getMessage, getThread } from "@/lib/queries/messages";
 import { getMusicianProfile } from "@/lib/queries/musicians";
@@ -160,6 +161,8 @@ export interface ThreadMessage {
   body: string;
   /** People it went to (To, Cc and Bcc): more than a few = a bulk email. */
   recipients: number;
+  /** With this person, or with someone else at their organization (a former director, another address). */
+  about?: "person" | "organization";
 }
 
 /**
@@ -168,7 +171,10 @@ export interface ThreadMessage {
  * ("history", so a new email shows what came before), else nothing ("none").
  */
 export interface DraftThread {
-  kind: "thread" | "history" | "none";
+  /** "organization": nothing with this person yet, but earlier emails with their organization. */
+  kind: "thread" | "history" | "organization" | "none";
+  /** The organization the earlier emails were with. */
+  organizationName?: string | null;
   messages: ThreadMessage[];
   /** Emails in the conversation, including older ones not sent to the card. */
   total: number;
@@ -184,14 +190,16 @@ export async function loadDraftThread(draftId: string): Promise<{ ok: true; thre
   const replied = draft.replyToMessageId ? await getMessage(draft.replyToMessageId) : null;
   const contactId = draft.contact?.id ?? null;
   let kind: DraftThread["kind"] = "none";
-  let messages: Awaited<ReturnType<typeof getThread>> = [];
+  let messages: (Awaited<ReturnType<typeof getThread>>[number] & { about?: "person" | "organization" })[] = [];
+  const contact = contactId ? await getContact(contactId) : null;
+  const organization = draft.organization ?? contact?.organization ?? null;
   if (replied) {
     kind = "thread";
     // The thread as this person lived it: an email sent to many (a mailing) gathers
     // everyone's replies and bounces in one Gmail thread; only the emails they
     // wrote or received are theirs. One that arrived after the draft matters most.
     const thread = await getThread(replied.accountId, replied.gmailThreadId);
-    const people = [...new Set([...(contactId ? ((await getContact(contactId))?.emails ?? []) : []), ...draft.to, ...draft.cc])];
+    const people = [...new Set([...(contact?.emails ?? []), ...draft.to, ...draft.cc])];
     const theirs = thread.length
       ? await sql<{ messageId: string }[]>`
           select distinct message_id from message_participants
@@ -200,10 +208,14 @@ export async function loadDraftThread(draftId: string): Promise<{ ok: true; thre
     const ids = new Set(theirs.map((r) => r.messageId));
     messages = thread.filter((m) => ids.has(m.id) || m.id === replied.id);
     if (!messages.length) messages = [replied];
-  } else if (contactId) {
-    messages = (await getContactHistory(contactId, { limit: 4, includeAutomated: false })).reverse();
-    if (messages.length) kind = "history";
+  } else if (contactId || organization) {
+    // The person first; with nothing from them, their organization (a former director, Josefina's emails…).
+    messages = (await getRelatedHistory(contactId, organization?.id ?? null, { limit: 6 })).reverse();
+    if (messages.some((m) => m.about === "person")) kind = "history";
+    else if (messages.length) kind = "organization";
   }
+  // Emails sent from a mailbox the owner only reads (Josefina's) are hers, not "You".
+  const readOnly = new Set((await sql<{ email: string }[]>`select lower(email) as email from gmail_accounts where monitor_only`).map((r) => r.email));
   const name = (a: { name: string | null; email: string } | null | undefined) => a?.name || a?.email || "";
   const counts = messages.length
     ? await sql<{ messageId: string; n: number }[]>`
@@ -216,16 +228,18 @@ export async function loadDraftThread(draftId: string): Promise<{ ok: true; thre
     ok: true,
     thread: {
       kind,
+      organizationName: organization?.name ?? null,
       total: messages.length,
       messages: messages.slice(-THREAD_MAX).map((m) => ({
         id: m.id,
         direction: m.direction,
-        from: m.direction === "outbound" ? "You" : name(m.from),
+        from: m.direction === "outbound" && !readOnly.has(m.accountEmail.toLowerCase()) ? "You" : name(m.from),
         to: m.to.map(name).join(", "),
         sentAt: new Date(m.sentAt).toISOString(),
         subject: m.subject,
         body: (m.bodyText?.trim() || m.snippet || "").slice(0, BODY_MAX),
         recipients: recipients.get(m.id) ?? m.to.length + m.cc.length,
+        about: m.about,
       })),
     },
   };

@@ -269,6 +269,10 @@ export interface GmailAccountView {
   backfillCompletedAt: Date | null;
   /** Import is unfinished and nothing is currently working on it. */
   backfillStalled: boolean;
+  /** The oldest stored email. */
+  oldestMessageAt?: Date | null;
+  /** The first import only took recent years (newer_than:…): older mail can still be imported. */
+  historyLimited?: boolean;
   lastSyncedAt: Date | null;
   watchExpiresAt: Date | null;
   /** Push notifications configured and the watch is current. */

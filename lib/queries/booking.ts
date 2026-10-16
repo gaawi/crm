@@ -9,7 +9,7 @@ import { todayIn } from "@/lib/dates";
 import { env } from "@/lib/env";
 import { cleanPhone, createContact, getContactByEmail } from "@/lib/queries/contacts";
 import { checkGoalValues, createOpportunity, parseMoney } from "@/lib/queries/opportunities";
-import { findOrCreateOrganization } from "@/lib/queries/organizations";
+import { findOrCreateOrganization, normalizeDomains } from "@/lib/queries/organizations";
 import { readProfile } from "@/lib/organizations/profile";
 import { createProject, updateProject } from "@/lib/queries/projects";
 import type { NextAction, OpportunityKind, OpportunityStage, OrganizationKind } from "@/lib/types";
@@ -317,7 +317,9 @@ export async function addSheetRow(input: NewSheetRow): Promise<string> {
     update organizations
        set city = coalesce(city, ${oneLine(input.city)}),
            website = coalesce(website, ${oneLine(input.website, 500)}),
-           kind = case when kind is null or kind = 'other' then ${organizationKindFor(kind)} else kind end
+           kind = case when kind is null or kind = 'other' then ${organizationKindFor(kind)} else kind end,
+           -- Its website's and the contact's work domains, so earlier emails with anyone there are found.
+           domains = array(select distinct d from unnest(domains || ${normalizeDomains([input.website ?? "", email ?? ""])}::text[]) d)
      where id = ${organizationId}
   `;
 
@@ -450,7 +452,8 @@ export async function updateSheetRow(id: string, patch: SheetRowPatch): Promise<
     if ("eventDates" in patch) values.eventDates = oneLine(patch.eventDates);
     if ("fee" in patch) values.value = feeValue(patch.fee);
     if ("notes" in patch) values.notes = patch.notes?.trim() || null;
-    if ("section" in patch) values.sheetSection = row.projectId ? await resolveSection(tx, row.projectId, patch.section) : oneLine(patch.section, 120);
+    if ("section" in patch)
+      values.sheetSection = row.projectId ? await resolveSection(tx, row.projectId, patch.section) : oneLine(patch.section, 120);
     if ("spaces" in patch) values.spaces = oneLine(patch.spaces, 1000);
     if (patch.returning !== undefined) values.isReturning = Boolean(patch.returning);
 
@@ -476,7 +479,8 @@ export async function updateSheetRow(id: string, patch: SheetRowPatch): Promise<
         const [contact] = await tx<{ id: string }[]>`
           insert into contacts ${tx({ ...phones, organizationId: row.organizationId, status: "lead", source: "manual" } as never)}
           returning id`;
-        if (row.projectId) await tx`insert into contact_projects (contact_id, project_id) values (${contact.id}, ${row.projectId}) on conflict do nothing`;
+        if (row.projectId)
+          await tx`insert into contact_projects (contact_id, project_id) values (${contact.id}, ${row.projectId}) on conflict do nothing`;
         await tx`update opportunities set contact_id = ${contact.id} where id = ${id}`;
       }
     }

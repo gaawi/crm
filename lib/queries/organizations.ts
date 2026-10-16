@@ -146,10 +146,7 @@ export async function getOrganizationContacts(id: string): Promise<ContactSummar
  * any address at one of its domains, de-duplicated, newest first. `before`
  * pages backwards; `q` full-text filter.
  */
-export async function getOrganizationHistory(
-  id: string,
-  options: { limit?: number; before?: Date; q?: string } = {},
-): Promise<EmailMessage[]> {
+export async function getOrganizationHistory(id: string, options: { limit?: number; before?: Date; q?: string } = {}): Promise<EmailMessage[]> {
   const limit = clampLimit(options.limit, 50);
   const q = options.q?.trim();
   const rows = await sql`
@@ -205,12 +202,109 @@ export async function linkContactsByDomain(id: string): Promise<number> {
 
 /* ------------------------------------------------------------------------- */
 
+/**
+ * Keeps organizations and people connected without editing cards by hand:
+ * 1. an organization without domains gets them from its website and from the
+ *    work addresses of its contacts (free-mail domains never count);
+ * 2. a contact without an organization joins the one organization whose
+ *    domain its address uses (a domain shared by several organizations, say
+ *    a university with two series, links no one).
+ * Only adds: never removes a domain or moves a contact that has an
+ * organization. Safe to run again (the daily sync does).
+ */
+export async function linkOrganizations(): Promise<{ organizationsWithNewDomains: number; contactsLinked: number }> {
+  const orgs = await sql<{ id: string; website: string | null; domains: string[]; emails: string[] | null }[]>`
+    select o.id, o.website, o.domains,
+           (select array_agg(distinct ce.email) from contacts c join contact_emails ce on ce.contact_id = c.id
+             where c.organization_id = o.id) as emails
+      from organizations o`;
+  let organizationsWithNewDomains = 0;
+  for (const org of orgs) {
+    const next = normalizeDomains([...(org.domains ?? []), ...(org.website ? [org.website] : []), ...(org.emails ?? [])]);
+    if (next.length > (org.domains ?? []).length) {
+      await sql`update organizations set domains = ${next} where id = ${org.id}`;
+      organizationsWithNewDomains++;
+    }
+  }
+  const linked = await sql`
+    with owners as (
+      select d as domain, min(o.id::text)::uuid as organization_id
+        from organizations o, unnest(o.domains) d
+       group by d
+      having count(distinct o.id) = 1
+    ),
+    targets as (
+      select distinct on (c.id) c.id, w.organization_id
+        from contacts c
+        join contact_emails ce on ce.contact_id = c.id
+        join owners w on w.domain = split_part(ce.email, '@', 2)
+       where c.organization_id is null
+       order by c.id, ce.is_primary desc
+    )
+    update contacts c set organization_id = t.organization_id
+      from targets t
+     where c.id = t.id and c.organization_id is null`;
+  return { organizationsWithNewDomains, contactsLinked: linked.count };
+}
+
+/**
+ * Earlier emails that matter before writing to someone, newest first, from
+ * every connected mailbox (Josefina's included), automated mail left out:
+ * those with the person (any of their addresses) and those with their
+ * organization (its other contacts, e.g. a former director, and any address
+ * at its domains). `about` tells which: "person" or "organization".
+ */
+export async function getRelatedHistory(
+  contactId: string | null,
+  organizationId: string | null,
+  options: { limit?: number } = {},
+): Promise<(EmailMessage & { about: "person" | "organization" })[]> {
+  if (!contactId && !organizationId) return [];
+  const limit = clampLimit(options.limit, 20, 100);
+  const rows = await sql`
+    with org as (select domains from organizations where id = ${organizationId}),
+    ids as (
+      select mp.message_id, true as mine
+        from contact_emails ce join message_participants mp on mp.email = ce.email
+       where ce.contact_id = ${contactId}
+      union all
+      select mp.message_id, false
+        from contacts c join contact_emails ce on ce.contact_id = c.id join message_participants mp on mp.email = ce.email
+       where c.organization_id = ${organizationId} and c.id is distinct from ${contactId}::uuid
+      union all
+      select mp.message_id, false
+        from org, message_participants mp
+       where cardinality(org.domains) > 0
+         and split_part(mp.email, '@', 2) = any(org.domains)
+         and mp.email not in (select email from self_addresses)
+    ),
+    found as (select message_id, bool_or(mine) as mine from ids group by message_id),
+    picked as (
+      select distinct on (coalesce(m.rfc822_message_id, m.id::text)) m.id, f.mine
+        from found f
+        join messages m on m.id = f.message_id
+       where not m.is_automated
+       order by coalesce(m.rfc822_message_id, m.id::text), f.mine desc, (m.direction = 'inbound'), m.created_at, m.id
+    )
+    select ${messageColumns()}, p.mine
+      from picked p
+      join messages m on m.id = p.id
+      join gmail_accounts a on a.id = m.account_id
+     order by m.sent_at desc, m.id
+     limit ${limit}
+  `;
+  return rows.map((row) => ({ ...toEmailMessage(row as never), about: (row as { mine: boolean }).mine ? "person" : "organization" }));
+}
+
 export function normalizeDomains(values: string[]): string[] {
   const out = new Set<string>();
   for (const raw of values) {
     let value = raw.trim().toLowerCase();
     if (!value) continue;
-    value = value.replace(/^[a-z]+:\/\//, "").replace(/^[^@]*@/, "").replace(/^www\./, "");
+    value = value
+      .replace(/^[a-z]+:\/\//, "")
+      .replace(/^[^@]*@/, "")
+      .replace(/^www\./, "");
     value = value.split(/[/?#:\s]/)[0];
     if (/^[a-z0-9.-]+\.[a-z]{2,}$/.test(value) && !FREE_MAIL_DOMAINS.has(value)) out.add(value);
   }

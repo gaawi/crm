@@ -1,6 +1,9 @@
 import { assistantApiGuard } from "@/lib/assistant/auth";
 import { sql } from "@/lib/db";
 import { env } from "@/lib/env";
+import { linkOrganizations } from "@/lib/queries/organizations";
+import { startOlderHistoryImport } from "@/lib/sync/backfill";
+import { triggerAccountJob } from "@/lib/sync/trigger";
 
 /**
  * Read-only health of the mail import: per connected mailbox, its import
@@ -9,6 +12,11 @@ import { env } from "@/lib/env";
  * Authorization: Bearer <ASSISTANT_API_TOKEN>.
  *
  * GET /api/assistant-agent/diagnostics
+ * POST /api/assistant-agent/diagnostics {"action":"link-organizations"} fills
+ *   organization domains and joins unaffiliated contacts to their organization
+ *   (the daily sync does it too). Only adds links, never removes.
+ * POST {"action":"import-older-history","email":"…"} starts the lean import of
+ *   that mailbox's mail older than its oldest stored email (read-only on Gmail).
  */
 
 export async function GET(request: Request) {
@@ -31,8 +39,13 @@ export async function GET(request: Request) {
       from pg_class c join pg_namespace n on n.oid = c.relnamespace
      where n.nspname = 'public' and c.relkind = 'r'
      order by pg_total_relation_size(c.oid) desc limit 8`;
+  const [organizations] = await sql`
+    select count(*)::int as total, count(*) filter (where cardinality(domains) > 0)::int as with_domains,
+           (select count(*)::int from contacts where organization_id is null) as contacts_without_organization
+      from organizations`;
   return Response.json(
     {
+      organizations,
       databaseMb: size.mb,
       limitMb: env.dbSizeLimitMb,
       skipCategories: env.skipCategories,
@@ -42,4 +55,19 @@ export async function GET(request: Request) {
     },
     { headers: { "Cache-Control": "no-store" } },
   );
+}
+
+export async function POST(request: Request) {
+  const denied = await assistantApiGuard(request);
+  if (denied) return denied;
+  const body = (await request.json().catch(() => null)) as { action?: string; email?: string } | null;
+  if (body?.action === "link-organizations") return Response.json(await linkOrganizations(), { headers: { "Cache-Control": "no-store" } });
+  if (body?.action === "import-older-history" && body.email) {
+    const [account] = await sql<{ id: string }[]>`select id from gmail_accounts where lower(email) = lower(${body.email}) and status = 'active'`;
+    if (!account) return Response.json({ error: "No active mailbox with that address." }, { status: 404 });
+    const started = await startOlderHistoryImport(account.id);
+    const triggered = started ? await triggerAccountJob(account.id, "backfill") : false;
+    return Response.json({ started, triggered });
+  }
+  return Response.json({ error: 'Pass {"action":"link-organizations"} or {"action":"import-older-history","email":"…"}.' }, { status: 400 });
 }

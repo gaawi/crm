@@ -4,14 +4,7 @@ import { env } from "@/lib/env";
 import { GmailApiError } from "@/lib/gmail/client";
 import { buildBackfillQuery, parseGmailMessage, shouldSkipLabels } from "@/lib/gmail/parse";
 import type { GmailListMessagesResponse, ParsedMessage } from "@/lib/gmail/types";
-import {
-  AccountAuthError,
-  databaseSizeMb,
-  getAccount,
-  getSelfEmails,
-  gmailClientFor,
-  recordAccountError,
-} from "@/lib/sync/accounts";
+import { AccountAuthError, databaseSizeMb, getAccount, getSelfEmails, gmailClientFor, recordAccountError } from "@/lib/sync/accounts";
 import { describeSyncError, isRateLimitError, summarizeFailures } from "@/lib/sync/errors";
 import { existingMessageIds, ingestMessages } from "@/lib/sync/ingest";
 import { acquireLease, extendLease, LEASE_SECONDS, releaseLease } from "@/lib/sync/locks";
@@ -31,6 +24,25 @@ const PAGE_SIZE = 100;
  * deadline is checked often and progress is saved as it is made.
  */
 const FETCH_BATCH = 25;
+/** Text kept per email by the older-history import (the history views show up to 4000 characters). */
+const LEAN_BODY_MAX = 4000;
+
+/**
+ * Gmail search for the mail older than what is stored (the first import of
+ * some mailboxes was limited to recent years): real conversations only, no
+ * promotions, social, updates or forums, so years of history fit the database.
+ * Messages are ingested "lean": automated mail is skipped and text is capped.
+ */
+export function olderHistoryQuery(oldestStored: Date): string {
+  const day = new Date(oldestStored.getTime() + 24 * 60 * 60 * 1000);
+  const ymd = `${day.getUTCFullYear()}/${String(day.getUTCMonth() + 1).padStart(2, "0")}/${String(day.getUTCDate()).padStart(2, "0")}`;
+  return `before:${ymd} -category:promotions -category:social -category:updates -category:forums -in:chats -in:drafts`;
+}
+
+/** An older-history import (see olderHistoryQuery): ingest lean. */
+export function isOlderHistoryQuery(query: string | null | undefined): boolean {
+  return /(^|\s)before:\d{4}\/\d{2}\/\d{2}(\s|$)/.test(query ?? "");
+}
 
 /**
  * One resumable chunk of the historical import (see docs/SYNC_SPEC.md).
@@ -39,10 +51,7 @@ const FETCH_BATCH = 25;
  * When time runs out in the middle of a page, the page token is not advanced:
  * the page is listed again next time and its stored ids are skipped.
  */
-export async function runBackfillChunk(
-  accountId: string,
-  options: { deadline: number; fetchImpl?: typeof fetch },
-): Promise<BackfillResult> {
+export async function runBackfillChunk(accountId: string, options: { deadline: number; fetchImpl?: typeof fetch }): Promise<BackfillResult> {
   const account = await getAccount(accountId);
   if (!account || account.status !== "active" || account.backfillStatus === "done") {
     return { status: "skipped", scanned: 0, imported: 0 };
@@ -93,6 +102,7 @@ export async function runBackfillChunk(
     const selfEmails = await getSelfEmails();
     const skipCategories = env.skipCategories;
     const query = account.backfillQuery ?? buildBackfillQuery(skipCategories, env.backfillQuery);
+    const lean = isOlderHistoryQuery(query);
     let pageToken = account.backfillPageToken;
     let restarted = false;
 
@@ -132,7 +142,11 @@ export async function runBackfillChunk(
         for (const message of fetched) {
           if (shouldSkipLabels(message.labelIds ?? [], skipCategories)) continue;
           try {
-            parsed.push(parseGmailMessage(message, { selfEmails }));
+            const one = parseGmailMessage(message, { selfEmails });
+            if (lean && one.isAutomated) continue;
+            parsed.push(
+              lean && one.bodyText && one.bodyText.length > LEAN_BODY_MAX ? { ...one, bodyText: one.bodyText.slice(0, LEAN_BODY_MAX) } : one,
+            );
           } catch (error) {
             failures.push({ gmailMessageId: message.id, error: errorMessage(error) });
           }
@@ -209,4 +223,23 @@ export async function resetBackfill(accountId: string): Promise<void> {
            backfill_completed_at = null
      where id = ${accountId}
   `;
+}
+
+/**
+ * Import the mail older than the oldest stored email of the account (lean:
+ * real conversations only). Already stored messages are skipped; the database
+ * size guard pauses it if space runs out. False when the account has no mail yet.
+ */
+export async function startOlderHistoryImport(accountId: string): Promise<boolean> {
+  const [row] = await sql<{ oldest: Date | null }[]>`select min(sent_at) as oldest from messages where account_id = ${accountId}`;
+  if (!row?.oldest) return false;
+  const updated = await sql`
+    update gmail_accounts
+       set backfill_page_token = null,
+           backfill_status = 'pending',
+           backfill_query = ${olderHistoryQuery(row.oldest)},
+           backfill_completed_at = null
+     where id = ${accountId} and status = 'active'
+  `;
+  return updated.count > 0;
 }

@@ -3,6 +3,7 @@ import { sql } from "@/lib/db";
 import { runAutopilotIfDue } from "@/lib/ai/autopilot";
 import { runCampaigns, type RunCampaignsSummary } from "@/lib/campaigns/scheduler";
 import { recoverStaleDrafts } from "@/lib/queries/drafts";
+import { linkOrganizations } from "@/lib/queries/organizations";
 import { getAccountByEmail, listAccounts, reconcileSelfContacts, refreshAliases } from "@/lib/sync/accounts";
 import { runBackfillChunk, type BackfillResult } from "@/lib/sync/backfill";
 import { describeSyncError } from "@/lib/sync/errors";
@@ -75,6 +76,8 @@ export interface CronSummary {
     backfillTriggered: boolean;
   }[];
   selfAddressesRemoved: number;
+  /** Domains filled and contacts joined to their organization (linkOrganizations). */
+  organizationsLinked?: { organizationsWithNewDomains: number; contactsLinked: number };
   autopilot: unknown;
   /** The gradual sender's run (approved campaigns only). */
   campaigns: RunCampaignsSummary | null;
@@ -108,6 +111,13 @@ export async function runCron(options: { deadline: number; fetchImpl?: typeof fe
     summary.selfAddressesRemoved = await reconcileSelfContacts();
   } catch (error) {
     summary.errors.push(`reconcile: ${describeSyncError(error)}`);
+  }
+
+  // People and organizations stay connected (domains, unaffiliated contacts) without editing cards.
+  try {
+    summary.organizationsLinked = await linkOrganizations();
+  } catch (error) {
+    summary.errors.push(`link organizations: ${describeSyncError(error)}`);
   }
 
   // Re-read: renewing a watch or refreshing a token may have changed a status.
@@ -182,11 +192,7 @@ export async function handlePushNotification(
  * 10 minutes (and not being synced right now), and a fresh chain for stalled
  * imports. Called from after() in the app layout; never throws.
  */
-export async function syncStaleAccounts(options: {
-  deadline: number;
-  maxAgeMinutes?: number;
-  fetchImpl?: typeof fetch;
-}): Promise<void> {
+export async function syncStaleAccounts(options: { deadline: number; maxAgeMinutes?: number; fetchImpl?: typeof fetch }): Promise<void> {
   try {
     const maxAge = Math.max(1, Math.floor(options.maxAgeMinutes ?? 10));
     const rows = await sql<{ id: string; syncDue: boolean; backfillStalled: boolean }[]>`

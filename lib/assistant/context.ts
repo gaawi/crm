@@ -53,6 +53,21 @@ interface SheetRowCtx {
   emails: { direction: string; date: string; subject: string | null; snippet: string | null }[];
   activities: { kind: string; outcome: string | null; date: string; note: string | null }[];
   openDraft: { id: string; status: string } | null;
+  /**
+   * "known_person": we have emails with this person; "known_organization": not
+   * with them, but with their organization (a former director, another
+   * address, Josefina's emails); "new": a true first contact. Read the history
+   * (GET history by contactId and organizationId) and pick it up, never write
+   * a known one as a first contact.
+   */
+  relationship: "known_person" | "known_organization" | "new";
+  /** Emails with other people at the organization (or its domains), automated mail aside. */
+  organizationHistory: {
+    count: number;
+    lastAt: string | null;
+    theyWrote: boolean;
+    last: { date: string; direction: string; with: string; subject: string | null } | null;
+  };
 }
 
 export interface AssistantContext {
@@ -143,7 +158,11 @@ export async function buildAssistantContext(now: Date = new Date()): Promise<Ass
   const projects: AssistantContext["projects"] = [];
   for (const sheet of sheets) {
     const rows = await sql<
-      (Omit<SheetRowCtx, "emails" | "activities" | "contact"> & {
+      (Omit<SheetRowCtx, "emails" | "activities" | "contact" | "relationship" | "organizationHistory"> & {
+        orgCount: number;
+        orgLastAt: Date | null;
+        orgTheyWrote: boolean | null;
+        orgLast: { date: string; direction: string; with: string; subject: string | null } | null;
         contact:
           | (Omit<NonNullable<SheetRowCtx["contact"]>, "cardMissing"> & {
               organizationId: string | null;
@@ -163,6 +182,7 @@ export async function buildAssistantContext(now: Date = new Date()): Promise<Ass
                'role', nullif(btrim(c.role), ''), 'researchedAt', c.researched_at, 'organizationId', c.organization_id,
                'organizationHasProfile', co.profile is not null, 'photoUrl', c.photo_url) end as contact,
              em.emails, ac.activities,
+             coalesce(oh.n, 0) as org_count, oh.last_at as org_last_at, oh.they_wrote as org_they_wrote, oh.last as org_last,
              (select json_build_object('id', d.id, 'status', d.status) from email_drafts d
                where (d.opportunity_id = op.id or (c.id is not null and d.contact_id = c.id))
                  and d.status = any(${OPEN_DRAFT_STATUSES}::text[])
@@ -194,6 +214,26 @@ export async function buildAssistantContext(now: Date = new Date()): Promise<Ass
                    where a.opportunity_id = op.id or (c.id is not null and a.contact_id = c.id)
                    order by a.occurred_at desc limit 5) y
         ) ac on true
+        left join lateral (
+          select count(*)::int as n, max(x.sent_at) as last_at, bool_or(x.direction = 'inbound') as they_wrote,
+                 (array_agg(json_build_object('date', x.sent_at, 'direction', x.direction, 'with', x.who, 'subject', x.subject)
+                   order by x.sent_at desc))[1] as last
+            from (
+              select distinct on (m.id) m.id, m.sent_at, m.direction, m.subject, mp.email as who
+                from message_participants mp
+                join messages m on m.id = mp.message_id
+               where not m.is_automated
+                 and coalesce(c.organization_id, op.organization_id) is not null
+                 and (c.id is null or mp.email not in (select ce3.email from contact_emails ce3 where ce3.contact_id = c.id))
+                 and (
+                   mp.email in (select ce2.email from contacts c2 join contact_emails ce2 on ce2.contact_id = c2.id
+                                 where c2.organization_id = coalesce(c.organization_id, op.organization_id) and c2.id is distinct from c.id)
+                   or (exists (select 1 from organizations od where od.id = coalesce(c.organization_id, op.organization_id) and split_part(mp.email, '@', 2) = any(od.domains))
+                       and mp.email not in (select email from self_addresses))
+                 )
+               order by m.id
+            ) x
+        ) oh on true
        where op.project_id = ${sheet.id}
        order by (op.contact_id is null),
                 array_position(array['negotiation','proposal','contacted','lead','won','lost']::text[], op.stage),
@@ -263,8 +303,15 @@ export async function buildAssistantContext(now: Date = new Date()): Promise<Ass
       lastRunAt: iso(sheet.lastRunAt),
       stageCounts: counts?.counts ?? {},
       truncatedRows: rows.length > MAX_ROWS,
-      rows: rows.slice(0, MAX_ROWS).map((r) => ({
+      rows: rows.slice(0, MAX_ROWS).map(({ orgCount, orgLastAt, orgTheyWrote, orgLast, ...r }) => ({
         ...r,
+        relationship: (r.emails ?? []).length ? ("known_person" as const) : orgCount ? ("known_organization" as const) : ("new" as const),
+        organizationHistory: {
+          count: orgCount,
+          lastAt: iso(orgLastAt),
+          theyWrote: Boolean(orgTheyWrote),
+          last: orgLast ? { ...orgLast, date: iso(orgLast.date)!, subject: clip(orgLast.subject, 200) } : null,
+        },
         contact: r.contact
           ? {
               id: r.contact.id,

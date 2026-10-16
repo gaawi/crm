@@ -40,7 +40,9 @@ export function DraftConversation({
                 ? `Conversation · ${loaded.total} ${loaded.total === 1 ? "email" : "emails"}`
                 : loaded?.kind === "history"
                   ? `Latest emails with ${name}`
-                  : `First email to ${name}`}
+                  : loaded?.kind === "organization"
+                    ? `First email to ${name} · earlier emails with ${loaded.organizationName ?? "their organization"}`
+                    : `First email to ${name}`}
         </p>
         {loaded && loaded.total > messages.length ? (
           <p className="text-[11.5px] text-subtle">
@@ -53,7 +55,7 @@ export function DraftConversation({
             message={m}
             latest={i === messages.length - 1}
             fresh={m.direction === "inbound" && new Date(m.sentAt).getTime() > createdAt}
-            showSubject={loaded?.kind === "history" || i === 0}
+            showSubject={loaded?.kind === "history" || loaded?.kind === "organization" || i === 0}
             timezone={timezone}
           />
         ))}
@@ -127,6 +129,9 @@ function Message({
           <span className="min-w-0 truncate text-subtle">mass email to {m.recipients} people</span>
         ) : mine && m.to ? (
           <span className="min-w-0 truncate text-subtle">to {m.to}</span>
+        ) : null}
+        {m.about === "organization" ? (
+          <span className="shrink-0 rounded-full bg-surface-2 px-1.5 text-[10.5px] text-subtle">same organization</span>
         ) : null}
         <span className="ml-auto shrink-0 text-[11px] text-subtle">{when}</span>
       </button>

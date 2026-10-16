@@ -65,12 +65,22 @@ export async function listHistory(params: URLSearchParams): Promise<{ count: num
       union
       select ${email ?? null}::text where ${email ?? null}::text is not null
     ),
+    ids as (
+      select mp.message_id from people p join message_participants mp on mp.email = p.email
+      union
+      -- An organization's correspondence also includes any address at its domains (a former director, a new one).
+      select mp.message_id
+        from organizations o, message_participants mp
+       where o.id = ${organizationId ?? null}::uuid
+         and cardinality(o.domains) > 0
+         and split_part(mp.email, '@', 2) = any(o.domains)
+         and mp.email not in (select email from self_addresses)
+    ),
     picked as (
       -- One row per email (a message stored in several mailboxes counts once).
       select distinct on (coalesce(m.rfc822_message_id, m.id::text)) m.id
-        from people p
-        join message_participants mp on mp.email = p.email
-        join messages m on m.id = mp.message_id
+        from ids
+        join messages m on m.id = ids.message_id
        where not m.is_automated
        order by coalesce(m.rfc822_message_id, m.id::text), (m.direction = 'inbound'), m.sent_at
     )

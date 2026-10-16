@@ -59,6 +59,8 @@ export async function listAccountViews(): Promise<GmailAccountView[]> {
            (${pushConfigured} and a.status = 'active' and a.watch_expires_at > now()) as push_active,
            a.last_error, a.last_error_at, a.monitor_only,
            (select count(*)::int from messages m where m.account_id = a.id) as message_count,
+           (select min(m.sent_at) from messages m where m.account_id = a.id) as oldest_message_at,
+           (a.backfill_query like '%newer_than:%') as history_limited,
            a.created_at
       from gmail_accounts a
      order by a.created_at
@@ -253,9 +255,7 @@ async function loadAccessToken(
   forceRefresh: boolean,
   fetchImpl: typeof fetch | undefined,
 ): Promise<{ token: string; expiresAt: Date }> {
-  const [account] = await sql<
-    Pick<GmailAccountRecord, "email" | "status" | "refreshTokenEnc" | "accessTokenEnc" | "accessTokenExpiresAt">[]
-  >`
+  const [account] = await sql<Pick<GmailAccountRecord, "email" | "status" | "refreshTokenEnc" | "accessTokenEnc" | "accessTokenExpiresAt">[]>`
     select email, status, refresh_token_enc, access_token_enc, access_token_expires_at
       from gmail_accounts where id = ${accountId}
   `;
