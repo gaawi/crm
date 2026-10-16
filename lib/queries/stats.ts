@@ -23,7 +23,8 @@ export async function getOverviewCounts(): Promise<OverviewCounts> {
         where status = 'active' and backfill_status in ('pending', 'running')) as importing,
       (select count(*)::int from contacts where status <> 'archived') as contacts,
       (select count(*)::int from contacts where status = 'new') as new_contacts,
-      (select count(*)::int from messages) as messages
+      -- Postgres's own estimate: counting every stored email on each page took ~0.4 s and no page shows the exact number.
+      (select greatest(reltuples, 0)::int from pg_class where oid = 'messages'::regclass) as messages
   `;
   return row;
 }
