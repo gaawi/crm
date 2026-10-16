@@ -139,7 +139,29 @@ describe("runTriage", () => {
     await runTriage({ deadline: Date.now() + 60_000 });
     expect(claude.calls).toBe(0);
     expect(await decision(a)).toMatchObject({ important: true, needsReply: false, decidedBy: "rule" });
-    expect(await decision(b)).toMatchObject({ important: true, decidedBy: "rule" });
+    // Without Claude the rules' guess is provisional…
+    expect(await decision(b)).toMatchObject({ important: true, decidedBy: "fallback" });
+
+    // …and Claude reviews it once it is on (the monitor-only mailbox keeps its rules).
+    process.env.CLAUDE_INBOX = "on";
+    await sql`update message_triage set claimed_at = now() - interval '1 hour'`;
+    await runTriage({ deadline: Date.now() + 60_000 });
+    expect(claude.calls).toBe(1);
+    expect(await decision(b)).toMatchObject({ important: false, decidedBy: "claude" });
+    expect(await decision(a)).toMatchObject({ decidedBy: "rule" });
+  });
+
+  it("sends obvious machine senders to Other and keeps money and official notices without Claude", async () => {
+    process.env.CLAUDE_INBOX = "off";
+    const usps = await receive(account, "uspsinformeddelivery@email.informeddelivery.usps.com", "Your Daily Digest");
+    const failed = await receive(account, "noreply@bank.test", "Action required: your mobile check deposit failed", { automated: "noreply" });
+    const notice = await receive(account, "avisos@notifica.example.com", "Nueva notificación electrónica", { automated: "noreply" });
+    const receipt = await receive(account, "noreply@bank.test", "Your check deposit has uploaded successfully", { automated: "noreply" });
+    await runTriage({ deadline: Date.now() + 60_000 });
+    expect(await decision(usps)).toMatchObject({ important: false, category: "notification" });
+    expect(await decision(failed)).toMatchObject({ important: true, category: "finance" });
+    expect(await decision(notice)).toMatchObject({ important: true, category: "official" });
+    expect(await decision(receipt)).toMatchObject({ important: false });
   });
 
   it("follows the owner's correction for the conversation and the sender's next emails", async () => {

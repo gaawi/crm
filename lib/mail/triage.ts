@@ -5,6 +5,7 @@ import { anthropic, FALLBACK_BETA, model } from "@/lib/ai/client";
 import { sql } from "@/lib/db";
 import { env } from "@/lib/env";
 import { getSettings } from "@/lib/queries/settings";
+import { isMachineAddress } from "@/lib/sync/rules";
 import { truncate } from "@/lib/utils";
 
 /**
@@ -37,7 +38,8 @@ export interface TriageDecision {
   category: TriageCategory;
   needsReply: boolean;
   reason: string;
-  decidedBy: "rule" | "claude";
+  /** fallback = the rules' best guess where Claude should decide (Claude was off or failed); reviewed again once Claude is on. */
+  decidedBy: "rule" | "fallback" | "claude";
 }
 
 /** How long an email stays eligible for triage after it arrives. */
@@ -109,6 +111,12 @@ export function isOfficialSender(email: string | null): boolean {
 }
 
 const PROMO_LABELS = ["CATEGORY_PROMOTIONS", "CATEGORY_SOCIAL", "CATEGORY_FORUMS"];
+/** Notices from a public body that arrive from another domain (notification services, platforms). */
+const OFFICIAL_SUBJECT = /notificaci[oó]n|requerimiento|resoluci[oó]n|subvenci[oó]n|ministerio|hacienda|seguridad social|agencia tributaria|ayuntamiento|sede electr[oó]nica|\birs\b|uscis|visa (application|appointment)|embassy|consulate/i;
+/** Automatic emails that still need the owner (money, accounts at risk). */
+const ACTION_SUBJECT = /action required|payment (failed|declined)|was declined|failed|overdue|past due|final notice|account (suspended|locked|on hold)|requires your (signature|attention)|please sign|signature request/i;
+/** Senders that are machines even when the message has no list headers. */
+const MACHINE_LOCAL = /(^|[._-])(no[._-]?reply|do[._-]?not[._-]?reply|donotreply|notifications?|alerts?|digest|newsletter|news|mailer|bounces?|automated|myaccount|informeddelivery|marketing|promo|deals|offers|rewards|team|hello|updates?)([._+-]|$)/i;
 /** Bulk-mail signals from parseGmailMessage (automated_reason). */
 const BULK_REASONS = new Set(["list_id", "precedence", "unsubscribe", "category"]);
 
@@ -156,6 +164,13 @@ export function ruleDecision(input: TriageInput): { final: TriageDecision | null
     return { final: d, fallback: d, known };
   }
   const bulk = input.isAutomated && BULK_REASONS.has(input.automatedReason ?? "");
+  if (input.isAutomated && !bulk && OFFICIAL_SUBJECT.test(input.subject ?? "")) {
+    const d = decide(true, "official", "Looks like an official notice");
+    return { final: null, fallback: d, known };
+  }
+  if (input.isAutomated && !bulk && ACTION_SUBJECT.test(input.subject ?? "")) {
+    return { final: null, fallback: decide(true, "finance", "Automatic email that needs your action"), known };
+  }
   if (input.labelIds.some((l) => PROMO_LABELS.includes(l))) {
     const d = decide(false, input.labelIds.includes("CATEGORY_SOCIAL") ? "social" : "promotion", "Promotion or social notification");
     return { final: d, fallback: d, known };
@@ -167,6 +182,10 @@ export function ruleDecision(input: TriageInput): { final: TriageDecision | null
   // Campaign contacts writing personally: important for sure; Claude still judges whether a reply is needed.
   if (human && input.campaigns.length) {
     return { final: null, fallback: decide(true, "campaign", `From a contact in ${input.campaigns[0]}`), known };
+  }
+  const local = input.fromEmail?.split("@")[0] ?? "";
+  if (human && !known && (isMachineAddress(input.fromEmail ?? "") || MACHINE_LOCAL.test(local))) {
+    return { final: null, fallback: decide(false, "notification", "Automatic notification"), known };
   }
   if (human) return { final: null, fallback: decide(true, known ? "personal" : "business", known ? "From someone you know" : "Personal email"), known };
   return { final: null, fallback: decide(false, "notification", "Automatic notification"), known };
@@ -318,6 +337,8 @@ async function loadInputs(ids: string[]): Promise<TriageInput[]> {
 
 /** Claim untriaged recent inbox emails (atomic: two runs never classify the same email). */
 async function claim(limit: number): Promise<string[]> {
+  // The rules' provisional guesses get Claude's decision once Claude is on.
+  const review = env.claudeInbox;
   const rows = await sql<{ messageId: string }[]>`
     with candidates as (
       select m.id, m.account_id from messages m
@@ -326,14 +347,16 @@ async function claim(limit: number): Promise<string[]> {
          and m.label_ids @> '{INBOX}' and not (m.label_ids && '{TRASH,SPAM,DELETED}')
          and m.sent_at > now() - make_interval(days => ${TRIAGE_WINDOW_DAYS})
          and not exists (select 1 from message_triage t where t.message_id = m.id
-                          and (t.decided_by <> 'pending' or t.claimed_at > now() - make_interval(mins => ${CLAIM_TIMEOUT_MINUTES})))
+                          and (t.decided_by not in ('pending', 'fallback') or (t.decided_by = 'fallback' and not ${review})
+                               or t.claimed_at > now() - make_interval(mins => ${CLAIM_TIMEOUT_MINUTES})))
        order by m.sent_at desc
        limit ${limit}
     )
     insert into message_triage (message_id, account_id)
     select id, account_id from candidates
-    on conflict (message_id) do update set claimed_at = now()
-      where message_triage.decided_by = 'pending' and message_triage.claimed_at <= now() - make_interval(mins => ${CLAIM_TIMEOUT_MINUTES})
+    on conflict (message_id) do update set decided_by = 'pending', claimed_at = now()
+      where (message_triage.decided_by = 'pending' or (message_triage.decided_by = 'fallback' and ${review}))
+        and message_triage.claimed_at <= now() - make_interval(mins => ${CLAIM_TIMEOUT_MINUTES})
     returning message_id
   `;
   return rows.map((r) => r.messageId);
@@ -367,12 +390,15 @@ export async function runTriage(options: { deadline: number; limit?: number }): 
     const worker = async () => {
       for (let input = queue.shift(); input; input = queue.shift()) {
         const { final, fallback, known } = ruleDecision(input);
-        let decision = final ?? fallback;
+        // Monitor-only mailboxes keep the rules' answer for good; elsewhere it is provisional until Claude decides.
+        let decision: TriageDecision = final ?? { ...fallback, decidedBy: input.monitorOnly ? "rule" : "fallback" };
         // Claude only for the real-mail cases, with time left (a classification takes a few seconds).
         if (!final && env.claudeInbox && !input.monitorOnly && Date.now() < options.deadline - 20_000) {
           try {
             decision = await claudeDecision(input, fallback, known, ownerName);
           } catch (error) {
+            // Not retried forever: the rules' answer stands.
+            decision = fallback;
             result.errors.push(`${input.messageId}: ${error instanceof Error ? error.message : String(error)}`);
           }
         }
