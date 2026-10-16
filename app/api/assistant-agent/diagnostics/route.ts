@@ -1,5 +1,6 @@
 import { loadReviewInbox } from "@/components/assistant/review-inbox";
 import { loadPendingApprovals } from "@/lib/approvals/pending";
+import postgres from "postgres";
 import { assistantApiGuard } from "@/lib/assistant/auth";
 import { todayIn } from "@/lib/dates";
 import { getFollowUps, getUpcomingFollowUps } from "@/lib/queries/followups";
@@ -67,9 +68,24 @@ async function todayTimings() {
   return { parallelMs, parallel: parts.map((p) => ({ name: p.name, ms: p.ms })), contactCampaignsMs: memberships.ms, alone };
 }
 
+/** ?timings=connect: how long opening N fresh connections in parallel takes (N = 1, 4, 12), each on its own client. */
+async function connectTimings() {
+  const out: { connections: number; ms: number }[] = [];
+  for (const n of [1, 4, 12]) {
+    const client = postgres(env.databaseUrl, { prepare: false, max: n, idle_timeout: 5, connect_timeout: 15, onnotice: () => {} });
+    const start = performance.now();
+    await Promise.all(Array.from({ length: n }, () => client`select pg_sleep(0.05)`));
+    out.push({ connections: n, ms: Math.round(performance.now() - start) });
+    await client.end({ timeout: 2 });
+  }
+  return out;
+}
+
 export async function GET(request: Request) {
   const denied = await assistantApiGuard(request);
   if (denied) return denied;
+  if (new URL(request.url).searchParams.get("timings") === "connect")
+    return Response.json(await connectTimings(), { headers: { "Cache-Control": "no-store" } });
   if (new URL(request.url).searchParams.get("timings") === "today")
     return Response.json(await todayTimings(), { headers: { "Cache-Control": "no-store" } });
   const accounts = await sql`
