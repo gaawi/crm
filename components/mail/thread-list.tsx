@@ -21,7 +21,8 @@ import {
   Trash2,
   Undo2,
 } from "lucide-react";
-import { ProjectDot, StatusBadge } from "@/components/ui/badge";
+import { CampaignPill } from "@/components/campaign-pill";
+import { StatusBadge } from "@/components/ui/badge";
 import { formatListDate, formatSenders, type SenderPart } from "@/lib/mail/format";
 import { threadHref, type InboxTab, type MailListState } from "@/lib/mail/params";
 import type { ThreadAction } from "@/lib/mail/gmail";
@@ -583,31 +584,24 @@ function Senders({ parts }: { parts: SenderPart[] }) {
 function SmartChips({ row }: { row: Row }) {
   return (
     <>
+      {(row.campaigns ?? []).slice(0, 2).map((c) => (
+        <CampaignPill key={c.id} campaign={c} />
+      ))}
       {row.draftId ? (
-        <span className="inline-flex h-5 shrink-0 items-center gap-1 rounded bg-blue-50 px-1.5 text-[11px] font-semibold text-blue-700 dark:bg-blue-950 dark:text-blue-300">
-          <PenLine className="size-3" strokeWidth={2} />
+        <span className="inline-flex h-5 shrink-0 items-center gap-1 rounded-full bg-blue-600 px-2 text-[11px] font-semibold text-white dark:bg-blue-500">
+          <PenLine className="size-3" strokeWidth={2.25} />
           Reply ready
         </span>
       ) : null}
       {row.triage?.category === "official" ? (
         <span
-          className="inline-flex h-5 shrink-0 items-center gap-1 rounded bg-amber-50 px-1.5 text-[11px] font-semibold text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+          className="inline-flex h-5 shrink-0 items-center gap-1 rounded-full bg-amber-50 px-2 text-[11px] font-semibold text-amber-800 dark:bg-amber-950 dark:text-amber-300"
           title={row.triage.reason ?? undefined}
         >
-          <Landmark className="size-3" strokeWidth={2} />
+          <Landmark className="size-3" strokeWidth={2.25} />
           Official
         </span>
       ) : null}
-      {(row.campaigns ?? []).slice(0, 2).map((c) => (
-        <span
-          key={c.id}
-          className="inline-flex h-5 max-w-40 shrink-0 items-center gap-1 rounded bg-surface-2 px-1.5 text-[11px] font-medium text-fg/80"
-          title={`Campaign: ${c.name}`}
-        >
-          <ProjectDot color={c.color} />
-          <span className="truncate">{c.name}</span>
-        </span>
-      ))}
     </>
   );
 }

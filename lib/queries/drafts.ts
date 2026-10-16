@@ -37,7 +37,19 @@ const draftColumns = () => sql`
   coalesce(
     (select aa.project_id from assistant_actions aa where aa.draft_id = d.id limit 1),
     (select aop.project_id from opportunities aop join projects ap on ap.id = aop.project_id and ap.sheet where aop.id = d.opportunity_id)
-  ) as assistant_project_id
+  ) as assistant_project_id,
+  -- The campaign the email is for: its own (assistant action or sheet row), else one the person or their organization is in.
+  (select json_build_object('id', cp.id, 'name', cp.name, 'color', cp.color)
+     from projects cp
+    where cp.sheet and not cp.archived and (
+          cp.id = (select aa.project_id from assistant_actions aa where aa.draft_id = d.id limit 1)
+          or exists (select 1 from opportunities cop where cop.project_id = cp.id
+                      and (cop.id = d.opportunity_id or cop.contact_id = d.contact_id
+                           or (c.organization_id is not null and cop.organization_id = c.organization_id)))
+          or exists (select 1 from contact_projects ccp where ccp.project_id = cp.id and ccp.contact_id = d.contact_id))
+    order by (cp.id = (select aa.project_id from assistant_actions aa where aa.draft_id = d.id limit 1)) desc nulls last,
+             exists (select 1 from opportunities cop where cop.project_id = cp.id and cop.id = d.opportunity_id) desc, cp.name
+    limit 1) as campaign
 `;
 
 const draftJoins = () => sql`

@@ -328,6 +328,8 @@ export interface EmailDraft {
    * of the assistant's actions. Null = no assistant revision flow.
    */
   assistantProjectId?: string | null;
+  /** The campaign (booking sheet) this email is for, shown as a pill on the card. */
+  campaign?: { id: string; name: string; color: string } | null;
   /** 'YYYY-MM-DD' while postponed. */
   postponedUntil: string | null;
   revisions: { at: string; note: string | null; subject: string; body: string }[];

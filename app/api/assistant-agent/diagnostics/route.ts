@@ -16,6 +16,7 @@ import { linkOrganizations } from "@/lib/queries/organizations";
 import { startOlderHistoryImport } from "@/lib/sync/backfill";
 import { triggerAccountJob } from "@/lib/sync/trigger";
 import { probeTriage } from "@/lib/mail/triage";
+import { cardInfo, draftThread } from "@/lib/approvals/card-data";
 
 /**
  * Read-only health of the mail import: per connected mailbox, its import
@@ -85,6 +86,24 @@ async function connectTimings() {
   return out;
 }
 
+/** ?timings=review: the flashcards page and the first cards' conversation and back (what /api/approvals/card returns). */
+async function reviewTimings() {
+  const time = async <T>(run: () => Promise<T>) => {
+    const start = performance.now();
+    const value = await run();
+    return { ms: Math.round(performance.now() - start), value };
+  };
+  const page = await time(() => loadPendingApprovals(new Date(), { details: true }));
+  const first = page.value.drafts.slice(0, 4);
+  const cards = await Promise.all(
+    first.map(async (d) => {
+      const [info, thread] = await Promise.all([time(() => cardInfo(d.id)), time(() => draftThread(d.id))]);
+      return { infoMs: info.ms, threadMs: thread.ms };
+    }),
+  );
+  return { pageMs: page.ms, drafts: page.value.drafts.length, mailings: page.value.mailings.length, cards };
+}
+
 /** ?timings=mail: each part of the Mail inbox page, on the real data (labels come from Gmail). */
 async function mailTimings() {
   const timed = async <T>(name: string, run: () => Promise<T>) => {
@@ -117,6 +136,8 @@ export async function GET(request: Request) {
     return Response.json(await mailTimings(), { headers: { "Cache-Control": "no-store" } });
   if (new URL(request.url).searchParams.get("timings") === "connect")
     return Response.json(await connectTimings(), { headers: { "Cache-Control": "no-store" } });
+  if (new URL(request.url).searchParams.get("timings") === "review")
+    return Response.json(await reviewTimings(), { headers: { "Cache-Control": "no-store" } });
   if (new URL(request.url).searchParams.get("timings") === "today")
     return Response.json(await todayTimings(), { headers: { "Cache-Control": "no-store" } });
   const accounts = await sql`

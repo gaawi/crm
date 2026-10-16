@@ -18,8 +18,9 @@ import { formatRelative } from "@/lib/dates";
 import type { EmailDraft } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { CardBack } from "./card-back";
-import { loadCardInfo, loadDraftThread, type CardInfo, type DraftThread } from "./card-info";
+import type { CardInfo, DraftThread } from "./card-info";
 import { MailingFace, type MailingCardData } from "./mailing-card";
+import { CampaignPill } from "@/components/campaign-pill";
 import { TheyWroteBadge } from "./they-wrote";
 import { DraftConversation } from "./thread-face";
 import { discardCampaignAction, startCampaignAction } from "@/app/(app)/approvals/actions";
@@ -39,6 +40,28 @@ type Panel = null | "edit" | "revise" | "changes" | "postpone";
 
 /** A card of the pile: one email, or a whole mailing (bulk send) approved at once. */
 type Item = { kind: "draft"; id: string; draft: EmailDraft } | { kind: "mailing"; id: string; mailing: MailingCardData };
+
+type CardPart<T> = T | { error: string };
+
+const cardRequests = new Map<string, Promise<{ info: CardPart<CardInfo>; thread: CardPart<DraftThread> }>>();
+
+/** A card's conversation and back, one request per card (shared by the preload and the flip). */
+function fetchCard(id: string): Promise<{ info: CardPart<CardInfo>; thread: CardPart<DraftThread> }> {
+  let request = cardRequests.get(id);
+  if (!request) {
+    request = fetch(`/api/approvals/card?id=${encodeURIComponent(id)}`, { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(String(response.status));
+        return (await response.json()) as { info: CardPart<CardInfo>; thread: CardPart<DraftThread> };
+      })
+      .catch(() => {
+        cardRequests.delete(id);
+        return { info: { error: "Couldn't load the contact." }, thread: { error: "Couldn't load the conversation." } };
+      });
+    cardRequests.set(id, request);
+  }
+  return request;
+}
 
 /**
  * Approvals one at a time, like flashcards: the whole email on the card in
@@ -106,14 +129,17 @@ export function Flashcards({
     };
   }, []);
 
+  // The card on screen, the one before and the next three are loaded ahead (conversation and back
+  // together), in parallel, so moving on and turning a card over never wait.
   useEffect(() => {
     if (index < 0) return;
-    for (const next of [pile[index], pile[index + 1]]) {
+    for (const next of pile.slice(Math.max(0, index - 1), index + 4)) {
       if (next?.kind !== "draft" || asked.current.has(next.id)) continue;
       asked.current.add(next.id);
-      void loadDraftThread(next.id)
-        .then((r) => setThreads((prev) => ({ ...prev, [next.id]: r.ok ? r.thread : { error: r.error } })))
-        .catch(() => setThreads((prev) => ({ ...prev, [next.id]: { error: "Couldn't load the conversation." } })));
+      void fetchCard(next.id).then((card) => {
+        setThreads((prev) => ({ ...prev, [next.id]: card.thread }));
+        setInfos((prev) => ({ ...prev, [next.id]: card.info }));
+      });
     }
   }, [pile, index]);
 
@@ -169,12 +195,7 @@ export function Flashcards({
     if (!item) return;
     const id = item.id;
     if (item.kind === "draft" && !flipped && !infos[id]) {
-      void loadCardInfo(id).then((r) =>
-        setInfos((prev) => ({
-          ...prev,
-          [id]: r.ok ? r.info : { error: r.error },
-        })),
-      );
+      void fetchCard(id).then((card) => setInfos((prev) => ({ ...prev, [id]: card.info })));
     }
     if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
       setFlipped((f) => !f);
@@ -430,7 +451,12 @@ export function Flashcards({
                       {flipped ? "Email" : "Info"}
                     </button>
                   </div>
-                  {draft.theyWrote ? <TheyWroteBadge at={draft.theyWrote.at} timezone={timezone} className="my-1" /> : null}
+                  {draft.campaign || draft.theyWrote ? (
+                    <div className="my-1 flex flex-wrap items-center gap-1.5">
+                      {draft.campaign ? <CampaignPill campaign={draft.campaign} link /> : null}
+                      {draft.theyWrote ? <TheyWroteBadge at={draft.theyWrote.at} timezone={timezone} /> : null}
+                    </div>
+                  ) : null}
                   {org && !flipped ? (
                     <p className="truncate text-[12px] text-muted">
                       <Link href={`/organizations/${org.id}`} className="font-medium text-fg/80 hover:underline">

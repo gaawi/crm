@@ -307,17 +307,7 @@ export async function listThreads(params: ThreadListParams): Promise<ThreadPage>
               order by (mp.role = 'from') desc, m.sent_at desc, mp.email
               limit 1
            ) as contact,
-           coalesce((
-             select json_agg(json_build_object('id', pr.id, 'name', pr.name, 'color', pr.color) order by pr.name)
-               from projects pr
-              where pr.sheet and not pr.archived and exists (
-                select 1 from messages m
-                  join message_participants mp on mp.message_id = m.id and mp.role in ('from', 'to', 'cc')
-                  join contact_emails ce on ce.email = mp.email
-                 where m.account_id = p.account_id and m.gmail_thread_id = p.gmail_thread_id and ${shown}
-                   and (exists (select 1 from opportunities op where op.project_id = pr.id and op.contact_id = ce.contact_id)
-                        or exists (select 1 from contact_projects cp where cp.project_id = pr.id and cp.contact_id = ce.contact_id)))
-           ), '[]') as campaigns,
+           ${threadCampaigns(sql`p.account_id`, sql`p.gmail_thread_id`, shown)} as campaigns,
            (
              select json_build_object('important', t.important, 'category', t.category, 'reason', t.reason)
                from message_triage t join messages m on m.id = t.message_id
@@ -428,6 +418,34 @@ export async function countInboxThreads(params: { accountId?: string | null; cat
        ${params.accountId ? sql`and m.account_id = ${params.accountId}` : sql``}
   `;
   return row.count;
+}
+
+/**
+ * Campaigns (booking sheets) a conversation belongs to: one of its people is
+ * in the campaign, as a row of the sheet (themselves or their organization)
+ * or as a member. JSON array of {id, name, color}, by name.
+ */
+function threadCampaigns(account: Fragment, thread: Fragment, shown: Fragment): Fragment {
+  return sql`coalesce((
+    select json_agg(json_build_object('id', pr.id, 'name', pr.name, 'color', pr.color) order by pr.name)
+      from projects pr
+     where pr.sheet and not pr.archived and exists (
+       select 1 from messages m
+         join message_participants mp on mp.message_id = m.id and mp.role in ('from', 'to', 'cc')
+         join contact_emails ce on ce.email = mp.email
+         join contacts c on c.id = ce.contact_id
+        where m.account_id = ${account} and m.gmail_thread_id = ${thread} and ${shown}
+          and (exists (select 1 from opportunities op where op.project_id = pr.id
+                        and (op.contact_id = c.id or (c.organization_id is not null and op.organization_id = c.organization_id)))
+               or exists (select 1 from contact_projects cp where cp.project_id = pr.id and cp.contact_id = c.id)))
+  ), '[]')`;
+}
+
+/** The campaigns of one conversation (thread page). */
+export async function campaignsOfThread(accountId: string, threadId: string): Promise<{ id: string; name: string; color: string }[]> {
+  const [row] = await sql<{ campaigns: { id: string; name: string; color: string }[] }[]>`
+    select ${threadCampaigns(sql`${accountId}::uuid`, sql`${threadId}`, visible("default"))} as campaigns`;
+  return row?.campaigns ?? [];
 }
 
 /** The open Approvals proposal in a conversation (a reply Claude prepared), if any. */

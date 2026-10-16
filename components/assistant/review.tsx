@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { TheyWroteBadge } from "@/components/approvals/they-wrote";
+import { CampaignPill } from "@/components/campaign-pill";
 import { useEffect, useState, useTransition } from "react";
 import { CalendarClock, Check, ChevronDown, ListTodo, Mail, MessageCircle, MessageSquareText, Pencil, Phone, Send, Trash2, X } from "lucide-react";
 import { CallButton, WhatsAppButton } from "@/components/booking/phone-actions";
@@ -172,6 +173,7 @@ export function AssistantDraftCard({
             to
           )}
         </span>
+        {draft.campaign ? <CampaignPill campaign={draft.campaign} link /> : null}
         {draft.theyWrote ? <TheyWroteBadge at={draft.theyWrote.at} /> : null}
         <PriorityBadge priority={priority} />
         {showProject ? <span className="ml-auto truncate text-xs text-subtle">{projectName}</span> : null}

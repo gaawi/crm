@@ -13,7 +13,7 @@ import { requireSession } from "@/lib/auth";
 import { env } from "@/lib/env";
 import { fetchThreadCached, userLabels, type LiveThread } from "@/lib/mail/gmail";
 import { isAccountId, isGmailId, listTitle, mailListHref, parseMailParams } from "@/lib/mail/params";
-import { openDraftInThread, storedThreadLabels } from "@/lib/mail/queries";
+import { campaignsOfThread, openDraftInThread, storedThreadLabels } from "@/lib/mail/queries";
 import { threadTriage } from "@/lib/mail/triage";
 import { buildSrcDoc } from "@/lib/mail/sanitize";
 import { getThread } from "@/lib/queries/messages";
@@ -124,7 +124,9 @@ export default async function ThreadPage({ params, searchParams }: PageProps<"/m
     (error: unknown) => ({ ok: false as const, error }),
   );
   const liveLabels = userLabels([accountId]).catch(() => []);
-  const smart = Promise.all([threadTriage(accountId, threadId), openDraftInThread(accountId, threadId)]).catch(() => [null, null] as const);
+  const smart = Promise.all([threadTriage(accountId, threadId), openDraftInThread(accountId, threadId), campaignsOfThread(accountId, threadId)]).catch(
+    () => [null, null, []] as const,
+  );
   const [chrome, own] = await Promise.all([loadMailChrome(parsed), ownAddressesForRender()]);
   const state = { ...parsed, account: chrome.account?.id ?? null };
   const account = chrome.accounts.find((a) => a.id === accountId);
@@ -151,7 +153,7 @@ export default async function ThreadPage({ params, searchParams }: PageProps<"/m
   if (!thread) notFound();
 
   // Opening marks it read from the client (ThreadView), so a prefetched thread stays unread until seen.
-  const [triage, draftId] = await smart;
+  const [triage, draftId, campaigns] = await smart;
   const labels = live ? (await liveLabels).map((l) => ({ id: l.id, name: l.name, color: l.color })) : [];
   const label = state.view === "label" ? chrome.labels.find((l) => l.id === state.label) : null;
   const backHref = mailListHref(state);
@@ -180,7 +182,9 @@ export default async function ThreadPage({ params, searchParams }: PageProps<"/m
               now={requestTime()}
               notice={notice}
               readOnly={account.monitorOnly}
-              triageBar={<TriageBar accountId={accountId} threadId={threadId} triage={triage} draftId={draftId} readOnly={account.monitorOnly} />}
+              triageBar={
+                <TriageBar accountId={accountId} threadId={threadId} triage={triage} draftId={draftId} campaigns={[...campaigns]} readOnly={account.monitorOnly} />
+              }
             />
           </div>
           <aside className="border-t border-border bg-bg px-4 pb-[calc(env(safe-area-inset-bottom)+6rem)] pt-6 md:px-6 md:pb-8 xl:overflow-y-auto xl:border-l xl:border-t-0 xl:px-4 xl:pt-4" aria-label="Contact in Vela">

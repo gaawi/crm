@@ -5,12 +5,13 @@ import { useRouter } from "next/navigation";
 import { startTransition, useState, useTransition } from "react";
 import { ArrowRight, Inbox, Layers, PenLine } from "lucide-react";
 import { setImportanceAction } from "@/app/(app)/mail/actions";
+import { CampaignPill, type CampaignRef } from "@/components/campaign-pill";
 import { useMail } from "./mail-provider";
 
 /**
- * Under a conversation's subject: where Vela's triage put it and why, a
- * one-tap correction (Vela then remembers the sender), and the reply Claude
- * prepared, if there is one.
+ * Under a conversation's subject: the campaigns it belongs to, where Vela's
+ * triage put it and why with a one-tap correction (Vela then remembers the
+ * sender), and the reply Claude prepared, if there is one.
  */
 export function TriageBar({
   accountId,
@@ -18,7 +19,9 @@ export function TriageBar({
   triage,
   draftId,
   readOnly,
+  campaigns = [],
 }: {
+  campaigns?: CampaignRef[];
   accountId: string;
   threadId: string;
   triage: { important: boolean; reason: string | null } | null;
@@ -29,7 +32,7 @@ export function TriageBar({
   const { toast } = useMail();
   const [important, setImportant] = useState(triage?.important ?? null);
   const [pending, start] = useTransition();
-  if (important === null && !draftId) return null;
+  if (important === null && !draftId && !campaigns.length) return null;
 
   const move = (next: boolean) =>
     start(async () => {
@@ -46,6 +49,9 @@ export function TriageBar({
 
   return (
     <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[13px] md:text-xs">
+      {campaigns.map((c) => (
+        <CampaignPill key={c.id} campaign={c} link size="md" />
+      ))}
       {important !== null ? (
         <span className="inline-flex min-w-0 items-center gap-1.5 text-muted">
           {important ? <Inbox className="size-3.5 shrink-0" /> : <Layers className="size-3.5 shrink-0" />}
