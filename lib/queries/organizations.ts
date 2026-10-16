@@ -273,10 +273,10 @@ export async function getRelatedHistory(
        where c.organization_id = ${organizationId} and c.id is distinct from ${contactId}::uuid
       union all
       select mp.message_id, false
-        from org, message_participants mp
-       where cardinality(org.domains) > 0
-         and split_part(mp.email, '@', 2) = any(org.domains)
-         and mp.email not in (select email from self_addresses)
+        from org
+        cross join lateral unnest(org.domains) as dom(domain)
+        join message_participants mp on split_part(mp.email, '@', 2) = dom.domain
+       where mp.email not in (select email from self_addresses)
     ),
     found as (select message_id, bool_or(mine) as mine from ids group by message_id),
     picked as (

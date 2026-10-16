@@ -219,18 +219,26 @@ export async function buildAssistantContext(now: Date = new Date()): Promise<Ass
                  (array_agg(json_build_object('date', x.sent_at, 'direction', x.direction, 'with', x.who, 'subject', x.subject)
                    order by x.sent_at desc))[1] as last
             from (
-              select distinct on (m.id) m.id, m.sent_at, m.direction, m.subject, mp.email as who
-                from message_participants mp
-                join messages m on m.id = mp.message_id
+              select distinct on (m.id) m.id, m.sent_at, m.direction, m.subject, p.email as who
+                from (
+                  -- Its other contacts (a former director, another address)…
+                  select mp.message_id, mp.email
+                    from contacts c2
+                    join contact_emails ce2 on ce2.contact_id = c2.id
+                    join message_participants mp on mp.email = ce2.email
+                   where c2.organization_id = coalesce(c.organization_id, op.organization_id) and c2.id is distinct from c.id
+                  union all
+                  -- …and anyone at its domains (through the domain index).
+                  select mp.message_id, mp.email
+                    from organizations od
+                    cross join lateral unnest(od.domains) as dom(domain)
+                    join message_participants mp on split_part(mp.email, '@', 2) = dom.domain
+                   where od.id = coalesce(c.organization_id, op.organization_id)
+                ) p
+                join messages m on m.id = p.message_id
                where not m.is_automated
-                 and coalesce(c.organization_id, op.organization_id) is not null
-                 and (c.id is null or mp.email not in (select ce3.email from contact_emails ce3 where ce3.contact_id = c.id))
-                 and (
-                   mp.email in (select ce2.email from contacts c2 join contact_emails ce2 on ce2.contact_id = c2.id
-                                 where c2.organization_id = coalesce(c.organization_id, op.organization_id) and c2.id is distinct from c.id)
-                   or (exists (select 1 from organizations od where od.id = coalesce(c.organization_id, op.organization_id) and split_part(mp.email, '@', 2) = any(od.domains))
-                       and mp.email not in (select email from self_addresses))
-                 )
+                 and p.email not in (select email from self_addresses)
+                 and (c.id is null or p.email not in (select ce3.email from contact_emails ce3 where ce3.contact_id = c.id))
                order by m.id
             ) x
         ) oh on true

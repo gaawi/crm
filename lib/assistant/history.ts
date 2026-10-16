@@ -70,10 +70,10 @@ export async function listHistory(params: URLSearchParams): Promise<{ count: num
       union
       -- An organization's correspondence also includes any address at its domains (a former director, a new one).
       select mp.message_id
-        from organizations o, message_participants mp
+        from organizations o
+        cross join lateral unnest(o.domains) as dom(domain)
+        join message_participants mp on split_part(mp.email, '@', 2) = dom.domain
        where o.id = ${organizationId ?? null}::uuid
-         and cardinality(o.domains) > 0
-         and split_part(mp.email, '@', 2) = any(o.domains)
          and mp.email not in (select email from self_addresses)
     ),
     picked as (
