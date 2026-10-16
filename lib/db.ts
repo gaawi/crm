@@ -18,17 +18,19 @@ import { env } from "@/lib/env";
  *   (The session pooler would allow pipelining but admits only ~15 clients.)
  *   With 20, Today (and the layout around it) could fill the pool and
  *   pipeline; one stuck query then poisoned its connection for the life of
- *   the instance (Today hung until the function timed out). 50 keeps a page
- *   far from the limit. (max_pipeline: 0 would forbid pipelining but also
+ *   the instance (Today hung until the function timed out). 30 keeps a page
+ *   clear of that. (max_pipeline: 0 would forbid pipelining but also
  *   breaks sql.begin, whose reservation runs in the same check.)
- * - Connections stay open 4 minutes idle: opening a TLS connection to the
- *   pooler costs ~100-200 ms, and a page opens many in parallel.
+ * - The 200 client connections are shared by every Vercel instance (pages,
+ *   cron, imports). 50 per instance kept open 4 minutes filled them on
+ *   16 Oct and pages failed with EMAXCONN, so idle connections close after
+ *   20 seconds and an instance holds at most 30.
  */
 function createClient() {
   return postgres(env.databaseUrl, {
     prepare: false,
-    max: Number(process.env.DATABASE_POOL_MAX ?? 50),
-    idle_timeout: 240,
+    max: Number(process.env.DATABASE_POOL_MAX ?? 30),
+    idle_timeout: 20,
     connect_timeout: 15,
     onnotice: () => {},
     types: {
