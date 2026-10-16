@@ -16,12 +16,19 @@ import { env } from "@/lib/env";
  *   instance may open enough client connections (cheap: the pooler admits
  *   200 and multiplexes them) that a page's parallel queries never pipeline.
  *   (The session pooler would allow pipelining but admits only ~15 clients.)
+ *   With 20, Today (and the layout around it) could fill the pool and
+ *   pipeline; one stuck query then poisoned its connection for the life of
+ *   the instance (Today hung until the function timed out). 50 keeps a page
+ *   far from the limit. (max_pipeline: 0 would forbid pipelining but also
+ *   breaks sql.begin, whose reservation runs in the same check.)
+ * - Connections stay open 4 minutes idle: opening a TLS connection to the
+ *   pooler costs ~100-200 ms, and a page opens many in parallel.
  */
 function createClient() {
   return postgres(env.databaseUrl, {
     prepare: false,
-    max: Number(process.env.DATABASE_POOL_MAX ?? 20),
-    idle_timeout: 20,
+    max: Number(process.env.DATABASE_POOL_MAX ?? 50),
+    idle_timeout: 240,
     connect_timeout: 15,
     onnotice: () => {},
     types: {
