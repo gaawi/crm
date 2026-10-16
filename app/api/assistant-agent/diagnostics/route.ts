@@ -1,4 +1,11 @@
+import { loadReviewInbox } from "@/components/assistant/review-inbox";
+import { loadPendingApprovals } from "@/lib/approvals/pending";
 import { assistantApiGuard } from "@/lib/assistant/auth";
+import { todayIn } from "@/lib/dates";
+import { getFollowUps, getUpcomingFollowUps } from "@/lib/queries/followups";
+import { recentActivity } from "@/lib/queries/messages";
+import { getOverviewCounts } from "@/lib/queries/stats";
+import { contactCampaigns, listCampaignRefs } from "@/lib/queries/today";
 import { sql } from "@/lib/db";
 import { env } from "@/lib/env";
 import { linkOrganizations } from "@/lib/queries/organizations";
@@ -19,9 +26,52 @@ import { triggerAccountJob } from "@/lib/sync/trigger";
  *   that mailbox's mail older than its oldest stored email (read-only on Gmail).
  */
 
+/** ?timings=today: how long each part of the Today page takes on the real data (the same calls the page makes). */
+async function todayTimings() {
+  const today = todayIn(env.timezone);
+  const timed = async <T>(name: string, run: () => Promise<T>) => {
+    const start = performance.now();
+    const value = await run();
+    return { name, ms: Math.round(performance.now() - start), value };
+  };
+  const total = performance.now();
+  const parts = await Promise.all([
+    timed("followUps", () => getFollowUps({ today, limit: 30 })),
+    timed("upcoming", () => getUpcomingFollowUps({ today, days: 7, limit: 8 })),
+    timed("recentActivity", () => recentActivity(12)),
+    timed("overviewCounts", () => getOverviewCounts()),
+    timed("reviewInbox", () => loadReviewInbox(today)),
+    timed("campaignRefs", () => listCampaignRefs()),
+    timed("pendingApprovals", () => loadPendingApprovals()),
+  ]);
+  const parallelMs = Math.round(performance.now() - total);
+  const ids = [
+    ...(parts[0].value as Awaited<ReturnType<typeof getFollowUps>>).due.map((c) => c.id),
+    ...(parts[1].value as Awaited<ReturnType<typeof getUpcomingFollowUps>>).map((c) => c.id),
+  ];
+  const memberships = await timed("contactCampaigns", () => contactCampaigns(ids));
+  // Each part alone, one after the other (no contention).
+  const alone = [];
+  for (const [name, run] of [
+    ["followUps", () => getFollowUps({ today, limit: 30 })],
+    ["upcoming", () => getUpcomingFollowUps({ today, days: 7, limit: 8 })],
+    ["recentActivity", () => recentActivity(12)],
+    ["overviewCounts", () => getOverviewCounts()],
+    ["reviewInbox", () => loadReviewInbox(today)],
+    ["campaignRefs", () => listCampaignRefs()],
+    ["pendingApprovals", () => loadPendingApprovals()],
+  ] as const) {
+    const t = await timed(name, run as () => Promise<unknown>);
+    alone.push({ name, ms: t.ms });
+  }
+  return { parallelMs, parallel: parts.map((p) => ({ name: p.name, ms: p.ms })), contactCampaignsMs: memberships.ms, alone };
+}
+
 export async function GET(request: Request) {
   const denied = await assistantApiGuard(request);
   if (denied) return denied;
+  if (new URL(request.url).searchParams.get("timings") === "today")
+    return Response.json(await todayTimings(), { headers: { "Cache-Control": "no-store" } });
   const accounts = await sql`
     select a.email, a.status, a.monitor_only, a.backfill_status, a.backfill_query, a.backfill_imported, a.backfill_scanned,
            a.backfill_estimate, a.backfill_started_at, a.backfill_completed_at, a.backfill_page_token is not null as has_page_token,
