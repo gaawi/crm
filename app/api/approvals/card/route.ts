@@ -1,5 +1,5 @@
 import { type NextRequest } from "next/server";
-import { cardInfo, draftThread } from "@/lib/approvals/card-data";
+import { cardFor } from "@/lib/approvals/card-data";
 import { assertSession, UnauthorizedError } from "@/lib/auth";
 
 /**
@@ -17,12 +17,5 @@ export async function GET(request: NextRequest) {
   }
   const id = request.nextUrl.searchParams.get("id") ?? "";
   if (!/^[0-9a-f-]{36}$/i.test(id)) return Response.json({ error: "Invalid card" }, { status: 400 });
-  const [info, thread] = await Promise.all([cardInfo(id), draftThread(id)]);
-  return Response.json(
-    {
-      info: info.ok ? info.info : { error: info.error },
-      thread: thread.ok ? thread.thread : { error: thread.error },
-    },
-    { headers: { "Cache-Control": "private, no-store" } },
-  );
+  return Response.json(await cardFor(id), { headers: { "Cache-Control": "private, no-store" } });
 }

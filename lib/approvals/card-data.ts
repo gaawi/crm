@@ -243,3 +243,9 @@ export async function draftThread(draftId: string): Promise<{ ok: true; thread: 
     },
   };
 }
+
+/** Both parts of a card, as /api/approvals/card returns them (errors in place of a part that could not load). */
+export async function cardFor(draftId: string): Promise<{ info: CardInfo | { error: string }; thread: DraftThread | { error: string } }> {
+  const [info, thread] = await Promise.all([cardInfo(draftId), draftThread(draftId)]);
+  return { info: info.ok ? info.info : { error: info.error }, thread: thread.ok ? thread.thread : { error: thread.error } };
+}

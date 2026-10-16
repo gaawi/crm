@@ -75,12 +75,15 @@ export function Flashcards({
   timezone,
   today,
   startId,
+  initialCards = {},
 }: {
   drafts: EmailDraft[];
   mailings?: MailingCardData[];
   timezone: string;
   today: string;
   startId?: string | null;
+  /** Cards rendered with the page (the first two): their conversation and back are already here. */
+  initialCards?: Record<string, { info: CardPart<CardInfo>; thread: CardPart<DraftThread> }>;
 }) {
   const claude = useClaudeEnabled();
   const [done, setDone] = useState<Record<string, string>>({});
@@ -109,10 +112,14 @@ export function Flashcards({
   // The back of the card (contact card, goal, latest emails), loaded the first time it is turned over.
   const [flipped, setFlipped] = useState(false);
   const [turning, setTurning] = useState(false);
-  const [infos, setInfos] = useState<Record<string, CardInfo | { error: string }>>({});
+  const [infos, setInfos] = useState<Record<string, CardInfo | { error: string }>>(() =>
+    Object.fromEntries(Object.entries(initialCards).map(([id, c]) => [id, c.info])),
+  );
   // The conversation on the front, loaded for the card on screen and the next one.
-  const [threads, setThreads] = useState<Record<string, DraftThread | { error: string }>>({});
-  const asked = useRef(new Set<string>());
+  const [threads, setThreads] = useState<Record<string, DraftThread | { error: string }>>(() =>
+    Object.fromEntries(Object.entries(initialCards).map(([id, c]) => [id, c.thread])),
+  );
+  const asked = useRef(new Set<string>(Object.keys(initialCards)));
   const cardRef = useRef<HTMLElement>(null);
   const toTop = () => cardRef.current?.scrollTo({ top: 0 });
 

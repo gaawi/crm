@@ -20,6 +20,8 @@ export function ApprovalsBlock({ pending }: { pending: PendingApprovals }) {
       {total ? (
         <Link
           href="/approvals/review"
+          // Downloaded in full while Today is open: the cards open at once.
+          prefetch
           className="flex items-center gap-3 rounded-2xl bg-brand px-4 py-4 text-white shadow-sm active:opacity-90 md:rounded-xl md:py-3.5 md:hover:opacity-95"
         >
           <Layers className="size-6 shrink-0" aria-hidden />

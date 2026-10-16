@@ -77,6 +77,7 @@ export function SideNav({ approvals = 0, mail = 0 }: { approvals?: number; mail?
           <Link
             key={href}
             href={href}
+            prefetch={href === "/" ? true : undefined}
             aria-current={active ? "page" : undefined}
             className={cn(
               "flex h-8 items-center gap-2.5 rounded-md px-2.5 text-sm transition-colors",
@@ -117,6 +118,8 @@ export function TabBar({ approvals = 0, mail = 0 }: { approvals?: number; mail?:
             <li key={href}>
               <Link
                 href={href}
+                // Today is downloaded in full ahead of time (kept 5 minutes): it opens at once from anywhere.
+                prefetch={href === "/" ? true : undefined}
                 aria-current={active ? "page" : undefined}
                 className={cn(
                   "relative flex h-full flex-col items-center justify-center gap-0.5 text-[10px] font-medium",
