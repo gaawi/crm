@@ -15,6 +15,7 @@ import { env } from "@/lib/env";
 import { linkOrganizations } from "@/lib/queries/organizations";
 import { startOlderHistoryImport } from "@/lib/sync/backfill";
 import { triggerAccountJob } from "@/lib/sync/trigger";
+import { probeTriage } from "@/lib/mail/triage";
 
 /**
  * Read-only health of the mail import: per connected mailbox, its import
@@ -146,6 +147,7 @@ export async function GET(request: Request) {
       limitMb: env.dbSizeLimitMb,
       skipCategories: env.skipCategories,
       backfillQuery: env.backfillQuery ?? null,
+      claude: { enabled: env.claudeEnabled, inbox: env.claudeInbox, model: env.claudeEnabled ? env.anthropicModel : null },
       tables,
       accounts,
     },
@@ -158,6 +160,8 @@ export async function POST(request: Request) {
   if (denied) return denied;
   const body = (await request.json().catch(() => null)) as { action?: string; email?: string } | null;
   if (body?.action === "link-organizations") return Response.json(await linkOrganizations(), { headers: { "Cache-Control": "no-store" } });
+  // One classification of a fictional email, to check the smart inbox reaches Claude (no data is written).
+  if (body?.action === "triage-probe") return Response.json(await probeTriage(), { headers: { "Cache-Control": "no-store" } });
   if (body?.action === "import-older-history" && body.email) {
     const [account] = await sql<{ id: string }[]>`select id from gmail_accounts where lower(email) = lower(${body.email}) and status = 'active'`;
     if (!account) return Response.json({ error: "No active mailbox with that address." }, { status: 404 });
