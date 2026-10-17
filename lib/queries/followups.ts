@@ -90,3 +90,55 @@ export async function getUpcomingFollowUps(options: { today: string; days: numbe
      limit ${clampLimit(options.limit, 20, 200)}
   `;
 }
+
+/** One reminder for a later day: a contact's follow-up or a campaign row's / goal's. */
+export interface ScheduledItem {
+  kind: "contact" | "goal";
+  id: string;
+  /** 'YYYY-MM-DD' */
+  date: string;
+  /** What to do (the follow-up note, or the goal's next step). */
+  note: string | null;
+  name: string;
+  organization: string | null;
+  contactId: string | null;
+  opportunityId: string | null;
+  campaign: { id: string; name: string; color: string } | null;
+}
+
+/**
+ * Everything scheduled after today, soonest first (Today's "Scheduled"):
+ * contacts' follow-ups and open goals' (campaign rows') follow-up dates, with
+ * the campaign they belong to, so a "write to us in February" is never lost.
+ */
+export async function getScheduled(options: { today: string; limit?: number }): Promise<ScheduledItem[]> {
+  const limit = clampLimit(options.limit, 60, 300);
+  return sql<ScheduledItem[]>`
+    select * from (
+      select 'contact' as kind, c.id, c.follow_up_at::text as date, c.follow_up_note as note,
+             coalesce(nullif(btrim(c.name), ''), (select ce.email from contact_emails ce where ce.contact_id = c.id order by ce.is_primary desc limit 1), 'Contact') as name,
+             o.name as organization, c.id as contact_id, null::uuid as opportunity_id,
+             (select json_build_object('id', p.id, 'name', p.name, 'color', p.color) from projects p
+               where p.sheet and not p.archived and (
+                     exists (select 1 from opportunities op where op.project_id = p.id
+                              and (op.contact_id = c.id or (c.organization_id is not null and op.organization_id = c.organization_id)))
+                     or exists (select 1 from contact_projects cp where cp.project_id = p.id and cp.contact_id = c.id))
+               order by p.name limit 1) as campaign
+        from contacts c
+        left join organizations o on o.id = c.organization_id
+       where c.status <> 'archived' and c.follow_up_at > ${options.today}::date
+      union all
+      select 'goal', op.id, op.follow_up_at::text, op.next_step,
+             coalesce(oc.name, oo.name, op.title), case when oc.name is not null then oo.name end,
+             op.contact_id, op.id,
+             case when p.sheet and not p.archived then json_build_object('id', p.id, 'name', p.name, 'color', p.color) end
+        from opportunities op
+        left join contacts oc on oc.id = op.contact_id
+        left join organizations oo on oo.id = coalesce(op.organization_id, oc.organization_id)
+        left join projects p on p.id = op.project_id
+       where op.stage = any(${OPEN_STAGES}::text[]) and op.follow_up_at > ${options.today}::date
+    ) s
+    order by s.date, s.name
+    limit ${limit}
+  `;
+}

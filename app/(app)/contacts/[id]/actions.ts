@@ -159,6 +159,19 @@ export async function setFollowUpPreset(contactId: string, preset: "1w" | "2w" |
   refresh();
 }
 
+/** "Remind me in February": a follow-up on a given day with what to do, from the mail CRM panel. */
+export async function scheduleFollowUp(contactId: string, date: string, note: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  await requireSession();
+  const id = parseId(contactId);
+  const day = optionalDateSchema.safeParse(date);
+  const text = shortText.safeParse(note);
+  if (!day.success || !day.data || day.data <= todayIn(env.timezone)) return { ok: false, error: "Pick a day after today." };
+  if (!text.success) return { ok: false, error: "The note is too long (300 characters at most)." };
+  await updateContact(id, { followUpAt: day.data, followUpNote: text.data || null });
+  refresh();
+  return { ok: true };
+}
+
 export async function clearFollowUp(contactId: string): Promise<void> {
   await requireSession();
   await updateContact(parseId(contactId), { followUpAt: null, followUpNote: null });

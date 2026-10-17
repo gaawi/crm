@@ -12,6 +12,7 @@ import { listOpportunities } from "@/lib/queries/opportunities";
 import type { Address, Contact, Opportunity } from "@/lib/types";
 import { cn, initials } from "@/lib/utils";
 import { ClaudePanel } from "./claude-panel";
+import { RemindLater } from "./remind-later";
 import type { ComposeInit } from "./mail-provider";
 
 const MAX_PEOPLE = 6;
@@ -150,6 +151,8 @@ function ContactCard({ contact, deals, today, returnPath }: { contact: Contact; 
           </form>
         ) : null}
       </div>
+
+      <RemindLater contactId={contact.id} today={today} />
 
       {deals.length ? (
         <ul className="border-t border-border px-4 py-2 md:px-3">

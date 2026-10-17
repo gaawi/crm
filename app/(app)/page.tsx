@@ -7,6 +7,7 @@ import { loadPendingApprovals } from "@/lib/approvals/pending";
 import { PhoneActions } from "@/components/booking/phone-actions";
 import { ContactRow, RowList } from "@/components/contact-row";
 import { CampaignFilter } from "@/components/today/campaign-filter";
+import { ScheduledBlock } from "@/components/today/scheduled";
 import { NextActionIcon } from "@/components/goals";
 import { StageBadge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
@@ -15,7 +16,7 @@ import { telHref } from "@/lib/booking/phone";
 import { goalLabel, nextStepParts, stageLabel } from "@/lib/constants";
 import { formatDue, formatRelative, todayIn } from "@/lib/dates";
 import { env } from "@/lib/env";
-import { getFollowUps, getUpcomingFollowUps } from "@/lib/queries/followups";
+import { getFollowUps, getScheduled } from "@/lib/queries/followups";
 import { recentActivity } from "@/lib/queries/messages";
 import { getOverviewCounts } from "@/lib/queries/stats";
 import { contactCampaigns, listCampaignRefs } from "@/lib/queries/today";
@@ -58,9 +59,9 @@ function ContactPhoneActions({ contact, timezone }: { contact: ContactSummary; t
 export default async function TodayPage({ searchParams }: PageProps<"/">) {
   const timezone = env.timezone;
   const today = todayIn(timezone);
-  const [allFollowUps, allUpcoming, allActivity, counts, allReview, campaigns, pending] = await Promise.all([
+  const [allFollowUps, allScheduled, allActivity, counts, allReview, campaigns, pending] = await Promise.all([
     getFollowUps({ today, limit: 30 }),
-    getUpcomingFollowUps({ today, days: 7, limit: 8 }),
+    getScheduled({ today, limit: 80 }),
     recentActivity(12),
     getOverviewCounts(),
     loadReviewInbox(today),
@@ -73,7 +74,7 @@ export default async function TodayPage({ searchParams }: PageProps<"/">) {
   const campaign = campaigns.find((c) => c.id === requested) ?? null;
   const selected = campaign?.id ?? null;
   const memberships = await contactCampaigns([
-    ...[...allFollowUps.due, ...allFollowUps.needsReply, ...allFollowUps.awaitingReply, ...allUpcoming].map((c) => c.id),
+    ...[...allFollowUps.due, ...allFollowUps.needsReply, ...allFollowUps.awaitingReply].map((c) => c.id),
     ...allActivity.flatMap((m) => (m.contact ? [m.contact.id] : [])),
   ]);
   const ofContact = (id: string | undefined) => (id ? memberships.get(id) : undefined);
@@ -97,7 +98,7 @@ export default async function TodayPage({ searchParams }: PageProps<"/">) {
     needsReply: allFollowUps.needsReply.filter((c) => inCampaign(ofContact(c.id), selected)),
     awaitingReply: allFollowUps.awaitingReply.filter((c) => inCampaign(ofContact(c.id), selected)),
   };
-  const upcoming = allUpcoming.filter((c) => inCampaign(ofContact(c.id), selected));
+  const scheduled = allScheduled.filter((item) => inCampaign(item.campaign ? [item.campaign.id] : undefined, selected));
   const activity = allActivity.filter((m) => inCampaign(ofContact(m.contact?.id), selected));
 
   const dateLabel = new Intl.DateTimeFormat("en-US", { timeZone: timezone, weekday: "long", month: "long", day: "numeric" }).format(new Date());
@@ -285,16 +286,7 @@ export default async function TodayPage({ searchParams }: PageProps<"/">) {
         </div>
 
         <aside className="flex flex-col gap-8">
-          {upcoming.length ? (
-            <section>
-              <SectionTitle>Coming up</SectionTitle>
-              <RowList>
-                {upcoming.map((c) => (
-                  <ContactRow key={c.id} contact={c} timezone={timezone} today={today} meta="follow_up" note={c.followUpNote ?? undefined} />
-                ))}
-              </RowList>
-            </section>
-          ) : null}
+          <ScheduledBlock items={scheduled} today={today} />
 
           <section>
             <SectionTitle>Recent email</SectionTitle>
