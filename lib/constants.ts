@@ -250,6 +250,40 @@ export const FREE_MAIL_DOMAINS = new Set([
   "naver.com",
 ]);
 
+/**
+ * Personal mailboxes (webmail, internet providers, platform relays): never an
+ * organization's domain. Someone at a concert series writing from
+ * optonline.net must not make every optonline.net user a member of it.
+ * Brands that are only mail providers match at any country domain
+ * (yahoo.es, gmx.at); short or common words (home, post, centrum, online)
+ * only as their exact provider domains, since centrum.org or home.org are
+ * real organizations.
+ */
+const PERSONAL_MAIL_BRANDS =
+  /^(?:gmail|googlemail|yahoo|ymail|rocketmail|hotmail|outlook|windowslive|msn|aol|icloud|gmx|yandex|protonmail|tutanota|fastmail|zoho|qq|126|163|139|sina|sohu|aliyun|naver|daum|hanmail|rediffmail|libero|virgilio|tiscali|fastwebnet|laposte|wanadoo|numericable|telefonica|movistar|telenet|skynet|ziggo|kpnmail|xs4all|bluewin|freenet|arcor|t-online|telia|tele2|comhem|bredband|abv|seznam|btinternet|btopenworld|talktalk|virginmedia|ntlworld|blueyonder|bigpond|optusnet|iinet|sympatico|videotron|cogeco|prodigy|comcast|verizon|sbcglobal|bellsouth|pacbell|swbell|ameritech|earthlink|mindspring|juno|netzero|optonline|roadrunner|frontiernet|windstream|centurylink|embarqmail|qwest|cableone|suddenlink|mediacombb)\.(?:com|net|[a-z]{2}|co\.[a-z]{2}|com\.[a-z]{2}|ne\.jp|or\.jp)$/;
+
+const PERSONAL_MAIL_DOMAINS = new Set(
+  (
+    "live.com live.co.uk live.ca live.fr live.nl live.be live.it live.de live.ie live.se live.dk live.no live.at live.com.au live.com.mx live.com.ar live.cl " +
+    "email.com inbox.com inbox.ru yeah.net nate.com alice.it tin.it terra.com terra.com.br terra.es ya.ru orange.net orange.es neuf.fr bbox.fr " +
+    "scarlet.be planet.nl home.nl hetnet.nl chello.nl chello.at hispeed.ch sunrise.ch aon.at online.no online.de sapo.pt centrum.cz centrum.sk post.cz " +
+    "wp.pl o2.pl onet.pl onet.eu op.pl interia.pl tlen.pl sky.com tpg.com.au xtra.co.nz rogers.com shaw.ca telus.net uol.com.br bol.com.br ig.com.br " +
+    "globo.com flash.net cox.net charter.net spectrum.net rr.com twc.com frontier.com q.com tds.net rcn.com sonic.net snet.net vineyard.net " +
+    "optimum.net facebook.com mail.ru mail.bg mail.tele.dk"
+  ).split(" "),
+);
+
+/** True for webmail and internet-provider domains (FREE_MAIL_DOMAINS and the lists above). */
+export function isPersonalMailDomain(domain: string): boolean {
+  const value = domain.trim().toLowerCase();
+  return (
+    FREE_MAIL_DOMAINS.has(value) ||
+    PERSONAL_MAIL_DOMAINS.has(value) ||
+    PERSONAL_MAIL_BRANDS.test(value) ||
+    /^[a-z0-9-]+\.rr\.com$/.test(value)
+  );
+}
+
 /** Outbound messages with more recipients than this never auto-create contacts. */
 export const MAX_RECIPIENTS_FOR_AUTO_CONTACTS = 20;
 

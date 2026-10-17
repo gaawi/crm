@@ -1,6 +1,6 @@
 import "server-only";
 import { sql, type Tx } from "@/lib/db";
-import { FREE_MAIL_DOMAINS } from "@/lib/constants";
+import { isPersonalMailDomain } from "@/lib/constants";
 import type { ParsedMessage } from "@/lib/gmail/types";
 import { participantRows, selectContactCandidates } from "@/lib/sync/rules";
 import { domainOf, errorMessage, truncate } from "@/lib/utils";
@@ -112,7 +112,7 @@ export async function ingestMessages(
       const names = emails.map((email) => candidates.get(email) ?? null);
       const domains = emails.map((email) => {
         const domain = domainOf(email);
-        return domain && !FREE_MAIL_DOMAINS.has(domain) ? domain : null;
+        return domain && !isPersonalMailDomain(domain) ? domain : null;
       });
 
       await tx`select pg_advisory_xact_lock(hashtext('crm:contact-create'))`;

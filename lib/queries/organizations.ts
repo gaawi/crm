@@ -1,7 +1,7 @@
 import "server-only";
 import { sql } from "@/lib/db";
 import type { ContactSummary, EmailMessage, Organization, OrganizationKind } from "@/lib/types";
-import { FREE_MAIL_DOMAINS } from "@/lib/constants";
+import { isPersonalMailDomain } from "@/lib/constants";
 import { normalizeTag } from "@/lib/utils";
 import {
   clampLimit,
@@ -306,7 +306,7 @@ export function normalizeDomains(values: string[]): string[] {
       .replace(/^[^@]*@/, "")
       .replace(/^www\./, "");
     value = value.split(/[/?#:\s]/)[0];
-    if (/^[a-z0-9.-]+\.[a-z]{2,}$/.test(value) && !FREE_MAIL_DOMAINS.has(value)) out.add(value);
+    if (/^[a-z0-9.-]+\.[a-z]{2,}$/.test(value) && !isPersonalMailDomain(value)) out.add(value);
   }
   return [...out];
 }
