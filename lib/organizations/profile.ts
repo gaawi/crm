@@ -83,6 +83,99 @@ export const artistSchema = z.object({
   date: optText(60),
 });
 
+export const FIT_LEVELS = ["high", "medium", "low"] as const;
+export type FitLevel = (typeof FIT_LEVELS)[number];
+
+export const RELATIONSHIP_STATUSES = ["none", "contacted", "replied", "interested", "in_conversation", "declined", "booked"] as const;
+export type RelationshipStatus = (typeof RELATIONSHIP_STATUSES)[number];
+
+export const PERSON_RELATIONS = ["decision", "programming", "talked", "primary", "admin", "other"] as const;
+export type PersonRelation = (typeof PERSON_RELATIONS)[number];
+
+const SIGNAL_VALUES = ["yes", "no", "unknown"] as const;
+
+/** An enum value, or undefined: anything else is dropped rather than failing the profile. */
+const tolerantEnum = <T extends readonly [string, ...string[]]>(values: T) =>
+  z
+    .string()
+    .trim()
+    .toLowerCase()
+    .nullish()
+    .transform((v) => ((values as readonly string[]).includes(v ?? "") ? (v as T[number]) : undefined))
+    .optional();
+
+/** A date Date.parse understands, stored as YYYY-MM-DD; anything else is dropped. */
+const tolerantDate = z
+  .string()
+  .trim()
+  .max(40)
+  .nullish()
+  .transform((v) => (v && !Number.isNaN(Date.parse(v)) ? new Date(v).toISOString().slice(0, 10) : undefined))
+  .optional();
+
+/**
+ * Booking analysis for the brand the campaign sells (CreArtBox in the USA,
+ * ADAR in Europe): how well they fit, whom to pitch, where the relationship
+ * stands and what to do next. Facts come from the sources; `fitReasons`,
+ * `program` and `nextStep` are judgments and read as such. Nothing about fees,
+ * budgets or availability unless the organization published it.
+ */
+export const bookingSchema = z.object({
+  /** "CreArtBox" or "ADAR". */
+  brand: optText(40),
+  fit: tolerantEnum(FIT_LEVELS),
+  fitReasons: optText(1500),
+  /** What their programming shows: chamber music, international ensembles, contemporary music, multidisciplinary work, visuals. */
+  signals: z
+    .object({
+      chamberMusic: tolerantEnum(SIGNAL_VALUES),
+      international: tolerantEnum(SIGNAL_VALUES),
+      contemporary: tolerantEnum(SIGNAL_VALUES),
+      multidisciplinary: tolerantEnum(SIGNAL_VALUES),
+      visual: tolerantEnum(SIGNAL_VALUES),
+    })
+    .nullish()
+    .transform((v) => v ?? undefined)
+    .optional(),
+  /** Groups they presented that are close to us. */
+  similarArtists: optList(text(160), 12),
+  /** The program of ours that could fit, and why. */
+  program: optText(800),
+  /** Who should receive the proposal. */
+  pitchTo: z
+    .object({ name: text(200), role: optText(200), email: optText(320), why: optText(400) })
+    .nullish()
+    .transform((v) => v ?? undefined)
+    .optional(),
+  /** The season they are planning now, deadlines, calls for artists. */
+  season: optText(800),
+  /** What a personal email could mention. */
+  emailHooks: optList(text(300), 8),
+  relationship: z
+    .object({
+      status: tolerantEnum(RELATIONSHIP_STATUSES),
+      /** Our last email to them. */
+      lastSent: tolerantDate,
+      /** Their last email to us. */
+      lastReceived: tolerantDate,
+      /** Who we wrote with, what we proposed, what they answered (quoted when it matters). */
+      summary: optText(2000),
+      /** "them": we wait for their answer; "us": they wait for ours. */
+      waitingOn: tolerantEnum(["them", "us", "none"] as const),
+      /** Dates or promises they made ("write again in February"). */
+      commitments: optList(text(300), 8),
+    })
+    .nullish()
+    .transform((v) => v ?? undefined)
+    .optional(),
+  nextStep: optText(500),
+  /** What could not be confirmed and still needs checking. */
+  pending: optList(text(300), 12),
+  /** When the facts were last checked against the sources. */
+  verifiedAt: tolerantDate,
+});
+export type BookingAnalysis = z.output<typeof bookingSchema>;
+
 export const MAX_TAGLINE = 120;
 
 export const orgProfileSchema = z.object({
@@ -133,9 +226,21 @@ export const orgProfileSchema = z.object({
         .or(z.literal(""))
         .transform((v) => (v ? v.toLowerCase() : undefined))
         .optional(),
+      phone: optText(60),
+      /** decision: books the artists; programming: plans the season; talked: we have corresponded; primary; admin; other. */
+      relation: tolerantEnum(PERSON_RELATIONS),
+      /** Their photo from an official or professional page (https). */
+      photo: tolerantHttps,
+      /** Their page on the organization's site. */
+      profileUrl: tolerantHttps,
+      linkedin: tolerantHttps,
     }),
     20,
   ),
+  booking: bookingSchema
+    .nullish()
+    .transform((v) => v ?? undefined)
+    .optional(),
   /** The organization's logo from its official site (https). Anything else is dropped rather than failing the profile. */
   logo: tolerantHttps,
   images: optList(z.object({ url: httpsUrl, caption: optText(300), source: optText(2048) }), MAX_PROFILE_IMAGES),

@@ -3,8 +3,13 @@
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import {
+  ArrowRight,
   Building2,
   CalendarDays,
+  CircleHelp,
+  Handshake,
+  Link2,
+  Phone,
   ChevronRight,
   ExternalLink,
   Info,
@@ -29,8 +34,12 @@ import {
   profileTagline,
   profileTaglineParts,
   venueMapsUrl,
+  type BookingAnalysis,
+  type FitLevel,
   type OrgProfile,
   type OrgProfileOwner,
+  type PersonRelation,
+  type RelationshipStatus,
   type ProfileKind,
 } from "@/lib/organizations/profile";
 import { OrgLogo } from "@/components/organizations/org-logo";
@@ -139,6 +148,168 @@ function Section({ title, icon: Icon, children }: { title: string; icon?: typeof
       </h4>
       {children}
     </section>
+  );
+}
+
+const FIT_LABEL: Record<FitLevel, string> = { high: "High fit", medium: "Medium fit", low: "Low fit" };
+const FIT_CLASS: Record<FitLevel, string> = {
+  high: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+  medium: "bg-amber-500/15 text-amber-700 dark:text-amber-300",
+  low: "bg-surface-2 text-muted",
+};
+const STATUS_LABEL: Record<RelationshipStatus, string> = {
+  none: "Not contacted yet",
+  contacted: "Contacted, no answer",
+  replied: "They replied",
+  interested: "Interested",
+  in_conversation: "In conversation",
+  declined: "Declined",
+  booked: "Booked",
+};
+const RELATION_LABEL: Record<PersonRelation, string> = {
+  decision: "Books the artists",
+  programming: "Programming",
+  talked: "We've written",
+  primary: "Main contact",
+  admin: "Administration",
+  other: "",
+};
+const SIGNAL_LABEL: [keyof NonNullable<BookingAnalysis["signals"]>, string][] = [
+  ["chamberMusic", "Chamber music"],
+  ["international", "International ensembles"],
+  ["contemporary", "Contemporary music"],
+  ["multidisciplinary", "Multidisciplinary"],
+  ["visual", "Visuals"],
+];
+
+function shortDate(iso: string | undefined): string | null {
+  if (!iso) return null;
+  return new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+}
+
+/** Booking at a glance: fit, where the relationship stands, the next step, whom to pitch and what to offer. */
+function BookingBlock({ booking: b }: { booking: BookingAnalysis }) {
+  const rel = b.relationship;
+  const signals = SIGNAL_LABEL.filter(([key]) => b.signals?.[key] && b.signals[key] !== "unknown");
+  return (
+    <div data-testid="org-booking" className="flex flex-col gap-3 rounded-lg border border-border p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <h4 className="flex items-center gap-1.5 text-[13px] font-semibold uppercase tracking-wide text-muted md:text-[11px]">
+          <Handshake className="size-3.5" strokeWidth={2} aria-hidden />
+          Booking{b.brand ? ` · ${b.brand}` : ""}
+        </h4>
+        {b.fit ? <span className={cn("rounded-full px-2 py-0.5 text-[12px] font-semibold md:text-[11px]", FIT_CLASS[b.fit])}>{FIT_LABEL[b.fit]}</span> : null}
+        {rel?.status ? <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[12px] text-fg md:text-[11px]">{STATUS_LABEL[rel.status]}</span> : null}
+        {rel?.waitingOn === "them" ? <span className="text-[12px] text-subtle md:text-[11px]">waiting for their answer</span> : null}
+        {rel?.waitingOn === "us" ? <span className="text-[12px] font-medium text-amber-700 dark:text-amber-300 md:text-[11px]">they wait for us</span> : null}
+      </div>
+
+      {b.nextStep ? (
+        <p className="flex items-start gap-2 rounded-md bg-brand/10 px-3 py-2 text-[15px] font-medium text-fg md:text-sm">
+          <ArrowRight className="mt-0.5 size-4 shrink-0 text-brand" strokeWidth={2} aria-hidden />
+          <span>{b.nextStep}</span>
+        </p>
+      ) : null}
+
+      {rel && (rel.summary || rel.lastSent || rel.lastReceived) ? (
+        <div className="flex flex-col gap-1">
+          <p className="text-[13px] text-muted md:text-xs">
+            {[rel.lastSent ? `We wrote ${shortDate(rel.lastSent)}` : null, rel.lastReceived ? `they wrote ${shortDate(rel.lastReceived)}` : null]
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
+          {rel.summary ? <p className="prose-plain text-[15px] leading-relaxed text-fg md:text-sm">{rel.summary}</p> : null}
+          {rel.commitments?.length ? (
+            <ul className="flex list-disc flex-col gap-0.5 pl-5 text-[15px] text-fg marker:text-subtle md:text-sm">
+              {rel.commitments.map((c, i) => (
+                <li key={i}>{c}</li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
+
+      {b.fitReasons ? <p className="prose-plain text-[15px] leading-relaxed text-fg md:text-sm">{b.fitReasons}</p> : null}
+      {signals.length ? (
+        <ul className="flex flex-wrap gap-1.5">
+          {signals.map(([key, label]) => (
+            <li
+              key={key}
+              className={cn(
+                "rounded-full px-2 py-0.5 text-[12px] md:text-[11px]",
+                b.signals?.[key] === "yes" ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-surface-2 text-subtle line-through",
+              )}
+            >
+              {label}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {b.program || b.pitchTo ? (
+        <dl className="grid gap-2 text-[15px] md:grid-cols-[7rem_minmax(0,1fr)] md:text-sm">
+          {b.program ? (
+            <>
+              <dt className="text-muted">What to offer</dt>
+              <dd className="prose-plain text-fg">{b.program}</dd>
+            </>
+          ) : null}
+          {b.pitchTo ? (
+            <>
+              <dt className="text-muted">Pitch to</dt>
+              <dd className="text-fg">
+                <span className="font-medium">{b.pitchTo.name}</span>
+                {b.pitchTo.role ? <span className="text-muted"> · {b.pitchTo.role}</span> : null}
+                {b.pitchTo.email ? (
+                  <a href={`mailto:${b.pitchTo.email}`} className="ml-1 text-muted hover:text-fg hover:underline">
+                    {b.pitchTo.email}
+                  </a>
+                ) : null}
+                {b.pitchTo.why ? <span className="block text-[13px] text-muted md:text-xs">{b.pitchTo.why}</span> : null}
+              </dd>
+            </>
+          ) : null}
+          {b.season ? (
+            <>
+              <dt className="text-muted">Season</dt>
+              <dd className="prose-plain text-fg">{b.season}</dd>
+            </>
+          ) : null}
+          {b.similarArtists?.length ? (
+            <>
+              <dt className="text-muted">Similar artists</dt>
+              <dd className="text-fg">{b.similarArtists.join(", ")}</dd>
+            </>
+          ) : null}
+        </dl>
+      ) : null}
+
+      {b.emailHooks?.length ? (
+        <div className="flex flex-col gap-1">
+          <p className="text-[13px] text-muted md:text-xs">For a personal email</p>
+          <ul className="flex list-disc flex-col gap-0.5 pl-5 text-[15px] text-fg marker:text-subtle md:text-sm">
+            {b.emailHooks.map((h, i) => (
+              <li key={i}>{h}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {b.pending?.length ? (
+        <div className="flex flex-col gap-1 rounded-md bg-surface-2 px-3 py-2">
+          <p className="flex items-center gap-1.5 text-[13px] text-muted md:text-xs">
+            <CircleHelp className="size-3.5" strokeWidth={2} aria-hidden />
+            To verify
+          </p>
+          <ul className="flex list-disc flex-col gap-0.5 pl-5 text-[13px] text-muted marker:text-subtle md:text-xs">
+            {b.pending.map((x, i) => (
+              <li key={i}>{x}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      {b.verifiedAt ? <p className="text-[12px] text-subtle md:text-[11px]">Checked {shortDate(b.verifiedAt)}</p> : null}
+    </div>
   );
 }
 
@@ -424,6 +595,8 @@ export function OrgProfileCard({
           <p className="text-[15px] leading-relaxed text-fg md:text-sm">{p.summary}</p>
         </div>
 
+        {p.booking ? <BookingBlock booking={p.booking} /> : null}
+
         {p.programming ? (
           <Section title="Programs">
             <p className="prose-plain text-[15px] leading-relaxed text-fg md:text-sm">{p.programming}</p>
@@ -507,7 +680,7 @@ export function OrgProfileCard({
           <div className="flex flex-col gap-2 rounded-lg bg-surface-2 p-3">
             <h4 className="flex items-center gap-1.5 text-[13px] font-semibold uppercase tracking-wide text-muted md:text-[11px]">
               <Lightbulb className="size-3.5" strokeWidth={2} aria-hidden />
-              Why ADAR
+              Why {p.booking?.brand ?? "ADAR"}
             </h4>
             {p.fitForAdar ? <p className="prose-plain text-[15px] leading-relaxed text-fg md:text-sm">{p.fitForAdar}</p> : null}
             {p.ideas?.length ? (
@@ -522,17 +695,62 @@ export function OrgProfileCard({
 
         {p.contacts?.length ? (
           <Section title="People">
-            <ul className="flex flex-col gap-1">
+            <ul className="flex flex-col gap-2">
               {p.contacts.map((c, i) => (
-                <li key={i} className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 text-[15px] md:text-sm">
-                  <span className="font-medium text-fg">{c.name}</span>
-                  {c.role ? <span className="text-muted">· {c.role}</span> : null}
-                  {c.email ? (
-                    <a href={`mailto:${c.email}`} className="inline-flex min-w-0 items-center gap-1 text-muted hover:text-fg">
-                      <Mail className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
-                      <span className="truncate">{c.email}</span>
-                    </a>
-                  ) : null}
+                <li key={i} className="flex min-w-0 items-start gap-3">
+                  {c.photo ? (
+                    <RemoteImage url={c.photo} alt={c.name} onFail={() => fail(c.photo!)} check={check(c.photo)} className="size-10 shrink-0 rounded-full bg-surface-2" />
+                  ) : (
+                    <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-surface-2 text-[13px] font-medium text-muted" aria-hidden>
+                      {c.name
+                        .split(/\s+/)
+                        .map((w) => w[0])
+                        .slice(0, 2)
+                        .join("")}
+                    </span>
+                  )}
+                  <span className="min-w-0 flex-1 text-[15px] md:text-sm">
+                    <span className="flex flex-wrap items-baseline gap-x-1.5">
+                      {c.profileUrl ? (
+                        <a href={c.profileUrl} target="_blank" rel="noreferrer noopener" className="font-medium text-fg hover:underline">
+                          {c.name}
+                        </a>
+                      ) : (
+                        <span className="font-medium text-fg">{c.name}</span>
+                      )}
+                      {c.relation && RELATION_LABEL[c.relation] ? (
+                        <span
+                          className={cn(
+                            "rounded-full px-1.5 py-px text-[11px]",
+                            c.relation === "decision" ? "bg-brand/15 font-medium text-brand" : "bg-surface-2 text-muted",
+                          )}
+                        >
+                          {RELATION_LABEL[c.relation]}
+                        </span>
+                      ) : null}
+                    </span>
+                    {c.role ? <span className="block text-muted">{c.role}</span> : null}
+                    <span className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[13px] text-muted md:text-xs">
+                      {c.email ? (
+                        <a href={`mailto:${c.email}`} className="inline-flex min-w-0 items-center gap-1 hover:text-fg">
+                          <Mail className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+                          <span className="truncate">{c.email}</span>
+                        </a>
+                      ) : null}
+                      {c.phone ? (
+                        <a href={`tel:${c.phone.replace(/[^+\d]/g, "")}`} className="inline-flex items-center gap-1 hover:text-fg">
+                          <Phone className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+                          {c.phone}
+                        </a>
+                      ) : null}
+                      {c.linkedin ? (
+                        <a href={c.linkedin} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-1 hover:text-fg">
+                          <Link2 className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+                          LinkedIn
+                        </a>
+                      ) : null}
+                    </span>
+                  </span>
                 </li>
               ))}
             </ul>

@@ -1,6 +1,7 @@
 import "server-only";
 import { z } from "zod";
-import { orgProfileSchema, profileIssue, type OrgProfile } from "@/lib/organizations/profile";
+import { isHttpsUrl, orgProfileSchema, profileIssue, type OrgProfile } from "@/lib/organizations/profile";
+import { sql } from "@/lib/db";
 import { listProjectOrganizations, organizationIdForEmail, organizationIdForOpportunity, setOrganizationProfile } from "@/lib/queries/org-profiles";
 import { isValidEmail } from "@/lib/utils";
 
@@ -20,6 +21,15 @@ const itemSchema = z.object({
   opportunityId: z.guid().nullish(),
   contactEmail: z.string().trim().max(320).refine(isValidEmail, "Invalid email address.").nullish(),
   profile: z.unknown(),
+  /** true: the fields sent replace the stored ones, the others are kept. */
+  merge: z.boolean().nullish(),
+  /** The organization's own website and city, set only where empty. */
+  organization: z
+    .object({
+      website: z.string().trim().max(300).refine(isHttpsUrl, "website must be an https URL.").nullish(),
+      city: z.string().trim().max(120).nullish(),
+    })
+    .nullish(),
 });
 
 export type ProfileItemResult =
@@ -65,7 +75,7 @@ async function resolveOrganization(item: z.output<typeof itemSchema>): Promise<{
 export async function applyProfiles(body: unknown, now: Date = new Date()): Promise<ApplyProfilesResult> {
   const parsed = bodySchema.safeParse(body);
   if (!parsed.success) {
-    throw new ProfilesError(`Send {"profiles": [{organizationId | opportunityId | contactEmail, profile}]} (1–${MAX_PROFILES_PER_CALL} items).`, 400);
+    throw new ProfilesError(`Send {"profiles": [{organizationId | opportunityId | contactEmail, profile, merge?, organization?: {website?, city?}}]} (1–${MAX_PROFILES_PER_CALL} items).`, 400);
   }
   const results: ProfileItemResult[] = [];
   for (const [index, raw] of parsed.data.profiles.entries()) {
@@ -79,7 +89,12 @@ export async function applyProfiles(body: unknown, now: Date = new Date()): Prom
       results.push({ index, ok: false, error: target.error });
       continue;
     }
-    const profile = orgProfileSchema.safeParse(item.data.profile);
+    let input = item.data.profile;
+    if (item.data.merge && input && typeof input === "object" && !Array.isArray(input)) {
+      const [stored] = await sql<{ profile: Record<string, unknown> | null }[]>`select profile from organizations where id = ${target.id}`;
+      if (stored?.profile) input = { ...stored.profile, ...(input as Record<string, unknown>) };
+    }
+    const profile = orgProfileSchema.safeParse(input);
     if (!profile.success) {
       results.push({ index, ok: false, organizationId: target.id, error: `profile.${profileIssue(profile.error)}` });
       continue;
@@ -90,6 +105,15 @@ export async function applyProfiles(body: unknown, now: Date = new Date()): Prom
       researchedAt: profile.data.researchedAt ?? now.toISOString(),
     };
     const saved = await setOrganizationProfile(target.id, value);
+    if (saved && item.data.organization) {
+      const { website, city } = item.data.organization;
+      await sql`
+        update organizations
+           set website = coalesce(nullif(btrim(website), ''), ${website ?? null}),
+               city = coalesce(nullif(btrim(city), ''), ${city ?? null}),
+               updated_at = now()
+         where id = ${target.id}`;
+    }
     results.push(saved ? { index, ok: true, organizationId: target.id } : { index, ok: false, error: `Organization ${target.id} not found.` });
   }
   const updated = results.filter((r) => r.ok).length;
