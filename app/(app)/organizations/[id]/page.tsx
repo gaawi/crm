@@ -5,7 +5,7 @@ import { cache, type ReactNode } from "react";
 import { Ellipsis, ExternalLink, Pencil, Plus, Sparkles, Trash2, UserPlus } from "lucide-react";
 import { PlaceLink } from "@/components/organizations/place-link";
 import { OrgLogo } from "@/components/organizations/org-logo";
-import { OrgProfileLine } from "@/components/organizations/profile-card";
+import { OrgProfileCard } from "@/components/organizations/profile-card";
 import { PhoneActions } from "@/components/booking/phone-actions";
 import { ContactRow, RowList } from "@/components/contact-row";
 import { EmailTimeline } from "@/components/email-timeline";
@@ -183,20 +183,7 @@ export default async function OrganizationPage({ params, searchParams }: PagePro
 
       {editingProfile ? (
         <ProfileForm organizationId={organization.id} profile={profile} cancelHref={base} />
-      ) : profile ? (
-        <section aria-label="Profile" className="mb-6">
-          <GroupTitle actions={<GroupAction href={profileEditHref}>Edit profile</GroupAction>}>Profile</GroupTitle>
-          <OrgProfileLine
-            profile={profile}
-            organization={organization}
-            editHref={profileEditHref}
-            buttonLabel="Open profile"
-            labelOnPhone
-            showPlace={false}
-            className="rounded-xl border border-border bg-surface px-4 py-3 md:rounded-lg md:px-3 md:py-2"
-          />
-        </section>
-      ) : (
+      ) : profile ? null : (
         <Link
           href={profileEditHref}
           scroll={false}
@@ -220,29 +207,39 @@ export default async function OrganizationPage({ params, searchParams }: PagePro
       />
 
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_22rem] xl:grid-cols-[minmax(0,1fr)_24rem] [&>*]:min-w-0">
-        <section className={cn("flex-col", show("email"))} aria-label="Correspondence">
-          <GroupTitle className="hidden md:flex">All correspondence</GroupTitle>
-          <FilterForm action={base} scroll={false} role="search" aria-label="Search correspondence" className="mb-3">
-            <input type="hidden" name="tab" value="email" />
-            <SearchInput name="q" defaultValue={q} placeholder={`Search emails with ${organization.name}`} aria-label="Search emails" />
-          </FilterForm>
-          {q || before ? (
-            <p className="mb-2 px-4 text-[13px] text-subtle md:px-0 md:text-xs">
-              {q ? <>Emails matching “{q}”</> : "Older emails"}
-              {before ? <> before {formatDate(before, timezone)}</> : null} ·{" "}
-              <Link href={`${base}?tab=email`} scroll={false} className="text-muted underline-offset-2 hover:underline">
-                {q ? "Clear search" : "Back to newest"}
-              </Link>
-            </p>
+        <div className={cn("flex-col gap-8 md:gap-7", tab === "people" || tab === "email" ? "flex" : "hidden md:flex")}>
+          {profile && !editingProfile ? (
+            // Open on the page: photos of the halls, who has played, programs (on phones, with People).
+            <section aria-label="Profile" className={cn("flex-col", show("people"))}>
+              <GroupTitle actions={<GroupAction href={profileEditHref}>Edit profile</GroupAction>}>Profile</GroupTitle>
+              <OrgProfileCard profile={profile} organization={organization} showName={false} editHref={profileEditHref} />
+            </section>
           ) : null}
-          <EmailTimeline
-            messages={history}
-            timezone={timezone}
-            selfEmails={selfEmails}
-            olderHref={olderHref}
-            emptyText={q ? `No emails match “${q}”.` : "No email with this organization yet."}
-          />
-        </section>
+
+          <section className={cn("flex-col", show("email"))} aria-label="Correspondence">
+            <GroupTitle className="hidden md:flex">All correspondence</GroupTitle>
+            <FilterForm action={base} scroll={false} role="search" aria-label="Search correspondence" className="mb-3">
+              <input type="hidden" name="tab" value="email" />
+              <SearchInput name="q" defaultValue={q} placeholder={`Search emails with ${organization.name}`} aria-label="Search emails" />
+            </FilterForm>
+            {q || before ? (
+              <p className="mb-2 px-4 text-[13px] text-subtle md:px-0 md:text-xs">
+                {q ? <>Emails matching “{q}”</> : "Older emails"}
+                {before ? <> before {formatDate(before, timezone)}</> : null} ·{" "}
+                <Link href={`${base}?tab=email`} scroll={false} className="text-muted underline-offset-2 hover:underline">
+                  {q ? "Clear search" : "Back to newest"}
+                </Link>
+              </p>
+            ) : null}
+            <EmailTimeline
+              messages={history}
+              timezone={timezone}
+              selfEmails={selfEmails}
+              olderHref={olderHref}
+              emptyText={q ? `No emails match “${q}”.` : "No email with this organization yet."}
+            />
+          </section>
+        </div>
 
         <div className="flex flex-col gap-8 md:gap-7">
           <section className={cn("flex-col", show("people"))} aria-label="People">
