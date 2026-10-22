@@ -12,7 +12,7 @@ describe("assistant people and booking profiles", () => {
   it("matches people by email or name at the organization, creates the new ones and fills only empty fields", async () => {
     const [org] = await sql<{ id: string }[]>`insert into organizations (name, domains) values ('Music Hall', '{hall.test}') returning id`;
     const [ana] = await sql<{ id: string }[]>`insert into contacts (name, organization_id, role) values ('Smith, Ana', ${org.id}, 'Owner title') returning id`;
-    const [bob] = await sql<{ id: string }[]>`insert into contacts (name, organization_id) values ('Bob', ${org.id}) returning id`;
+    const [bob] = await sql<{ id: string }[]>`insert into contacts (name, organization_id) values ('Robert', ${org.id}) returning id`;
     await sql`insert into contact_emails (contact_id, email, is_primary) values (${bob.id}, 'bob@hall.test', true)`;
 
     const result = await applyPeople({
@@ -28,12 +28,21 @@ describe("assistant people and booking profiles", () => {
     const people = await sql<{ id: string; name: string; role: string | null; photoUrl: string | null; notes: string | null }[]>`
       select id, name, role, photo_url, notes from contacts where organization_id = ${org.id} order by name`;
     expect(people.find((p) => p.id === ana.id)).toMatchObject({ role: "Owner title", photoUrl: "https://hall.test/ana.jpg" });
-    expect(people.find((p) => p.id === bob.id)).toMatchObject({ name: "Bob", role: "Executive Director" });
+    expect(people.find((p) => p.id === bob.id)).toMatchObject({ name: "Robert", role: "Executive Director" });
     const carla = people.find((p) => p.name === "Carla Ruiz");
     expect(carla?.notes).toContain("LinkedIn: https://www.linkedin.com/in/carla");
     const [email] = await sql<{ email: string; isPrimary: boolean }[]>`select email, is_primary from contact_emails where contact_id = ${carla!.id}`;
     expect(email).toEqual({ email: "carla@hall.test", isPrimary: true });
     expect(nameKey("Shain, Joshua")).toBe(nameKey("Joshua Shain"));
+
+    // An address someone else already uses (a generic box): a new contact, the bio never lands on the other person.
+    const shared = await applyPeople({
+      organizationId: org.id,
+      people: [{ name: "Dana White", role: "Director", email: "bob@hall.test", bio: "Dana's bio.", sources: [SRC] }],
+    });
+    expect(shared).toMatchObject({ created: 1, updated: 0 });
+    const [bobNow] = await sql<{ notes: string | null }[]>`select notes from contacts where id = ${bob.id}`;
+    expect(bobNow.notes ?? "").not.toContain("Dana");
   });
 
   it("merges a booking analysis into the stored profile and fills an empty website", async () => {

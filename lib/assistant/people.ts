@@ -68,6 +68,15 @@ export class PeopleError extends Error {
 const TITLES = new Set(["dr", "mr", "mrs", "ms", "prof", "sir", "dame", "rev", "jr", "sr", "ii", "iii"]);
 
 /** "Shain, Joshua" and "Dr. Joshua Shain" give the same key. */
+/** The same person: the same name, or one name's words all in the other ("Ana Smith" / "Ana M. Smith"). */
+export function sameNames(a: string, b: string): boolean {
+  const x = nameKey(a).split(" ").filter(Boolean);
+  const y = nameKey(b).split(" ").filter(Boolean);
+  if (!x.length || !y.length) return true;
+  const [short, long] = x.length <= y.length ? [x, y] : [y, x];
+  return short.every((t) => long.includes(t));
+}
+
 export function nameKey(name: string): string {
   return name
     .normalize("NFKD")
@@ -123,8 +132,17 @@ export async function applyPeople(body: unknown): Promise<{ ok: true; organizati
       continue;
     }
 
-    // The same person: their email, else the same name at this organization.
+    // The same person: their email (when the contact there has a compatible name), else the same name at this organization.
     let contactId = p.email ? await contactIdForEmail(p.email) : null;
+    let emailTaken = false;
+    if (contactId) {
+      const [owner] = await sql<{ name: string | null }[]>`select name from contacts where id = ${contactId}`;
+      if (owner?.name && !owner.name.includes("@") && !sameNames(owner.name, p.name)) {
+        // A shared or mislabeled address (info@, a colleague's): not this person.
+        contactId = null;
+        emailTaken = true;
+      }
+    }
     if (!contactId) {
       const key = nameKey(p.name);
       const sameName = (await sql<{ id: string; name: string | null }[]>`select id, name from contacts where organization_id = ${organizationId} and status <> 'archived'`).filter(
@@ -146,7 +164,7 @@ export async function applyPeople(body: unknown): Promise<{ ok: true; organizati
     } else {
       await sql`update contacts set organization_id = ${organizationId}, updated_at = now() where id = ${contactId} and organization_id is null`;
     }
-    if (p.email) {
+    if (p.email && !emailTaken) {
       try {
         await sql`
           insert into contact_emails (contact_id, email, is_primary)
