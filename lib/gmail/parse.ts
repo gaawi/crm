@@ -516,11 +516,30 @@ function unflow(text: string, delsp: boolean): string {
   return out.join("\n");
 }
 
+/**
+ * A text part's bytes. Gmail's API often hands them over already converted to
+ * UTF-8 while the part still declares its original charset (iso-8859-1 from
+ * Outlook, iso-8859-2 from a Slovenian mailer): decoding those with the
+ * declared charset turns "días" into "dÃ­as". Valid UTF-8 is read as UTF-8
+ * (text really in a single-byte charset is practically never valid UTF-8);
+ * anything else gets the declared charset.
+ */
+function decodeBodyBytes(bytes: Uint8Array, charset: string | null): string {
+  if (!normalizeCharset(charset)?.startsWith("utf-16")) {
+    try {
+      return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    } catch {
+      // Not UTF-8: the declared charset below.
+    }
+  }
+  return decodeBytes(bytes, charset);
+}
+
 function decodePartText(part: GmailMessagePart, mimeType: string): string {
   const data = part.body?.data;
   if (typeof data !== "string" || data === "") return "";
   const contentType = getHeader(part.headers, "Content-Type");
-  let text = decodeBytes(decodeBase64Url(data), headerParam(contentType, "charset"));
+  let text = decodeBodyBytes(decodeBase64Url(data), headerParam(contentType, "charset"));
   if (mimeType === "text/plain" && headerParam(contentType, "format")?.toLowerCase() === "flowed") {
     text = unflow(text, headerParam(contentType, "delsp")?.toLowerCase() === "yes");
   }

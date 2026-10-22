@@ -194,6 +194,19 @@ describe("parse", () => {
     expect(bodies.html).toBe("<p>Café mañana</p>");
   });
 
+  it("reads UTF-8 bytes as UTF-8 even when the part still declares a single-byte charset", () => {
+    // Gmail's API converts text parts to UTF-8 but keeps the original Content-Type.
+    const bodies = extractBodies({
+      mimeType: "multipart/alternative",
+      parts: [
+        { mimeType: "text/plain", headers: [{ name: "Content-Type", value: 'text/plain; charset="iso-8859-1"' }], body: { size: 30, data: b64url("Buenos días: está previsto") } },
+        { mimeType: "text/html", headers: [{ name: "Content-Type", value: "text/html; charset=iso-8859-2" }], body: { size: 20, data: b64url("<p>Klemen Ramovš</p>") } },
+      ],
+    });
+    expect(bodies.text).toBe("Buenos días: está previsto");
+    expect(bodies.html).toBe("<p>Klemen Ramovš</p>");
+  });
+
   it("converts HTML to readable text", () => {
     const text = htmlToText("<style>p{color:red}</style><p>Hello&nbsp;<b>Anna</b></p><ul><li>One</li><li>Two</li></ul><script>x()</script>");
     expect(text).toContain("Hello Anna");

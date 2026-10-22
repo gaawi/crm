@@ -16,7 +16,10 @@ import { linkOrganizations } from "@/lib/queries/organizations";
 import { startOlderHistoryImport } from "@/lib/sync/backfill";
 import { triggerAccountJob } from "@/lib/sync/trigger";
 import { probeTriage } from "@/lib/mail/triage";
+import { repairStoredMojibake } from "@/lib/sync/repair-mojibake";
 import { cardInfo, draftThread } from "@/lib/approvals/card-data";
+
+export const maxDuration = 60;
 
 /**
  * Read-only health of the mail import: per connected mailbox, its import
@@ -179,10 +182,16 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const denied = await assistantApiGuard(request);
   if (denied) return denied;
-  const body = (await request.json().catch(() => null)) as { action?: string; email?: string } | null;
+  const body = (await request.json().catch(() => null)) as { action?: string; email?: string; cursor?: string } | null;
   if (body?.action === "link-organizations") return Response.json(await linkOrganizations(), { headers: { "Cache-Control": "no-store" } });
   // One classification of a fictional email, to check the smart inbox reaches Claude (no data is written).
   if (body?.action === "triage-probe") return Response.json(await probeTriage(), { headers: { "Cache-Control": "no-store" } });
+  // Restore bodies stored with broken accents ("dÃ­as"); call again with the returned cursor until it is null.
+  if (body?.action === "repair-mojibake") {
+    return Response.json(await repairStoredMojibake({ cursor: body.cursor ?? null, deadline: Date.now() + 45_000 }), {
+      headers: { "Cache-Control": "no-store" },
+    });
+  }
   if (body?.action === "import-older-history" && body.email) {
     const [account] = await sql<{ id: string }[]>`select id from gmail_accounts where lower(email) = lower(${body.email}) and status = 'active'`;
     if (!account) return Response.json({ error: "No active mailbox with that address." }, { status: 404 });
