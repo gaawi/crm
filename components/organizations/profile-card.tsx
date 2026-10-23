@@ -509,6 +509,10 @@ function SiteCard({ link, organizationId }: { link: { label: string; url: string
             alt=""
             loading="lazy"
             decoding="async"
+            // A cached picture can finish before React attaches onLoad: read its state on mount too.
+            ref={(img) => {
+              if (img?.complete) setState(img.naturalWidth ? "ok" : "failed");
+            }}
             onLoad={() => setState("ok")}
             onError={() => setState("failed")}
             className={cn("absolute inset-0 size-full object-cover object-top transition-opacity", state === "ok" ? "opacity-100" : "opacity-0")}
