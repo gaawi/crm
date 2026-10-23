@@ -470,6 +470,67 @@ export function OrgProfileLine({
   );
 }
 
+/** The website first, then the profile's links (season, team, contact…), each once. */
+function siteLinks(p: OrgProfile, organization?: OrgProfileOwner | null): { label: string; url: string }[] {
+  const all = [
+    ...(organization?.website && isHttpsUrl(organization.website) ? [{ label: "Website", url: organization.website }] : []),
+    ...(p.links ?? []).filter((l) => isHttpsUrl(l.url)),
+  ];
+  const seen = new Set<string>();
+  return all.filter((l) => {
+    const key = l.url.replace(/#.*$/, "").replace(/\/$/, "").replace(/^https:\/\/www\./, "https://");
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+/**
+ * A link with a screenshot of the page (taken by Vela's server, cached a
+ * month), so the organization is recognizable by the look of its site.
+ * While it loads: a placeholder; if it cannot be taken: the site's name.
+ */
+function SiteCard({ link, organizationId }: { link: { label: string; url: string }; organizationId?: string }) {
+  const [state, setState] = useState<"loading" | "ok" | "failed">(organizationId ? "loading" : "failed");
+  const host = hostOf(link.url);
+  return (
+    <a
+      href={link.url}
+      target="_blank"
+      rel="noreferrer noopener"
+      title={link.url}
+      className="group flex min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-surface active:bg-surface-2 md:hover:border-border-strong"
+    >
+      <span className="relative block aspect-[16/10] w-full overflow-hidden bg-surface-2">
+        {organizationId && state !== "failed" ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={`/api/site-shot/${organizationId}?url=${encodeURIComponent(link.url)}`}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            onLoad={() => setState("ok")}
+            onError={() => setState("failed")}
+            className={cn("absolute inset-0 size-full object-cover object-top transition-opacity", state === "ok" ? "opacity-100" : "opacity-0")}
+          />
+        ) : null}
+        {state !== "ok" ? (
+          <span className={cn("absolute inset-0 flex items-center justify-center px-2 text-center text-[12px] text-subtle", state === "loading" && "animate-pulse")}>
+            {state === "loading" ? "" : host}
+          </span>
+        ) : null}
+      </span>
+      <span className="flex min-w-0 items-center gap-1 px-2 py-1.5">
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[13px] text-fg md:text-xs">{link.label}</span>
+          <span className="block truncate text-[11px] text-subtle">{host}</span>
+        </span>
+        <ExternalLink className="size-3.5 shrink-0 text-subtle" strokeWidth={1.75} aria-hidden />
+      </span>
+    </a>
+  );
+}
+
 /** The full card (shown in the popup). `bare`: no border, edge to edge. */
 export function OrgProfileCard({
   profile: p,
@@ -500,7 +561,7 @@ export function OrgProfileCard({
   const hero = images[heroIndex];
   const KindIcon = KIND_ICON[p.kind ?? "organization"];
   const sources = (p.sources ?? []).filter(isHttpsUrl);
-  const links = (p.links ?? []).filter((l) => isHttpsUrl(l.url));
+  const sites = siteLinks(p, organization);
   const name = organization?.name;
   const place = orgPlace(organization, p);
   const addressUrl = addressMapsUrl(p, organization);
@@ -757,19 +818,10 @@ export function OrgProfileCard({
           </Section>
         ) : null}
 
-        {links.length ? (
-          <div className="flex flex-wrap gap-2">
-            {links.map((l) => (
-              <a
-                key={l.url}
-                href={l.url}
-                target="_blank"
-                rel="noreferrer noopener"
-                className="inline-flex h-9 max-w-full items-center gap-1.5 rounded-full border border-border px-3 text-[13px] text-fg active:bg-surface-2 md:h-7 md:text-xs md:hover:bg-surface-2"
-              >
-                <span className="truncate">{l.label}</span>
-                <ExternalLink className="size-3.5 shrink-0 text-subtle" strokeWidth={1.75} aria-hidden />
-              </a>
+        {sites.length ? (
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {sites.map((l) => (
+              <SiteCard key={l.url} link={l} organizationId={organization?.id} />
             ))}
           </div>
         ) : null}

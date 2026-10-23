@@ -34,6 +34,10 @@ const STRICT_CSP = csp("'self' data: blob:");
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // Website screenshots (/api/site-shot): the serverless Chromium reads its compressed binaries from disk.
+  outputFileTracingIncludes: {
+    "/api/site-shot/\\[id\\]": ["./node_modules/@sparticuz/chromium/bin/**/*"],
+  },
   devIndicators: false,
   experimental: {
     // A page visited in the last 30 s opens from the browser's copy (Mail list and thread, Today…),
