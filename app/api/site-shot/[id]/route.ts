@@ -27,8 +27,9 @@ function normalize(value: string): string | null {
   }
 }
 
+// Not cached: a page that failed to load (slow, down for a moment) is tried again next time.
 function notFound() {
-  return new Response(null, { status: 404, headers: { "Cache-Control": "public, max-age=3600, s-maxage=86400", "X-Content-Type-Options": "nosniff" } });
+  return new Response(null, { status: 404, headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
 }
 
 export async function GET(request: Request, { params }: RouteContext<"/api/site-shot/[id]">) {

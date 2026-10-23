@@ -12,7 +12,7 @@ import type { Browser } from "puppeteer-core";
 
 export const SHOT_WIDTH = 1280;
 export const SHOT_HEIGHT = 800;
-const NAV_TIMEOUT_MS = 20_000;
+const NAV_TIMEOUT_MS = 15_000;
 const SETTLE_MS = 2_000;
 const LOCAL_CHROMIUM = "/opt/pw-browsers/chromium-1194/chrome-linux/chrome";
 
@@ -61,9 +61,29 @@ export function isPublicWebUrl(value: string, { allowHttp = false } = {}): boole
   }
 }
 
-/** A JPEG of the top of the page (1280×800 viewport, half scale), or null when it cannot load. */
+// A few pages at a time per server instance: a profile asks for all its links at once.
+const MAX_PAGES = 2;
+let open = 0;
+const waiting: (() => void)[] = [];
+
+async function withSlot<T>(run: () => Promise<T>): Promise<T> {
+  if (open >= MAX_PAGES) await new Promise<void>((resolve) => waiting.push(resolve));
+  open++;
+  try {
+    return await run();
+  } finally {
+    open--;
+    waiting.shift()?.();
+  }
+}
+
+/** A JPEG of the top of the page (1280×800 viewport, half scale), or null when it cannot load (tried twice). */
 export async function screenshotPage(url: string): Promise<Uint8Array<ArrayBuffer> | null> {
   if (!isPublicWebUrl(url)) return null;
+  return withSlot(async () => (await shoot(url)) ?? (await shoot(url)));
+}
+
+async function shoot(url: string): Promise<Uint8Array<ArrayBuffer> | null> {
   const page = await (await browser()).newPage();
   try {
     await page.setViewport({ width: SHOT_WIDTH, height: SHOT_HEIGHT, deviceScaleFactor: 0.5 });
@@ -83,7 +103,7 @@ export async function screenshotPage(url: string): Promise<Uint8Array<ArrayBuffe
     if (!response || response.status() >= 400) return null;
     if (!isPublicWebUrl(page.url(), { allowHttp: true })) return null;
     // Images, fonts and sliders settle; a page that never goes idle is shot anyway.
-    await page.waitForNetworkIdle({ idleTime: 500, timeout: 6_000 }).catch(() => {});
+    await page.waitForNetworkIdle({ idleTime: 500, timeout: 4_000 }).catch(() => {});
     await new Promise((resolve) => setTimeout(resolve, SETTLE_MS));
     // Cookie and consent banners cover the page: hide them (the picture is for recognizing the site).
     await page
