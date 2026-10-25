@@ -26,7 +26,7 @@ export function kindLabel(kind: PlatformKind): string {
 }
 
 export const SUBMISSION_STATUSES = [
-  { value: "todo", label: "To do", tone: "neutral" },
+  { value: "todo", label: "Pending", tone: "neutral" },
   { value: "sent", label: "Sent", tone: "info" },
   { value: "received", label: "Received", tone: "info" },
   { value: "published", label: "Published", tone: "success" },

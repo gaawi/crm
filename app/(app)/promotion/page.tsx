@@ -1,68 +1,18 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { ExternalLink, KeyRound, Mail, Pencil, Plus } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { ChevronRight, ExternalLink, Pencil, Plus, Ticket } from "lucide-react";
 import { EmptyState, Notice, PageHeader } from "@/components/ui/layout";
 import { listingBrief } from "@/lib/listings/brief";
-import {
-  kindLabel,
-  methodLabel,
-  PLATFORM_TIERS,
-  SETTLED_STATUSES,
-  SUBMISSION_STATUSES,
-  statusLabel,
-  type PlatformTier,
-  type SubmissionStatus,
-} from "@/lib/listings/constants";
-import {
-  getListingEvent,
-  listListingEvents,
-  partnerThreads,
-  platformsForEvent,
-  type EventSummary,
-  type PartnerThread,
-  type PlatformForEvent,
-} from "@/lib/queries/listings";
-import type { PartnerRelationship } from "@/lib/listings/relationship";
-import { hostOf } from "@/lib/organizations/profile";
+import { getListingEvent, listListingEvents, platformsForEvent, type EventSummary, type ListingEvent, type PlatformForEvent } from "@/lib/queries/listings";
 import { cn } from "@/lib/utils";
-import { Segmented } from "../_components/segmented";
-import { hrefWith, param } from "../_lib/url";
-import { CopyBrief, EventForm, PlatformForm, StatusPicker, STATUS_STYLE, SubmissionForm } from "./forms";
+import { param } from "../_lib/url";
+import { CopyBrief, EventForm, PlatformForm, StatusPicker } from "./forms";
+import { MethodTag, splitByDate, STAGE_DOT, STAGE_OF, stageOf, statusOf, type Stage } from "./stage";
 
 export const metadata: Metadata = { title: "Promotion" };
 
-const TIER_TITLE: Record<PlatformTier, string> = {
-  always: "Every concert",
-  sometimes: "Some concerts",
-  skip: "Not worth it (kept for reference)",
-};
-
-const FILTERS = ["open", "done", "all"] as const;
-type Filter = (typeof FILTERS)[number];
-
-function eventLabel(e: EventSummary): string {
-  const date = new Intl.DateTimeFormat("en-US", { timeZone: e.timeZone, month: "short", day: "numeric" }).format(e.startsAt);
-  return `${e.title} · ${date}`;
-}
-
-function whenLong(e: { startsAt: Date; timeZone: string }): string {
-  return new Intl.DateTimeFormat("en-US", {
-    timeZone: e.timeZone,
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(e.startsAt);
-}
-
-/** The next concert still to come, else the latest one. */
-function defaultEvent(events: EventSummary[]): EventSummary | undefined {
-  const now = Date.now();
-  const upcoming = events.filter((e) => e.startsAt.getTime() >= now - 6 * 3600_000).sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
-  return upcoming[0] ?? events[0];
+function shortDate(e: { startsAt: Date; timeZone: string }): string {
+  return new Intl.DateTimeFormat("en-US", { timeZone: e.timeZone, weekday: "short", month: "short", day: "numeric", year: "numeric" }).format(e.startsAt);
 }
 
 /** Before the promotion migration is applied, the tables do not exist yet. */
@@ -75,10 +25,12 @@ async function eventsOrMissing(): Promise<EventSummary[] | null> {
   }
 }
 
+const summaryClass = "flex cursor-pointer list-none items-center gap-2 [&::-webkit-details-marker]:hidden";
+
 export default async function PromotionPage({ searchParams }: PageProps<"/promotion">) {
   const sp = await searchParams;
-  const events = await eventsOrMissing();
-  if (!events) {
+  const all = await eventsOrMissing();
+  if (!all) {
     return (
       <>
         <PageHeader title="Promotion" />
@@ -88,389 +40,218 @@ export default async function PromotionPage({ searchParams }: PageProps<"/promot
       </>
     );
   }
-  const wanted = param(sp, "event", 40);
-  const selected = events.find((e) => e.id === wanted) ?? defaultEvent(events);
-  const filterParam = param(sp, "show");
-  const filter: Filter = (FILTERS as readonly string[]).includes(filterParam) ? (filterParam as Filter) : "all";
-  const [event, platforms] = await Promise.all([
-    selected ? getListingEvent(selected.id) : Promise.resolve(null),
-    platformsForEvent(selected?.id ?? null),
-  ]);
-
-  // Ticketing partners show their latest emails on the card.
-  const threads = new Map(
-    await Promise.all(
-      platforms.filter((p) => p.kind === "partner" && p.emailMatch.length).map(async (p) => [p.id, await partnerThreads(p.emailMatch, 15)] as const),
-    ),
+  const { upcoming, past } = splitByDate(all);
+  const loaded = await Promise.all(
+    [...upcoming, ...past].map(async (s) => {
+      const [event, platforms] = await Promise.all([getListingEvent(s.id), platformsForEvent(s.id)]);
+      return { event: event!, platforms };
+    }),
   );
-  const statusOf = (p: PlatformForEvent): SubmissionStatus => p.submission?.status ?? "todo";
-  const isDone = (p: PlatformForEvent) => SETTLED_STATUSES.includes(statusOf(p));
-  const inRoutine = (p: PlatformForEvent) => p.tier !== "skip";
-  const shown = platforms.filter((p) => (filter === "open" ? !isDone(p) && inRoutine(p) : filter === "done" ? isDone(p) : true));
-  const counts = Object.fromEntries(SUBMISSION_STATUSES.map((s) => [s.value, platforms.filter((p) => inRoutine(p) && statusOf(p) === s.value).length])) as Record<
-    SubmissionStatus,
-    number
-  >;
-  const openCount = platforms.filter((p) => inRoutine(p) && !isDone(p)).length;
-  const brief = event ? listingBrief(event, platforms) : "";
-  const href = (patch: Record<string, string>) => hrefWith("/promotion", { event: selected?.id ?? "", show: filter === "all" ? "" : filter, ...patch });
+  const wanted = param(sp, "event", 40);
+  const openId = all.some((e) => e.id === wanted) ? wanted : upcoming[0]?.id;
+  const skipped = loaded[0]?.platforms.filter((p) => p.tier === "skip") ?? [];
 
   return (
     <>
-      <PageHeader
-        title="Promotion"
-        description="The partners, editors, calendars and newsletters every concert goes to, and for each concert what was sent and what happened."
-      />
+      <PageHeader title="Promotion" description="Concert by concert: the ticketing partners and listings each one goes to, and what is pending, sent or published." />
 
-      {events.length > 1 ? (
-        <nav aria-label="Concerts" className="mb-3 flex flex-wrap gap-1.5 px-4 md:px-0">
-          {events.map((e) => (
-            <Link
-              key={e.id}
-              href={hrefWith("/promotion", { event: e.id })}
-              className={cn(
-                "inline-flex h-9 items-center rounded-full border px-3 text-[13px] md:h-7 md:text-xs",
-                e.id === selected?.id ? "border-fg bg-fg text-bg" : "border-border text-muted hover:text-fg",
-              )}
-            >
-              {eventLabel(e)}
-            </Link>
-          ))}
-        </nav>
+      {!all.length ? <EmptyState title="No concert yet">Add the concert you want to promote below.</EmptyState> : null}
+
+      <div className="flex flex-col gap-3">
+        {loaded.slice(0, upcoming.length).map(({ event, platforms }) => (
+          <ConcertCard key={event.id} event={event} platforms={platforms} open={event.id === openId} />
+        ))}
+      </div>
+
+      {past.length ? (
+        <details className="group mt-5" open={past.some((e) => e.id === wanted)}>
+          <summary className={cn(summaryClass, "min-h-10 px-4 text-xs font-medium uppercase tracking-wide text-subtle md:px-0")}>
+            <ChevronRight className="size-3.5 transition-transform group-open:rotate-90" aria-hidden />
+            Past concerts ({past.length})
+          </summary>
+          <div className="mt-2 flex flex-col gap-3">
+            {loaded.slice(upcoming.length).map(({ event, platforms }) => (
+              <ConcertCard key={event.id} event={event} platforms={platforms} open={event.id === wanted} />
+            ))}
+          </div>
+        </details>
       ) : null}
 
-      {event ? (
-        <section className="mb-4 rounded-xl border border-border bg-surface p-4 md:rounded-lg">
-          <div className="flex flex-wrap items-start gap-3">
-            <div className="min-w-0 flex-1">
-              <h2 className="text-lg font-semibold text-fg md:text-base">{event.title}</h2>
-              <p className="text-[13px] text-muted md:text-xs">
-                {whenLong(event)}
-                {event.venue ? ` · ${event.venue}` : ""}
-                {event.prices ? ` · ${event.prices}` : ""}
-              </p>
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {SUBMISSION_STATUSES.filter((s) => counts[s.value]).map((s) => (
-                  <Badge key={s.value} className={STATUS_STYLE[s.value]}>
-                    {counts[s.value]} {s.label.toLowerCase()}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-            <CopyBrief text={brief} pending={openCount} />
-          </div>
-          <details className="group mt-3">
-            <summary className="flex min-h-9 cursor-pointer list-none items-center gap-1.5 text-[13px] text-muted hover:text-fg md:text-xs [&::-webkit-details-marker]:hidden">
-              <Pencil className="size-3.5" aria-hidden />
-              Concert details
+      <div className="mt-6 flex flex-col gap-3">
+        <div className="grid gap-3 md:grid-cols-2">
+          <details className="group rounded-xl border border-border bg-surface md:rounded-lg">
+            <summary className={cn(summaryClass, "min-h-12 px-4 text-[15px] text-fg active:opacity-60 md:min-h-10 md:text-sm")}>
+              <Plus className="size-4 text-muted" aria-hidden />
+              Add a concert
             </summary>
-            <div className="pt-2">
-              <EventForm event={event} />
+            <div className="px-4 pb-4">
+              <EventForm />
             </div>
           </details>
-        </section>
-      ) : (
-        <EmptyState title="No concert yet">Add the concert you want to promote, then mark where it was sent.</EmptyState>
-      )}
-
-      {event ? (
-        <Segmented
-          label="Show"
-          className="mb-3"
-          fill={false}
-          segments={[
-            { href: href({ show: "" }), label: "All", active: filter === "all", count: platforms.length },
-            { href: href({ show: "open" }), label: "To do", active: filter === "open", count: openCount },
-            { href: href({ show: "done" }), label: "Done", active: filter === "done", count: platforms.length - platforms.filter((p) => !isDone(p)).length },
-          ]}
-        />
-      ) : null}
-
-      {event && shown.length ? (
-        <div className="flex flex-col gap-5">
-          {PLATFORM_TIERS.map((tier) => {
-            const group = shown.filter((p) => p.tier === tier.value);
-            if (!group.length) return null;
-            return (
-              <section key={tier.value} aria-label={tier.label}>
-                <h2 className="mb-2 px-4 text-xs font-medium uppercase tracking-wide text-subtle md:px-0">
-                  {TIER_TITLE[tier.value]} <span className="tabular-nums">{group.length}</span>
-                </h2>
-                <ul className="flex flex-col gap-2">
-                  {group.map((p) => (
-                    <PlatformRow key={p.id} platform={p} eventId={event.id} status={statusOf(p)} threads={threads.get(p.id) ?? []} />
-                  ))}
-                </ul>
-              </section>
-            );
-          })}
+          <details className="group rounded-xl border border-border bg-surface md:rounded-lg">
+            <summary className={cn(summaryClass, "min-h-12 px-4 text-[15px] text-fg active:opacity-60 md:min-h-10 md:text-sm")}>
+              <Plus className="size-4 text-muted" aria-hidden />
+              Add a partner or listing site
+            </summary>
+            <div className="px-4 pb-4">
+              <PlatformForm />
+            </div>
+          </details>
         </div>
-      ) : event ? (
-        <p className="px-4 py-6 text-center text-sm text-subtle md:px-0">{platforms.length ? "Nothing here." : "No platforms yet: add the first one below."}</p>
-      ) : null}
-
-      <div className="mt-6 grid gap-3 md:grid-cols-2">
-        <details className="group rounded-xl border border-border bg-surface md:rounded-lg">
-          <summary className="flex min-h-12 cursor-pointer list-none items-center gap-2 px-4 text-[15px] text-fg active:opacity-60 md:min-h-10 md:text-sm [&::-webkit-details-marker]:hidden">
-            <Plus className="size-4 text-muted" aria-hidden />
-            Add a platform
-          </summary>
-          <div className="px-4 pb-4">
-            <PlatformForm />
-          </div>
-        </details>
-        <details className="group rounded-xl border border-border bg-surface md:rounded-lg">
-          <summary className="flex min-h-12 cursor-pointer list-none items-center gap-2 px-4 text-[15px] text-fg active:opacity-60 md:min-h-10 md:text-sm [&::-webkit-details-marker]:hidden">
-            <Plus className="size-4 text-muted" aria-hidden />
-            Add a concert
-          </summary>
-          <div className="px-4 pb-4">
-            <EventForm />
-          </div>
-        </details>
+        {skipped.length ? (
+          <details className="group rounded-xl border border-border bg-surface md:rounded-lg">
+            <summary className={cn(summaryClass, "min-h-12 px-4 text-[15px] text-muted active:opacity-60 md:min-h-10 md:text-sm")}>
+              <ChevronRight className="size-4 transition-transform group-open:rotate-90" aria-hidden />
+              Not worth it ({skipped.length}), kept for reference
+            </summary>
+            <ul className="flex flex-col divide-y divide-border border-t border-border">
+              {skipped.map((p) => (
+                <li key={p.id}>
+                  <Link href={`/promotion/p/${p.id}`} className="flex min-h-11 items-center gap-2 px-4 text-[15px] text-muted active:bg-surface-2 md:min-h-9 md:text-sm md:hover:bg-surface-2">
+                    <span className="min-w-0 flex-1 truncate">{p.name}</span>
+                    <MethodTag method={p.method} />
+                    <ChevronRight className="size-4 shrink-0 text-subtle" aria-hidden />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </details>
+        ) : null}
       </div>
     </>
   );
 }
 
-function PlatformRow({
-  platform: p,
-  eventId,
-  status,
-  threads,
-}: {
-  platform: PlatformForEvent;
-  eventId: string;
-  status: SubmissionStatus;
-  threads: PartnerThread[];
-}) {
-  const partner = p.kind === "partner";
-  const s = p.submission;
-  const target = p.submitUrl ?? p.website;
+const count = (list: PlatformForEvent[], stage: Stage) => list.filter((p) => stageOf(p) === stage).length;
+
+/** One concert: a one-line summary that opens into its checklist. */
+function ConcertCard({ event, platforms, open }: { event: ListingEvent; platforms: PlatformForEvent[]; open: boolean }) {
+  const routine = platforms.filter((p) => p.tier !== "skip");
+  const partners = routine.filter((p) => p.kind === "partner");
+  const listings = routine.filter((p) => p.kind !== "partner");
+  const always = listings.filter((p) => p.tier === "always");
+  const sometimes = listings.filter((p) => p.tier === "sometimes");
+  // Pending counts what must go out for every concert; "some concerts" sites are optional.
+  const pending = count([...partners, ...always], "pending");
+  const sometimesStarted = sometimes.filter((p) => stageOf(p) !== "pending").length;
+  const unpublished = routine.filter((p) => stageOf(p) === "pending" || stageOf(p) === "sent").length;
+
   return (
-    <li className={cn("rounded-xl border border-border bg-surface md:rounded-lg", p.tier === "skip" && "opacity-60")}>
-      <div className="flex flex-wrap items-start gap-x-3 gap-y-2 px-4 py-3">
+    <details open={open} className="group/concert rounded-xl border border-border bg-surface md:rounded-lg">
+      <summary className={cn(summaryClass, "gap-3 px-4 py-3 active:opacity-70")}>
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            {target ? (
-              <a href={target} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-1 font-medium text-fg hover:underline">
-                {p.name}
-                <ExternalLink className="size-3.5 text-subtle" aria-hidden />
-              </a>
-            ) : (
-              <span className="font-medium text-fg">{p.name}</span>
-            )}
-            <Badge>{kindLabel(p.kind)}</Badge>
-            <Badge>{methodLabel(p.method)}</Badge>
-            <Badge
-              className={
-                p.cost === "free"
-                  ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
-                  : p.cost === "paid"
-                    ? "bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
-                    : undefined
-              }
-              title={p.costNote ?? undefined}
-            >
-              {p.cost === "free" ? "Free" : p.cost === "paid" ? (p.costNote && p.costNote.length <= 30 ? `Paid: ${p.costNote}` : "Paid") : "Cost ?"}
-            </Badge>
-            <Badge title={p.loginAccount ?? undefined} className="max-w-[16rem]">
-              <KeyRound className="size-3 shrink-0" aria-hidden />
-              <span className="truncate">{p.loginRequired ? (p.loginAccount ? `Login: ${p.loginAccount}` : "Login") : "No login"}</span>
-            </Badge>
-            {p.leadDays != null ? <Badge>{p.leadDays} days ahead</Badge> : null}
-            {partner && s && (s.ticketsOffered != null || s.memberPrice) ? (
-              <Badge className="bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-300">
-                {[
-                  s.ticketsOffered != null ? `${s.ticketsOffered} tickets` : null,
-                  s.memberPrice,
-                  s.ticketsTaken != null ? `${s.ticketsTaken} taken` : null,
-                ]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </Badge>
-            ) : null}
-          </div>
-          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[13px] text-subtle md:text-xs">
-            {p.email ? (
-              <a href={`mailto:${p.email}`} className="inline-flex items-center gap-1 hover:text-fg">
-                <Mail className="size-3" aria-hidden />
-                {p.email}
-              </a>
-            ) : null}
-            {p.submitUrl && p.website && hostOf(p.website) !== hostOf(p.submitUrl) ? <span>{hostOf(p.website)}</span> : null}
-            {p.audience ? <span>{p.audience}</span> : null}
-          </div>
-          {p.notes ? <p className="mt-1 line-clamp-2 text-[13px] text-muted md:text-xs">{p.notes}</p> : null}
-          {s && (s.sentAt || s.sentBy || s.confirmationUrl || s.publicUrl || s.notes) ? (
-            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-0.5 rounded-md bg-surface-2 px-2.5 py-1.5 text-[13px] text-muted md:text-xs">
-              {s.sentAt ? <span>{statusLabel(status)} {s.sentAt}</span> : null}
-              {s.sentBy ? <span>by {s.sentBy}</span> : null}
-              {s.confirmationUrl ? (
-                <a href={s.confirmationUrl} target="_blank" rel="noreferrer noopener" className="underline-offset-2 hover:underline">
-                  Confirmation
-                </a>
-              ) : null}
-              {s.publicUrl ? (
-                <a href={s.publicUrl} target="_blank" rel="noreferrer noopener" className="font-medium text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-300">
-                  Public listing
-                </a>
-              ) : null}
-              {s.notes ? <span className="basis-full">{s.notes}</span> : null}
-            </div>
+          <p className="truncate text-[17px] font-semibold text-fg md:text-base">{event.title}</p>
+          <p className="truncate text-[13px] text-muted md:text-xs">
+            {shortDate(event)}
+            {event.venue ? ` · ${event.venue}` : ""}
+          </p>
+          <p className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[13px] md:text-xs">
+            <Count stage="pending" n={pending} label="pending" />
+            <Count stage="sent" n={count(routine, "sent")} label="sent" />
+            <Count stage="published" n={count(routine, "published")} label="published" />
+          </p>
+        </div>
+        <ChevronRight className="size-5 shrink-0 text-subtle transition-transform group-open/concert:rotate-90" aria-hidden />
+      </summary>
+
+      <div className="border-t border-border pb-1">
+        <div className="flex flex-wrap items-center gap-2 px-4 py-3">
+          <CopyBrief text={listingBrief(event, platforms)} pending={unpublished} />
+          {event.ticketUrl ? (
+            <a href={event.ticketUrl} target="_blank" rel="noreferrer noopener" className="inline-flex min-h-9 items-center gap-1 px-1 text-[13px] text-muted hover:text-fg md:text-xs">
+              Tickets page
+              <ExternalLink className="size-3.5" aria-hidden />
+            </a>
           ) : null}
         </div>
-        <StatusPicker key={`${p.id}-${status}`} eventId={eventId} platformId={p.id} status={status} />
+
+        <Group title="Ticketing partners" icon={<Ticket className="size-3.5" aria-hidden />} platforms={partners} eventId={event.id} />
+        <Group title="Listings, every concert" platforms={always} eventId={event.id} />
+        {sometimes.length ? (
+          <details className="group/some">
+            <summary className={cn(summaryClass, "min-h-10 gap-1.5 px-4 text-xs font-medium uppercase tracking-wide text-subtle")}>
+              <ChevronRight className="size-3.5 transition-transform group-open/some:rotate-90" aria-hidden />
+              Listings, some concerts ({sometimes.length}
+              {sometimesStarted ? `, ${sometimesStarted} started` : ""})
+            </summary>
+            <Rows platforms={sometimes} eventId={event.id} />
+          </details>
+        ) : null}
+
+        <details className="group/edit">
+          <summary className={cn(summaryClass, "min-h-11 gap-1.5 px-4 text-[13px] text-muted hover:text-fg md:min-h-10 md:text-xs")}>
+            <Pencil className="size-3.5" aria-hidden />
+            Concert details (what the forms ask for)
+          </summary>
+          <div className="px-4 pb-3 pt-1">
+            <EventForm event={event} />
+          </div>
+        </details>
       </div>
-      <details className="group border-t border-border">
-        <summary className="flex min-h-10 cursor-pointer list-none items-center gap-1.5 px-4 text-[13px] text-muted hover:text-fg md:min-h-8 md:text-xs [&::-webkit-details-marker]:hidden">
-          <Pencil className="size-3" aria-hidden />
-          Details
-        </summary>
-        <div className="grid gap-5 px-4 pb-4 pt-1 lg:grid-cols-2">
-          <div>
-            <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-subtle">This concert</h3>
-            <SubmissionForm eventId={eventId} platformId={p.id} submission={s} partner={partner} />
-            {p.relationship ? <Relationship relationship={p.relationship} /> : null}
-            {threads.length ? <PartnerEmails threads={threads} /> : null}
-          </div>
-          <div>
-            <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-subtle">The platform</h3>
-            {p.costNote ? (
-              <p className="mb-2 text-[13px] text-muted md:text-xs">
-                <span className="font-medium text-fg">Cost:</span> {p.costNote}
-              </p>
-            ) : null}
-            {p.notes ? <p className="mb-2 whitespace-pre-line text-[13px] text-muted md:text-xs">{p.notes}</p> : null}
-            {p.fields ? (
-              <p className="mb-2 whitespace-pre-line text-[13px] text-muted md:text-xs">
-                <span className="font-medium text-fg">They ask for:</span> {p.fields}
-              </p>
-            ) : null}
-            {p.instructions ? <p className="mb-3 whitespace-pre-line text-[13px] text-muted md:text-xs">{p.instructions}</p> : null}
-            <PlatformForm platform={p} />
-          </div>
-        </div>
-      </details>
-    </li>
+    </details>
   );
 }
 
-function Relationship({ relationship: r }: { relationship: PartnerRelationship }) {
-  const facts = [
-    ["Members pay", r.priceToMembers],
-    ["We receive", r.paidToUs],
-    ["Usual tickets", r.typicalTickets],
-    ["Account", r.login],
-  ].filter((f): f is [string, string] => Boolean(f[1]));
+function Count({ stage, n, label }: { stage: Stage; n: number; label: string }) {
   return (
-    <section className="mt-5 flex flex-col gap-3 text-[13px] text-muted md:text-xs">
-      <h3 className="text-xs font-medium uppercase tracking-wide text-subtle">The relationship</h3>
-      {r.howItWorks ? <p className="whitespace-pre-line">{r.howItWorks}</p> : null}
-      {facts.length ? (
-        <dl className="grid gap-x-3 gap-y-1 sm:grid-cols-[8rem_1fr]">
-          {facts.map(([k, v]) => (
-            <div key={k} className="contents">
-              <dt className="font-medium text-fg">{k}</dt>
-              <dd>{v}</dd>
-            </div>
-          ))}
-        </dl>
-      ) : null}
-      {r.contacts.length ? (
-        <ul className="flex flex-col gap-0.5">
-          {r.contacts.map((c, i) => (
-            <li key={i}>
-              <span className="text-fg">{c.name ?? c.email}</span>
-              {c.role ? ` · ${c.role}` : ""}
-              {c.email && c.name ? (
-                <>
-                  {" · "}
-                  <a href={`mailto:${c.email}`} className="underline-offset-2 hover:underline">
-                    {c.email}
-                  </a>
-                </>
-              ) : null}
-              {c.lastSeen ? ` · last ${c.lastSeen}` : ""}
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      {r.concerts.length ? (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[28rem] text-left">
-            <thead className="text-subtle">
-              <tr>
-                <th className="py-1 pr-2 font-medium">Concert</th>
-                <th className="py-1 pr-2 font-medium">Offered</th>
-                <th className="py-1 pr-2 font-medium">Taken</th>
-                <th className="py-1 pr-2 font-medium">Members pay</th>
-                <th className="py-1 font-medium">We receive</th>
-              </tr>
-            </thead>
-            <tbody>
-              {r.concerts.map((c, i) => (
-                <tr key={i} className="border-t border-border align-top" title={c.notes ?? undefined}>
-                  <td className="py-1 pr-2">
-                    <span className="text-fg">{c.date}</span> {c.title}
-                  </td>
-                  <td className="py-1 pr-2 tabular-nums">{c.ticketsOffered ?? ""}</td>
-                  <td className="py-1 pr-2 tabular-nums">{c.ticketsTaken ?? ""}</td>
-                  <td className="py-1 pr-2">{c.priceToMembers ?? ""}</td>
-                  <td className="py-1">{c.paidToUs ?? ""}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : null}
-      {r.openItems.length ? (
-        <div>
-          <p className="font-medium text-fg">Pending</p>
-          <ul className="list-disc pl-4">
-            {r.openItems.map((o, i) => (
-              <li key={i}>{o}</li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-      {r.timeline.length ? (
-        <details>
-          <summary className="cursor-pointer text-fg">History ({r.timeline.length})</summary>
-          <ol className="mt-1 flex flex-col gap-1">
-            {r.timeline.map((t, i) => (
-              <li key={i}>
-                <span className="tabular-nums text-fg">{t.date}</span> {t.direction === "out" ? "→" : t.direction === "in" ? "←" : ""} {t.who ? `${t.who}: ` : ""}
-                {t.summary}
-              </li>
-            ))}
-          </ol>
-        </details>
-      ) : null}
-      {r.notes ? <p className="whitespace-pre-line">{r.notes}</p> : null}
-      {r.reviewedAt ? <p className="text-subtle">Summarized from the emails on {r.reviewedAt}.</p> : null}
+    <span className={cn("inline-flex items-center gap-1.5", stage === "pending" && n > 0 ? "font-medium text-fg" : "text-muted")}>
+      <span className={cn("size-2 rounded-full", STAGE_DOT[stage])} aria-hidden />
+      {n} {label}
+    </span>
+  );
+}
+
+function Group({ title, icon, platforms, eventId }: { title: string; icon?: React.ReactNode; platforms: PlatformForEvent[]; eventId: string }) {
+  if (!platforms.length) return null;
+  const done = platforms.length - count(platforms, "pending");
+  return (
+    <section className="mb-2">
+      <h3 className="flex min-h-9 items-center gap-1.5 px-4 text-xs font-medium uppercase tracking-wide text-subtle">
+        {icon}
+        {title}
+        <span className="ml-auto tabular-nums normal-case">
+          {done} of {platforms.length} done
+        </span>
+      </h3>
+      <Rows platforms={platforms} eventId={eventId} />
     </section>
   );
 }
 
-function PartnerEmails({ threads }: { threads: PartnerThread[] }) {
+/** The simple list: the site, how it is sent (email, form, account) and its status, changed in place. */
+function Rows({ platforms, eventId }: { platforms: PlatformForEvent[]; eventId: string }) {
   return (
-    <section className="mt-5 text-[13px] md:text-xs">
-      <h3 className="mb-1 text-xs font-medium uppercase tracking-wide text-subtle">Emails</h3>
-      <ul className="flex flex-col divide-y divide-border rounded-md border border-border">
-        {threads.map((t) => (
-          <li key={`${t.accountId}-${t.threadId}`}>
-            <Link href={`/mail/t/${t.accountId}/${t.threadId}`} className="flex items-baseline gap-2 px-2.5 py-1.5 hover:bg-surface-2">
-              <span className="w-20 shrink-0 tabular-nums text-subtle">{t.lastAt.toISOString().slice(0, 10)}</span>
-              <span className="min-w-0 flex-1 truncate text-fg">{t.subject || "(no subject)"}</span>
-              <span className="shrink-0 text-subtle">
-                {t.lastDirection === "outbound" ? "sent" : "received"}
-                {t.count > 1 ? ` · ${t.count}` : ""}
+    <ul className="flex flex-col divide-y divide-border border-y border-border">
+      {platforms.map((p) => {
+        const status = statusOf(p);
+        const s = p.submission;
+        const tickets =
+          p.kind === "partner" && s
+            ? [s.ticketsOffered != null ? `${s.ticketsOffered} tickets` : null, s.memberPrice, s.ticketsTaken != null ? `${s.ticketsTaken} taken` : null]
+                .filter(Boolean)
+                .join(" · ")
+            : "";
+        return (
+          <li key={p.id} className="flex min-h-14 items-center gap-2.5 py-1.5 pl-4 pr-3 md:min-h-11">
+            <span className={cn("size-2.5 shrink-0 rounded-full", STAGE_DOT[STAGE_OF[status]])} aria-hidden />
+            <Link href={`/promotion/p/${p.id}?event=${eventId}`} className="min-w-0 flex-1 active:opacity-60 md:hover:underline">
+              <span className="block truncate text-[15px] text-fg md:text-sm">{p.name}</span>
+              <span className="flex min-w-0 items-center gap-1.5 text-[12px] text-subtle md:text-[11px]">
+                <MethodTag method={p.method} />
+                {p.cost === "paid" ? <span className="shrink-0 text-amber-700 dark:text-amber-300">· Paid</span> : null}
+                {tickets ? <span className="truncate text-violet-700 dark:text-violet-300">· {tickets}</span> : null}
+                {!tickets && s?.sentAt ? <span className="truncate">· {s.sentAt}</span> : null}
               </span>
             </Link>
+            {s?.publicUrl ? (
+              <a href={s.publicUrl} target="_blank" rel="noreferrer noopener" aria-label={`Public listing on ${p.name}`} className="shrink-0 p-1 text-emerald-600 dark:text-emerald-400">
+                <ExternalLink className="size-4" aria-hidden />
+              </a>
+            ) : null}
+            <StatusPicker key={`${p.id}-${status}`} eventId={eventId} platformId={p.id} status={status} />
           </li>
-        ))}
-      </ul>
-    </section>
+        );
+      })}
+    </ul>
   );
 }

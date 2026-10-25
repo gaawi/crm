@@ -108,14 +108,14 @@ export async function savePlatformAction(platformId: string | null, _prev: Actio
     const message = errorMessage(error);
     return { error: /listing_platforms_name_idx|duplicate key/.test(message) ? "There is already a platform with that name." : message };
   }
-  revalidatePath("/promotion");
+  revalidatePath("/promotion", "layout");
   return { message: id ? "Saved." : "Platform added." };
 }
 
 export async function deletePlatformAction(platformId: string): Promise<void> {
   await requireSession();
   await deletePlatform(parseId(platformId));
-  revalidatePath("/promotion");
+  revalidatePath("/promotion", "layout");
 }
 
 const eventSchema = z.object({
@@ -159,7 +159,7 @@ export async function saveEventAction(eventId: string | null, _prev: ActionResul
   } catch (error) {
     return { error: errorMessage(error) };
   }
-  revalidatePath("/promotion");
+  revalidatePath("/promotion", "layout");
   if (!id) redirect(`/promotion?event=${saved}`);
   return { message: "Saved." };
 }
@@ -169,7 +169,7 @@ export async function setStatusAction(eventId: string, platformId: string, formD
   await requireSession();
   const status = statusSchema.parse(field(formData, "status"));
   await saveSubmission(parseId(eventId), parseId(platformId), { status });
-  revalidatePath("/promotion");
+  revalidatePath("/promotion", "layout");
 }
 
 const ticketCount = z
@@ -210,6 +210,6 @@ export async function saveSubmissionAction(eventId: string, platformId: string, 
   } catch (error) {
     return { error: errorMessage(error) };
   }
-  revalidatePath("/promotion");
+  revalidatePath("/promotion", "layout");
   return { message: "Saved." };
 }
