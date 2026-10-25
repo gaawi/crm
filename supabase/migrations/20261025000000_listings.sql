@@ -1,8 +1,13 @@
 -- ============================================================================
--- Listings: where to post our concerts (calendars, magazines, newsletters,
--- event sites) and, for each concert, where it was sent and what happened.
+-- Promotion: the partners, editors, calendars and newsletters every concert
+-- is sent to (TDF, Culture Pass, Time Out, BroadwayWorld, The Skint…), and,
+-- for each concert, where it was sent and what happened.
 --
---   listing_platforms    one row per site or outlet (New Music USA, The Skint…)
+--   listing_platforms    one row per partner or outlet
+--     kind               'partner' (tickets / audiences: TDF, Culture Pass) | 'editorial'
+--                        (editors, critics) | 'calendar' | 'newsletter' | 'aggregator' | 'other'
+--     tier               'always' (part of every concert's routine) | 'sometimes' | 'skip'
+--     fields             what their form or email asks for
 --     method             'form' | 'email' | 'account' (post from a login) | 'other'
 --     login_required     the account it needs (which email or "Google", never a password)
 --     cost               'free' | 'paid' | 'unknown', with cost_note ("25 USD per concert")
@@ -20,6 +25,9 @@ create table if not exists listing_platforms (
   website         text check (website is null or (website ~ '^https?://[^\s/]+[^\s]*$' and length(website) <= 2048)),
   submit_url      text check (submit_url is null or (submit_url ~ '^https?://[^\s/]+[^\s]*$' and length(submit_url) <= 2048)),
   email           text check (email is null or length(email) <= 320),
+  kind            text not null default 'calendar'
+                  check (kind in ('partner', 'editorial', 'calendar', 'newsletter', 'aggregator', 'other')),
+  tier            text not null default 'sometimes' check (tier in ('always', 'sometimes', 'skip')),
   method          text not null default 'form' check (method in ('form', 'email', 'account', 'other')),
   login_required  boolean not null default false,
   login_account   text check (login_account is null or length(login_account) <= 300),
@@ -27,9 +35,9 @@ create table if not exists listing_platforms (
   cost_note       text check (cost_note is null or length(cost_note) <= 300),
   lead_days       smallint check (lead_days is null or lead_days between 0 and 365),
   audience        text check (audience is null or length(audience) <= 300),
+  fields          text check (fields is null or length(fields) <= 2000),
   instructions    text check (instructions is null or length(instructions) <= 4000),
   notes           text check (notes is null or length(notes) <= 4000),
-  active          boolean not null default true,
   created_at      timestamptz not null default now(),
   updated_at      timestamptz not null default now()
 );

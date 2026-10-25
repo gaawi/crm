@@ -4,18 +4,22 @@ import {
   DEFAULT_EVENT_TIME_ZONE,
   type ListingCost,
   type ListingMethod,
+  type PlatformKind,
+  type PlatformTier,
   type SubmissionStatus,
 } from "@/lib/listings/constants";
 
 /**
- * Listings: the sites and outlets where we post our concerts
+ * Promotion: the partners and outlets every concert is sent to
  * (listing_platforms), the concerts we promote (listing_events) and, for
- * each concert, what was done on each platform (listing_submissions).
+ * each concert, what was done on each one (listing_submissions).
  */
 
 export interface ListingPlatform {
   id: string;
   name: string;
+  kind: PlatformKind;
+  tier: PlatformTier;
   website: string | null;
   submitUrl: string | null;
   email: string | null;
@@ -26,9 +30,9 @@ export interface ListingPlatform {
   costNote: string | null;
   leadDays: number | null;
   audience: string | null;
+  fields: string | null;
   instructions: string | null;
   notes: string | null;
-  active: boolean;
 }
 
 export interface ListingEvent {
@@ -69,8 +73,8 @@ export interface PlatformForEvent extends ListingPlatform {
 }
 
 const platformColumns = sql`
-  p.id, p.name, p.website, p.submit_url, p.email, p.method, p.login_required, p.login_account,
-  p.cost, p.cost_note, p.lead_days, p.audience, p.instructions, p.notes, p.active
+  p.id, p.name, p.kind, p.tier, p.website, p.submit_url, p.email, p.method, p.login_required, p.login_account,
+  p.cost, p.cost_note, p.lead_days, p.audience, p.fields, p.instructions, p.notes
 `;
 
 const eventColumns = sql`
@@ -94,7 +98,7 @@ export async function getListingEvent(id: string): Promise<ListingEvent | null> 
   return row ?? null;
 }
 
-/** Every platform (active first, then by name) with this concert's submission, when there is one. */
+/** Every platform (every-concert ones first, by kind and name) with this concert's submission, when there is one. */
 export async function platformsForEvent(eventId: string | null): Promise<PlatformForEvent[]> {
   const rows = await sql<(ListingPlatform & { submission: ListingSubmission | null })[]>`
     select ${platformColumns},
@@ -104,7 +108,7 @@ export async function platformsForEvent(eventId: string | null): Promise<Platfor
         from listing_submissions s where s.platform_id = p.id and s.event_id = ${eventId}
       ) s) as submission
     from listing_platforms p
-    order by p.active desc, lower(p.name)`;
+    order by case p.tier when 'always' then 0 when 'sometimes' then 1 else 2 end, case p.kind when 'partner' then 0 when 'editorial' then 1 when 'calendar' then 2 when 'newsletter' then 3 when 'aggregator' then 4 else 5 end, lower(p.name)`;
   return rows.map((r) => ({ ...r, submission: r.submission ? toSubmission(r.submission as unknown as Record<string, unknown>) : null }));
 }
 
@@ -126,11 +130,13 @@ function toSubmission(raw: Record<string, unknown>): ListingSubmission {
 }
 
 export async function listListingPlatforms(): Promise<ListingPlatform[]> {
-  return sql<ListingPlatform[]>`select ${platformColumns} from listing_platforms p order by p.active desc, lower(p.name)`;
+  return sql<ListingPlatform[]>`select ${platformColumns} from listing_platforms p order by case p.tier when 'always' then 0 when 'sometimes' then 1 else 2 end, case p.kind when 'partner' then 0 when 'editorial' then 1 when 'calendar' then 2 when 'newsletter' then 3 when 'aggregator' then 4 else 5 end, lower(p.name)`;
 }
 
 export interface PlatformInput {
   name: string;
+  kind?: PlatformKind;
+  tier?: PlatformTier;
   website?: string | null;
   submitUrl?: string | null;
   email?: string | null;
@@ -141,15 +147,17 @@ export interface PlatformInput {
   costNote?: string | null;
   leadDays?: number | null;
   audience?: string | null;
+  fields?: string | null;
   instructions?: string | null;
   notes?: string | null;
-  active?: boolean;
 }
 
 /** Creates the platform, or updates the one with that id. Only the fields given change on an update. */
 export async function savePlatform(input: PlatformInput, id?: string): Promise<string> {
   const values = {
     name: input.name.trim(),
+    kind: input.kind ?? "calendar",
+    tier: input.tier ?? "sometimes",
     website: input.website ?? null,
     submit_url: input.submitUrl ?? null,
     email: input.email ?? null,
@@ -160,9 +168,9 @@ export async function savePlatform(input: PlatformInput, id?: string): Promise<s
     cost_note: input.costNote ?? null,
     lead_days: input.leadDays ?? null,
     audience: input.audience ?? null,
+    fields: input.fields ?? null,
     instructions: input.instructions ?? null,
     notes: input.notes ?? null,
-    active: input.active ?? true,
   };
   if (id) {
     const keys = Object.keys(values).filter((k) => {

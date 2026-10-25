@@ -1,7 +1,18 @@
 import "server-only";
 import { z } from "zod";
 import { sql } from "@/lib/db";
-import { LISTING_COSTS, LISTING_METHODS, SUBMISSION_STATUSES, type ListingCost, type ListingMethod, type SubmissionStatus } from "@/lib/listings/constants";
+import {
+  LISTING_COSTS,
+  LISTING_METHODS,
+  PLATFORM_KINDS,
+  PLATFORM_TIERS,
+  SUBMISSION_STATUSES,
+  type ListingCost,
+  type ListingMethod,
+  type PlatformKind,
+  type PlatformTier,
+  type SubmissionStatus,
+} from "@/lib/listings/constants";
 import {
   findPlatformByName,
   listListingEvents,
@@ -14,7 +25,7 @@ import { noEmDash } from "@/lib/text/no-em-dash";
 import { isValidEmail } from "@/lib/utils";
 
 /**
- * Listings for an assistant (Claude, a ChatGPT agent with the token):
+ * Promotion for an assistant (Claude, a ChatGPT agent with the token):
  * read the concerts, the platforms and where each concert was sent; add or
  * update platforms (matched by name), concerts and submissions.
  */
@@ -56,6 +67,8 @@ const txt = (max: number) =>
 
 const platformSchema = z.object({
   name: z.string().trim().min(1).max(200),
+  kind: z.enum(PLATFORM_KINDS.map((k) => k.value) as [PlatformKind, ...PlatformKind[]]).optional(),
+  tier: z.enum(PLATFORM_TIERS.map((t) => t.value) as [PlatformTier, ...PlatformTier[]]).optional(),
   website: url,
   submitUrl: url,
   email: z
@@ -72,9 +85,9 @@ const platformSchema = z.object({
   costNote: txt(300),
   leadDays: z.number().int().min(0).max(365).nullish(),
   audience: txt(300),
+  fields: txt(2000),
   instructions: txt(4000),
   notes: txt(4000),
-  active: z.boolean().optional(),
 });
 
 const eventSchema = z.object({

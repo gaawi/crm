@@ -1,5 +1,5 @@
 import { noEmDash } from "@/lib/text/no-em-dash";
-import { LISTING_COSTS, methodLabel, statusLabel, type SubmissionStatus } from "./constants";
+import { kindLabel, LISTING_COSTS, methodLabel, statusLabel, type SubmissionStatus } from "./constants";
 import type { ListingEvent, PlatformForEvent } from "@/lib/queries/listings";
 
 /**
@@ -38,12 +38,13 @@ export function listingBrief(event: ListingEvent, platforms: PlatformForEvent[])
   if (event.description) lines.push("", "### Descripción", event.description);
   if (event.notes) lines.push("", "### Notas", event.notes);
 
-  const open = platforms.filter((p) => p.active && OPEN.includes(p.submission?.status ?? "todo"));
+  const open = platforms.filter((p) => p.tier !== "skip" && OPEN.includes(p.submission?.status ?? "todo"));
   const done = platforms.filter((p) => p.submission && !OPEN.includes(p.submission.status));
   lines.push("", `## Plataformas pendientes (${open.length})`);
   open.forEach((p, i) => {
     const status = p.submission?.status ?? "todo";
     lines.push("", `### ${i + 1}. ${p.name}${status !== "todo" ? ` (estado actual: ${statusLabel(status)})` : ""}`);
+    lines.push(`- Tipo: ${kindLabel(p.kind)}${p.tier === "always" ? " (se envía en cada concierto)" : ""}`);
     lines.push(`- Método: ${methodLabel(p.method)}`);
     if (p.submitUrl) lines.push(`- Dónde enviar: ${p.submitUrl}`);
     if (p.email) lines.push(`- Email: ${p.email}`);
@@ -53,6 +54,7 @@ export function listingBrief(event: ListingEvent, platforms: PlatformForEvent[])
     lines.push(`- Coste: ${cost === "free" ? "gratis" : cost === "paid" ? `de pago${p.costNote ? ` (${p.costNote})` : ""}. NO pagues sin permiso` : `desconocido${p.costNote ? ` (${p.costNote})` : ""}`}`);
     if (p.leadDays != null) lines.push(`- Antelación que piden: ${p.leadDays} días`);
     if (p.audience) lines.push(`- Público: ${p.audience}`);
+    if (p.fields) lines.push(`- Qué piden: ${p.fields}`);
     if (p.instructions) lines.push(`- Instrucciones: ${p.instructions}`);
     if (p.notes) lines.push(`- Notas: ${p.notes}`);
     if (p.submission?.notes) lines.push(`- Notas de este concierto: ${p.submission.notes}`);

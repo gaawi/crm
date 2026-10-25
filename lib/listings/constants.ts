@@ -1,7 +1,29 @@
 /**
- * Listings (where we post our concerts): the vocabulary shared by the page,
- * the server actions, the assistant API and the brief for an outside agent.
+ * Promotion (the partners and outlets every concert is sent to): the
+ * vocabulary shared by the page, the server actions, the assistant API and
+ * the brief for an outside agent.
  */
+
+export const PLATFORM_KINDS = [
+  { value: "partner", label: "Partner", hint: "Sells or offers tickets to its members (TDF, Culture Pass)" },
+  { value: "editorial", label: "Press", hint: "Editors and critics (Time Out, BroadwayWorld)" },
+  { value: "calendar", label: "Calendar", hint: "Publishes the listing on its event calendar" },
+  { value: "newsletter", label: "Newsletter", hint: "Curated picks sent to subscribers (The Skint)" },
+  { value: "aggregator", label: "Aggregator", hint: "Copies events from other sites" },
+  { value: "other", label: "Other", hint: "" },
+] as const;
+export type PlatformKind = (typeof PLATFORM_KINDS)[number]["value"];
+
+export const PLATFORM_TIERS = [
+  { value: "always", label: "Every concert" },
+  { value: "sometimes", label: "Some concerts" },
+  { value: "skip", label: "Not worth it" },
+] as const;
+export type PlatformTier = (typeof PLATFORM_TIERS)[number]["value"];
+
+export function kindLabel(kind: PlatformKind): string {
+  return PLATFORM_KINDS.find((k) => k.value === kind)?.label ?? kind;
+}
 
 export const SUBMISSION_STATUSES = [
   { value: "todo", label: "To do", tone: "neutral" },

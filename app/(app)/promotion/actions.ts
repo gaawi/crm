@@ -7,9 +7,13 @@ import { requireSession } from "@/lib/auth";
 import {
   LISTING_COSTS,
   LISTING_METHODS,
+  PLATFORM_KINDS,
+  PLATFORM_TIERS,
   SUBMISSION_STATUSES,
   type ListingCost,
   type ListingMethod,
+  type PlatformKind,
+  type PlatformTier,
   type SubmissionStatus,
 } from "@/lib/listings/constants";
 import { deletePlatform, saveEvent, savePlatform, saveSubmission } from "@/lib/queries/listings";
@@ -34,9 +38,13 @@ const text = (max: number) =>
 const statusSchema = z.enum(SUBMISSION_STATUSES.map((s) => s.value) as [SubmissionStatus, ...SubmissionStatus[]]);
 const methodSchema = z.enum(LISTING_METHODS.map((m) => m.value) as [ListingMethod, ...ListingMethod[]]);
 const costSchema = z.enum(LISTING_COSTS.map((c) => c.value) as [ListingCost, ...ListingCost[]]);
+const kindSchema = z.enum(PLATFORM_KINDS.map((k) => k.value) as [PlatformKind, ...PlatformKind[]]);
+const tierSchema = z.enum(PLATFORM_TIERS.map((t) => t.value) as [PlatformTier, ...PlatformTier[]]);
 
 const platformSchema = z.object({
   name: z.string().trim().min(1, "Give the platform a name.").max(200),
+  kind: kindSchema,
+  tier: tierSchema,
   website: urlSchema,
   submitUrl: urlSchema,
   email: z
@@ -56,14 +64,16 @@ const platformSchema = z.object({
     .regex(/^\d{0,3}$/, "Lead time is a number of days.")
     .transform((v) => (v ? Math.min(Number(v), 365) : null)),
   audience: text(300),
+  fields: text(2000),
   instructions: text(4000),
   notes: text(4000),
-  active: z.boolean(),
 });
 
 function platformFields(formData: FormData) {
   return platformSchema.safeParse({
     name: field(formData, "name"),
+    kind: field(formData, "kind") || "calendar",
+    tier: field(formData, "tier") || "sometimes",
     website: field(formData, "website"),
     submitUrl: field(formData, "submitUrl"),
     email: field(formData, "email"),
@@ -74,9 +84,9 @@ function platformFields(formData: FormData) {
     costNote: field(formData, "costNote"),
     leadDays: field(formData, "leadDays"),
     audience: field(formData, "audience"),
+    fields: field(formData, "fields"),
     instructions: field(formData, "instructions"),
     notes: field(formData, "notes"),
-    active: !formData.has("activeField") || field(formData, "active") === "on",
   });
 }
 
@@ -92,14 +102,14 @@ export async function savePlatformAction(platformId: string | null, _prev: Actio
     const message = errorMessage(error);
     return { error: /listing_platforms_name_idx|duplicate key/.test(message) ? "There is already a platform with that name." : message };
   }
-  revalidatePath("/listings");
+  revalidatePath("/promotion");
   return { message: id ? "Saved." : "Platform added." };
 }
 
 export async function deletePlatformAction(platformId: string): Promise<void> {
   await requireSession();
   await deletePlatform(parseId(platformId));
-  revalidatePath("/listings");
+  revalidatePath("/promotion");
 }
 
 const eventSchema = z.object({
@@ -143,8 +153,8 @@ export async function saveEventAction(eventId: string | null, _prev: ActionResul
   } catch (error) {
     return { error: errorMessage(error) };
   }
-  revalidatePath("/listings");
-  if (!id) redirect(`/listings?event=${saved}`);
+  revalidatePath("/promotion");
+  if (!id) redirect(`/promotion?event=${saved}`);
   return { message: "Saved." };
 }
 
@@ -153,7 +163,7 @@ export async function setStatusAction(eventId: string, platformId: string, formD
   await requireSession();
   const status = statusSchema.parse(field(formData, "status"));
   await saveSubmission(parseId(eventId), parseId(platformId), { status });
-  revalidatePath("/listings");
+  revalidatePath("/promotion");
 }
 
 const submissionSchema = z.object({
@@ -182,6 +192,6 @@ export async function saveSubmissionAction(eventId: string, platformId: string, 
   } catch (error) {
     return { error: errorMessage(error) };
   }
-  revalidatePath("/listings");
+  revalidatePath("/promotion");
   return { message: "Saved." };
 }

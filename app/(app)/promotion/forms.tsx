@@ -8,6 +8,8 @@ import {
   DEFAULT_EVENT_TIME_ZONE,
   LISTING_COSTS,
   LISTING_METHODS,
+  PLATFORM_KINDS,
+  PLATFORM_TIERS,
   SUBMISSION_STATUS_HINT,
   SUBMISSION_STATUSES,
   type SubmissionStatus,
@@ -115,6 +117,24 @@ export function PlatformForm({ platform }: { platform?: ListingPlatform }) {
         <Field label="Name" htmlFor={`${p}-name`}>
           <Input id={`${p}-name`} name="name" required maxLength={200} defaultValue={platform?.name ?? ""} autoComplete="off" />
         </Field>
+        <Field label="Type" htmlFor={`${p}-kind`}>
+          <Select id={`${p}-kind`} name="kind" defaultValue={platform?.kind ?? "calendar"}>
+            {PLATFORM_KINDS.map((k) => (
+              <option key={k.value} value={k.value} title={k.hint}>
+                {k.label}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Routine" htmlFor={`${p}-tier`} hint="Every concert: part of the checklist each time.">
+          <Select id={`${p}-tier`} name="tier" defaultValue={platform?.tier ?? "sometimes"}>
+            {PLATFORM_TIERS.map((t) => (
+              <option key={t.value} value={t.value}>
+                {t.label}
+              </option>
+            ))}
+          </Select>
+        </Field>
         <Field label="How to submit" htmlFor={`${p}-method`}>
           <Select id={`${p}-method`} name="method" defaultValue={platform?.method ?? "form"}>
             {LISTING_METHODS.map((m) => (
@@ -161,19 +181,15 @@ export function PlatformForm({ platform }: { platform?: ListingPlatform }) {
       <Field label="Audience" htmlFor={`${p}-aud`}>
         <Input id={`${p}-aud`} name="audience" maxLength={300} defaultValue={platform?.audience ?? ""} placeholder="Classical / new music / local discovery…" />
       </Field>
+      <Field label="What they ask for" htmlFor={`${p}-fields`} hint="The form's fields or what the email must include: image size, word limits, categories…">
+        <Textarea id={`${p}-fields`} name="fields" rows={2} maxLength={2000} defaultValue={platform?.fields ?? ""} />
+      </Field>
       <Field label="Instructions" htmlFor={`${p}-instr`} hint="What the form asks, requirements, what to say. The brief for ChatGPT includes it.">
         <Textarea id={`${p}-instr`} name="instructions" rows={3} maxLength={4000} defaultValue={platform?.instructions ?? ""} />
       </Field>
       <Field label="Notes" htmlFor={`${p}-notes`}>
         <Textarea id={`${p}-notes`} name="notes" rows={2} maxLength={4000} defaultValue={platform?.notes ?? ""} />
       </Field>
-      {platform ? (
-        <label className="flex items-center gap-2 text-sm text-muted">
-          <input type="hidden" name="activeField" value="1" />
-          <Checkbox name="active" defaultChecked={platform.active} />
-          Active (unchecked: kept for reference, left out of the brief)
-        </label>
-      ) : null}
       <FormActions>
         <FormSubmit pendingLabel="Saving…">{platform ? "Save platform" : "Add platform"}</FormSubmit>
       </FormActions>
