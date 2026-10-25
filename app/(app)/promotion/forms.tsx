@@ -145,6 +145,19 @@ export function SubmissionForm({
         <UrlCell label="Confirmation" name="confirmationUrl" value={s?.confirmationUrl ?? null} />
         <UrlCell label="Public listing" name="publicUrl" value={s?.publicUrl ?? null} />
       </InsetGroup>
+      <InsetGroup title="Why it is pending" footer="ChatGPT writes here (pending_reason) what blocks the submission and what it needs from you.">
+        <li>
+          <textarea
+            name="pendingReason"
+            rows={2}
+            maxLength={2000}
+            defaultValue={s?.pendingReason ?? ""}
+            aria-label="Why it is pending"
+            placeholder="Captcha, login, they ask for payment…"
+            className="block min-h-20 w-full resize-none bg-transparent px-4 py-3 text-[17px] leading-relaxed text-fg placeholder:text-subtle/60 [field-sizing:content] focus:outline-none md:text-sm"
+          />
+        </li>
+      </InsetGroup>
       <InsetGroup title="Notes for this concert">
         <li>
           <textarea

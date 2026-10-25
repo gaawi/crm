@@ -1,14 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { ExternalLink, Pencil } from "lucide-react";
+import { ExternalLink, Pencil, Ticket } from "lucide-react";
 import { PageHeader } from "@/components/ui/layout";
 import { listingBrief } from "@/lib/listings/brief";
 import { getListingEvent, platformsForEvent, type PlatformForEvent } from "@/lib/queries/listings";
 import { cn } from "@/lib/utils";
 import { CopyBrief, StatusCell } from "../../forms";
 import { EventSheetRow } from "../../sheets";
-import { concertGroups, InsetGroup, MethodIcon, methodName, ProgressBar, rowClass, statusOf, stageOf, ViewLink } from "../../stage";
+import { concertGroups, CountsLine, InsetGroup, MethodIcon, methodName, ProgressBar, rowClass, statusOf, stageOf, ViewLink } from "../../stage";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -38,13 +38,9 @@ export default async function PromotionConcertPage({ params }: PageProps<"/promo
       <PageHeader title={event.title} description={[when(event), event.venue].filter(Boolean).join(" · ")} back={{ href: "/promotion", label: "Promotion" }} />
       <div className="flex flex-col gap-7 md:max-w-2xl">
         <InsetGroup>
-          <li className="p-4">
-            <div className="grid grid-cols-3 text-center">
-              <Stat n={counts.pending} label="Pending" className="text-amber-600 dark:text-amber-400" />
-              <Stat n={counts.sent} label="Sent" className="text-blue-600 dark:text-blue-400" />
-              <Stat n={counts.published} label="Published" className="text-emerald-600 dark:text-emerald-400" />
-            </div>
-            <ProgressBar counts={counts} className="mt-4" />
+          <li className="flex flex-col gap-2 px-4 py-3.5">
+            <CountsLine counts={counts} className="text-[15px] md:text-sm" />
+            <ProgressBar counts={counts} />
           </li>
           <li>
             <CopyBrief
@@ -97,19 +93,10 @@ export default async function PromotionConcertPage({ params }: PageProps<"/promo
   );
 }
 
-function Stat({ n, label, className }: { n: number; label: string; className: string }) {
-  return (
-    <div>
-      <p className={cn("text-[28px] font-semibold leading-none tabular-nums md:text-2xl", className)}>{n}</p>
-      <p className="mt-1 text-[13px] text-muted md:text-xs">{label}</p>
-    </div>
-  );
-}
-
 /** Why a pending site is still pending, as ChatGPT (or whoever) noted it. */
 function pendingReason(p: PlatformForEvent): string | null {
   if (stageOf(p) !== "pending") return null;
-  if (p.submission?.notes) return p.submission.notes;
+  if (p.submission?.pendingReason) return p.submission.pendingReason;
   return statusOf(p) === "blocked" ? "Blocked: no reason noted yet." : "Not sent yet.";
 }
 
@@ -121,10 +108,12 @@ function pendingReason(p: PlatformForEvent): string | null {
 function SiteRow({ platform: p, eventId }: { platform: PlatformForEvent; eventId: string }) {
   const s = p.submission;
   const stage = stageOf(p);
-  const detail =
+  const tickets =
     p.kind === "partner" && s && (s.ticketsOffered != null || s.memberPrice)
       ? [s.ticketsOffered != null ? `${s.ticketsOffered} tickets` : null, s.memberPrice, s.ticketsTaken != null ? `${s.ticketsTaken} taken` : null].filter(Boolean).join(" · ")
-      : stage === "published" && !s?.publicUrl
+      : null;
+  const detail =
+    stage === "published" && !s?.publicUrl
         ? "No public link saved"
         : s?.sentAt
           ? s.sentAt
@@ -142,6 +131,12 @@ function SiteRow({ platform: p, eventId }: { platform: PlatformForEvent; eventId
             {methodName(p.method)}
             {detail ? ` · ${detail}` : ""}
           </span>
+          {tickets ? (
+            <span className="mt-1 inline-flex max-w-full items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[13px] font-medium text-violet-800 md:text-xs dark:bg-violet-950 dark:text-violet-200">
+              <Ticket className="size-3.5 shrink-0" aria-hidden />
+              <span className="truncate">{tickets}</span>
+            </span>
+          ) : null}
           {reason ? <span className="mt-0.5 line-clamp-2 text-[13px] leading-snug text-amber-700 md:text-xs dark:text-amber-400">{reason}</span> : null}
         </span>
       </Link>

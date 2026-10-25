@@ -124,6 +124,8 @@ const submissionSchema = z.object({
   confirmationUrl: url,
   publicUrl: url,
   notes: txt(4000),
+  /** Why it is still pending (todo or blocked): what blocks it and what the owner must provide. */
+  pendingReason: txt(2000),
   ticketsOffered: z.number().int().min(0).max(10000).nullish(),
   ticketsTaken: z.number().int().min(0).max(10000).nullish(),
   memberPrice: txt(100),

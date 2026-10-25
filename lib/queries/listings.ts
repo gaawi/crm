@@ -66,6 +66,8 @@ export interface ListingSubmission {
   confirmationUrl: string | null;
   publicUrl: string | null;
   notes: string | null;
+  /** Why it is still pending (todo or blocked), as ChatGPT notes it. */
+  pendingReason: string | null;
   /** Ticketing partners: tickets we offered, what their members pay, how many they took. */
   ticketsOffered: number | null;
   ticketsTaken: number | null;
@@ -114,7 +116,7 @@ export async function platformsForEvent(eventId: string | null): Promise<Platfor
     select ${platformColumns},
       (select to_jsonb(s) from (
         select s.id, s.event_id, s.platform_id, s.status, s.sent_at, s.sent_by, s.confirmation_url,
-               s.public_url, s.notes, s.tickets_offered, s.tickets_taken, s.member_price, s.updated_at
+               s.public_url, s.notes, s.pending_reason, s.tickets_offered, s.tickets_taken, s.member_price, s.updated_at
         from listing_submissions s where s.platform_id = p.id and s.event_id = ${eventId}
       ) s) as submission
     from listing_platforms p
@@ -135,6 +137,7 @@ function toSubmission(raw: Record<string, unknown>): ListingSubmission {
     confirmationUrl: get("confirmation_url") as string | null,
     publicUrl: get("public_url") as string | null,
     notes: get("notes") as string | null,
+    pendingReason: get("pending_reason") as string | null,
     ticketsOffered: get("tickets_offered") as number | null,
     ticketsTaken: get("tickets_taken") as number | null,
     memberPrice: get("member_price") as string | null,
@@ -265,6 +268,7 @@ export interface SubmissionInput {
   confirmationUrl?: string | null;
   publicUrl?: string | null;
   notes?: string | null;
+  pendingReason?: string | null;
   ticketsOffered?: number | null;
   ticketsTaken?: number | null;
   memberPrice?: string | null;
@@ -284,17 +288,18 @@ export async function saveSubmission(eventId: string, platformId: string, input:
     confirmationUrl: input.confirmationUrl !== undefined,
     publicUrl: input.publicUrl !== undefined,
     notes: input.notes !== undefined,
+    pendingReason: input.pendingReason !== undefined,
     ticketsOffered: input.ticketsOffered !== undefined,
     ticketsTaken: input.ticketsTaken !== undefined,
     memberPrice: input.memberPrice !== undefined,
   };
   const [row] = await sql<{ id: string }[]>`
     insert into listing_submissions (event_id, platform_id, status, sent_at, sent_by, confirmation_url, public_url, notes,
-                                     tickets_offered, tickets_taken, member_price)
+                                     pending_reason, tickets_offered, tickets_taken, member_price)
     values (${eventId}, ${platformId}, ${input.status ?? "todo"},
             ${defaultDate ? sql`current_date` : sql`${input.sentAt ?? null}::date`},
             ${input.sentBy ?? null}, ${input.confirmationUrl ?? null}, ${input.publicUrl ?? null}, ${input.notes ?? null},
-            ${input.ticketsOffered ?? null}, ${input.ticketsTaken ?? null}, ${input.memberPrice ?? null})
+            ${input.pendingReason ?? null}, ${input.ticketsOffered ?? null}, ${input.ticketsTaken ?? null}, ${input.memberPrice ?? null})
     on conflict (event_id, platform_id) do update set
       status = case when ${has.status} then excluded.status else listing_submissions.status end,
       sent_at = case when ${has.sentAt} then excluded.sent_at
@@ -304,6 +309,7 @@ export async function saveSubmission(eventId: string, platformId: string, input:
       confirmation_url = case when ${has.confirmationUrl} then excluded.confirmation_url else listing_submissions.confirmation_url end,
       public_url = case when ${has.publicUrl} then excluded.public_url else listing_submissions.public_url end,
       notes = case when ${has.notes} then excluded.notes else listing_submissions.notes end,
+      pending_reason = case when ${has.pendingReason} then excluded.pending_reason else listing_submissions.pending_reason end,
       tickets_offered = case when ${has.ticketsOffered} then excluded.tickets_offered else listing_submissions.tickets_offered end,
       tickets_taken = case when ${has.ticketsTaken} then excluded.tickets_taken else listing_submissions.tickets_taken end,
       member_price = case when ${has.memberPrice} then excluded.member_price else listing_submissions.member_price end

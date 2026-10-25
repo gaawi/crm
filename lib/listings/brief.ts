@@ -57,6 +57,7 @@ export function listingBrief(event: ListingEvent, platforms: PlatformForEvent[])
     if (p.fields) lines.push(`- Qué piden: ${p.fields}`);
     if (p.instructions) lines.push(`- Instrucciones: ${p.instructions}`);
     if (p.notes) lines.push(`- Notas: ${p.notes}`);
+    if (p.submission?.pendingReason) lines.push(`- Motivo por el que sigue pendiente: ${p.submission.pendingReason}`);
     if (p.submission?.notes) lines.push(`- Notas de este concierto: ${p.submission.notes}`);
   });
   if (done.length) {
@@ -69,11 +70,11 @@ export function listingBrief(event: ListingEvent, platforms: PlatformForEvent[])
     "- No pagues nada, no crees cuentas nuevas y no aceptes condiciones comerciales sin mi permiso.",
     "- No dupliques fichas que ya existan; si encuentras una con datos erróneos, anótalo.",
     "- Si un captcha o un login te bloquea, déjalo como bloqueado y dime qué falta.",
-    "- Si no puedes enviar a una plataforma, escribe en Notas el motivo exacto (qué te bloquea y qué necesitas de mí). Lo reviso uno por uno.",
+    "- Si no puedes enviar a una plataforma, escribe el motivo exacto (qué te bloquea y qué necesitas de mí) en la columna Motivo pendiente. En Supabase es el campo pending_reason de la tabla listing_submissions. Lo reviso uno por uno.",
     "- Cuando una ficha esté publicada, pon siempre el enlace público, para poder ver cómo ha quedado.",
     "",
     "## Cómo informarme",
-    "Al terminar, devuélveme una tabla con una fila por plataforma: Plataforma | Estado (Sent, Received, Published, Rejected, Blocked o Skipped) | Fecha | Enlace de confirmación | Enlace público | Notas.",
+    "Al terminar, devuélveme una tabla con una fila por plataforma: Plataforma | Estado (Sent, Received, Published, Rejected, Blocked o Skipped) | Fecha | Enlace de confirmación | Enlace público | Motivo pendiente | Notas.",
   );
   return noEmDash(lines.join("\n"));
 }

@@ -59,14 +59,23 @@ describe("listings", () => {
       submissions: [
         { event: "fall concert", platform: "Time Out New York", status: "sent", sentAt: "2026-10-24", sentBy: "ChatGPT" },
         { event: "Fall concert", platform: "Nowhere", status: "sent" },
+        { event: "Fall concert", platform: "New Music USA", status: "blocked", pendingReason: "Captcha; needs a person." },
       ],
     });
     expect(second.platforms[0]).toMatchObject({ ok: true, created: false });
-    expect(second.submissions.map((s) => s.ok)).toEqual([true, false]);
+    expect(second.submissions.map((s) => s.ok)).toEqual([true, false, true]);
 
     const overview = await listingsOverview(first.events[0].ok ? first.events[0].id : null);
     const nmu = overview.platforms.find((p) => p.name === "New Music USA");
-    expect(nmu).toMatchObject({ cost: "free", submitUrl: "https://www.newmusicusa.org/submit", notes: "Publishes in a few days" });
+    expect(nmu).toMatchObject({ cost: "free", submitUrl: "https://www.newmusicusa.org/submit", notes: "Publishes in a few days", submission: { status: "blocked", pendingReason: "Captcha; needs a person." } });
+
+    // ChatGPT writes straight to the database: the checklist view gives it every pair's ids.
+    const rows = await sql<{ site: string; status: string; pendingReason: string | null }[]>`
+      select site, status, pending_reason from promotion_checklist where concert = 'Fall concert' order by site`;
+    expect(rows).toEqual([
+      { site: "New Music USA", status: "blocked", pendingReason: "Captcha; needs a person." },
+      { site: "Time Out New York", status: "sent", pendingReason: null },
+    ]);
     const timeout = overview.platforms.find((p) => p.name === "Time Out New York");
     expect(timeout).toMatchObject({ email: "classical.ny@timeout.com", submission: { status: "sent", sentAt: "2026-10-24", sentBy: "ChatGPT" } });
   });

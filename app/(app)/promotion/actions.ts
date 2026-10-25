@@ -189,6 +189,7 @@ const submissionSchema = z.object({
   confirmationUrl: urlSchema,
   publicUrl: urlSchema,
   notes: text(4000),
+  pendingReason: text(2000),
 });
 
 /** The full row editor: status, date, who sent it, links and notes for this concert. */
@@ -204,6 +205,7 @@ export async function saveSubmissionAction(eventId: string, platformId: string, 
     confirmationUrl: field(formData, "confirmationUrl"),
     publicUrl: field(formData, "publicUrl"),
     notes: field(formData, "notes"),
+    pendingReason: field(formData, "pendingReason"),
   });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Some fields are invalid." };
   try {
