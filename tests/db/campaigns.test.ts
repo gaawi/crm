@@ -62,7 +62,7 @@ import {
   updateCampaignSettings,
 } from "@/lib/campaigns/campaigns";
 import { runCampaigns } from "@/lib/campaigns/scheduler";
-import type { CampaignSettings } from "@/lib/campaigns/types";
+import { ACCOUNT_DAILY_SEND_CAP, type CampaignSettings } from "@/lib/campaigns/types";
 import { addActivity } from "@/lib/queries/activities";
 import { createContact } from "@/lib/queries/contacts";
 import { countPendingDrafts, getDraft, listDrafts } from "@/lib/queries/drafts";
@@ -213,7 +213,7 @@ describe.skipIf(process.env.SKIP_DB_TESTS === "1")("gradual campaigns", () => {
     const other = await createCampaign({ name: "Earlier", accountId, draftIds: [] });
     await sql`
       insert into email_drafts (account_id, campaign_id, status, sent_at, to_emails, subject, body_text)
-      select ${accountId}, ${other}, 'sent', ${minutes(MON_10, -120)}, '{x@y.test}', 's', 'b' from generate_series(1, 150)`;
+      select ${accountId}, ${other}, 'sent', ${minutes(MON_10, -120)}, '{x@y.test}', 's', 'b' from generate_series(1, ${ACCOUNT_DAILY_SEND_CAP})`;
     const { campaignId } = await campaignOf(2);
     await startCampaign(campaignId, { perHour: 60 });
     expect((await run(MON_10)).campaigns[0]).toMatchObject({ sent: 0, waiting: "account_cap" });

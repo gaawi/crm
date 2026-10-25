@@ -10,8 +10,8 @@ import type { CampaignStatus, DraftStatus } from "@/lib/types";
 
 export type { CampaignStatus };
 
-/** Most emails sent from one Gmail account by all campaigns together in any 24 hours. */
-export const ACCOUNT_DAILY_SEND_CAP = 150;
+/** Most emails sent from one Gmail account by all campaigns together in any 24 hours (Google Workspace allows 2,000). */
+export const ACCOUNT_DAILY_SEND_CAP = 250;
 
 /**
  * Start of the error of an email the sender held back (back to "proposed")

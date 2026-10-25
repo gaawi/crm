@@ -107,7 +107,7 @@ Detailed specs: `docs/SYNC_SPEC.md` (sync engine), `docs/MAIL_CLIENT_SPEC.md`
   `queued`); then the cron (`runCampaigns`, after the sync fan-out and the
   autopilot) sends queued emails a few at a time: inside the sending window
   in the campaign's timezone (weekdays only by default), 3600/per_hour s
-  apart ±20 %, under the daily cap and 150 / account / 24 h, with a lease so
+  apart ±20 %, under the daily cap and 250 / account / 24 h, with a lease so
   overlapping runs never double-send. Right before each send it re-checks
   the email is still queued in a running campaign and that nobody wrote or
   talked to the contact since it was prepared, or since the owner queued it
