@@ -9,6 +9,8 @@ import {
   type SubmissionStatus,
 } from "@/lib/listings/constants";
 import type { PartnerRelationship } from "@/lib/listings/relationship";
+import type { EmailMessage } from "@/lib/types";
+import { clampLimit, messageColumns, toEmailMessage } from "./shared";
 
 /**
  * Promotion: the partners and outlets every concert is sent to
@@ -309,42 +311,35 @@ export async function saveSubmission(eventId: string, platformId: string, input:
   return row.id;
 }
 
-export interface PartnerThread {
-  accountId: string;
-  threadId: string;
-  subject: string | null;
-  lastAt: Date;
-  count: number;
-  lastDirection: "inbound" | "outbound";
-  lastFrom: string | null;
-}
-
 /**
- * The latest email threads with a partner: messages from or to any of its
- * addresses ("molly@piptix.com") or domains ("piptix.com"), newest first.
+ * A partner's emails, in the same shape as a contact's or an organization's
+ * correspondence: every message from or to one of its addresses (entries
+ * with @) or domains, newest first, one copy per message across accounts.
  */
-export async function partnerThreads(emailMatch: string[], limit = 25): Promise<PartnerThread[]> {
+export async function partnerHistory(emailMatch: string[], limit = 30): Promise<EmailMessage[]> {
   const items = emailMatch.map((e) => e.trim().toLowerCase()).filter(Boolean);
   if (!items.length) return [];
   const addresses = items.filter((e) => e.includes("@"));
   const domains = items.filter((e) => !e.includes("@"));
-  return sql<PartnerThread[]>`
-    with hits as (
-      select m.account_id, m.gmail_thread_id, m.subject, m.sent_at, m.direction, m.from_email
-      from messages m
-      where lower(m.from_email) = any(${addresses}) or split_part(lower(m.from_email), '@', 2) = any(${domains})
-         or exists (
-           select 1 from message_participants p
-           where p.message_id = m.id
-             and (lower(p.email) = any(${addresses}) or split_part(lower(p.email), '@', 2) = any(${domains})))
+  const rows = await sql`
+    with ids as (
+      select mp.message_id
+        from message_participants mp
+       where (mp.email = any(${addresses}) or split_part(mp.email, '@', 2) = any(${domains}))
+         and mp.email not in (select email from self_addresses)
+    ),
+    picked as (
+      select distinct on (coalesce(m.rfc822_message_id, m.id::text)) m.id
+        from ids
+        join messages m on m.id = ids.message_id
+       order by coalesce(m.rfc822_message_id, m.id::text), (m.direction = 'inbound'), m.created_at, m.id
     )
-    select account_id, gmail_thread_id as thread_id,
-           (array_agg(subject order by sent_at desc))[1] as subject,
-           max(sent_at) as last_at, count(*)::int as count,
-           (array_agg(direction order by sent_at desc))[1] as last_direction,
-           (array_agg(from_email order by sent_at desc))[1] as last_from
-    from hits
-    group by account_id, gmail_thread_id
-    order by max(sent_at) desc
-    limit ${limit}`;
+    select ${messageColumns()}
+      from picked p
+      join messages m on m.id = p.id
+      join gmail_accounts a on a.id = m.account_id
+     order by m.sent_at desc, m.id
+     limit ${clampLimit(limit, 30)}
+  `;
+  return rows.map((row) => toEmailMessage(row as never));
 }

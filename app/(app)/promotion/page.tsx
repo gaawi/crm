@@ -4,8 +4,8 @@ import { Plus } from "lucide-react";
 import { Notice, PageHeader } from "@/components/ui/layout";
 import { listListingEvents, listListingPlatforms, platformsForEvent, type EventSummary } from "@/lib/queries/listings";
 import { param } from "../_lib/url";
-import { EventForm, PlatformForm } from "./forms";
-import { concertGroups, CountsLine, DateTile, InsetGroup, LinkRow, MethodIcon, methodName, ProgressBar, splitByDate } from "./stage";
+import { EventSheetRow, PlatformSheetRow } from "./sheets";
+import { concertGroups, CountsLine, DateTile, InsetGroup, LinkRow, ProgressBar, splitByDate } from "./stage";
 
 export const metadata: Metadata = { title: "Promotion" };
 
@@ -18,9 +18,6 @@ async function eventsOrMissing(): Promise<EventSummary[] | null> {
     throw error;
   }
 }
-
-const addClass =
-  "flex min-h-[52px] cursor-pointer list-none items-center gap-3 px-4 text-[17px] text-blue-600 active:bg-surface-2 md:min-h-11 md:text-sm dark:text-blue-400 [&::-webkit-details-marker]:hidden";
 
 /** The concerts being promoted; each one opens its checklist. */
 export default async function PromotionPage({ searchParams }: PageProps<"/promotion">) {
@@ -45,7 +42,7 @@ export default async function PromotionPage({ searchParams }: PageProps<"/promot
     Promise.all(all.map(async (e) => [e.id, concertGroups(await platformsForEvent(e.id)).counts] as const)).then((rows) => new Map(rows)),
     listListingPlatforms(),
   ]);
-  const skipped = platforms.filter((p) => p.tier === "skip");
+  const skipped = platforms.filter((p) => p.tier === "skip").length;
   const row = (e: EventSummary) => {
     const c = counts.get(e.id)!;
     return (
@@ -67,15 +64,7 @@ export default async function PromotionPage({ searchParams }: PageProps<"/promot
         <InsetGroup title="Upcoming concerts">
           {upcoming.map(row)}
           <li>
-            <details className="group">
-              <summary className={addClass}>
-                <Plus className="size-5" aria-hidden />
-                Add a concert
-              </summary>
-              <div className="border-t border-border px-4 py-4">
-                <EventForm />
-              </div>
-            </details>
+            <EventSheetRow label="Add a concert" icon={<Plus className="size-5" aria-hidden />} />
           </li>
         </InsetGroup>
 
@@ -83,34 +72,13 @@ export default async function PromotionPage({ searchParams }: PageProps<"/promot
 
         <InsetGroup title="Sites" footer="Partners and listing sites live here; each concert shows the ones it goes to.">
           <li>
-            <details className="group">
-              <summary className={addClass}>
-                <Plus className="size-5" aria-hidden />
-                Add a partner or listing site
-              </summary>
-              <div className="border-t border-border px-4 py-4">
-                <PlatformForm />
-              </div>
-            </details>
+            <PlatformSheetRow label="Add a partner or listing site" icon={<Plus className="size-5" aria-hidden />} />
           </li>
-          {skipped.length ? (
-            <li>
-              <details className="group/skip">
-                <summary className={addClass.replace("text-blue-600", "text-fg").replace("dark:text-blue-400", "")}>
-                  <span className="flex-1">Not worth it</span>
-                  <span className="text-muted">{skipped.length}</span>
-                </summary>
-                <ul className="border-t border-border [&>li+li]:border-t [&>li+li]:border-border">
-                  {skipped.map((p) => (
-                    <LinkRow key={p.id} href={`/promotion/p/${p.id}`}>
-                      <MethodIcon method={p.method} />
-                      <span className="min-w-0 flex-1 truncate text-[17px] text-muted md:text-sm">{p.name}</span>
-                      <span className="text-[15px] text-subtle md:text-xs">{methodName(p.method)}</span>
-                    </LinkRow>
-                  ))}
-                </ul>
-              </details>
-            </li>
+          {skipped ? (
+            <LinkRow href="/promotion/skipped">
+              <span className="flex-1 text-[17px] text-fg md:text-sm">Not worth it</span>
+              <span className="text-[17px] text-muted md:text-sm">{skipped}</span>
+            </LinkRow>
           ) : null}
         </InsetGroup>
       </div>

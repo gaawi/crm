@@ -166,10 +166,10 @@ export function SubmissionForm({
 }
 
 /** Add a platform, or edit one (how to submit, login, cost…). */
-export function PlatformForm({ platform }: { platform?: ListingPlatform }) {
+export function PlatformForm({ platform, id, onDone }: { platform?: ListingPlatform; id?: string; onDone?: () => void }) {
   const p = platform ? `p-${platform.id}` : "p-new";
   return (
-    <ActionForm action={savePlatformAction.bind(null, platform?.id ?? null)} className="flex flex-col gap-3">
+    <ActionForm id={id} onDone={onDone} action={savePlatformAction.bind(null, platform?.id ?? null)} className="flex flex-col gap-3">
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Name" htmlFor={`${p}-name`}>
           <Input id={`${p}-name`} name="name" required maxLength={200} defaultValue={platform?.name ?? ""} autoComplete="off" />
@@ -250,7 +250,8 @@ export function PlatformForm({ platform }: { platform?: ListingPlatform }) {
       <Field label="Their emails" htmlFor={`${p}-match`} hint="Addresses or domains we talk to them from (molly@piptix.com, tdf.org): their emails show on the card.">
         <Input id={`${p}-match`} name="emailMatch" autoCapitalize="off" defaultValue={platform?.emailMatch.join(", ") ?? ""} />
       </Field>
-      <FormActions>
+      {/* In a sheet, phones save from its header. */}
+      <FormActions className={id ? "hidden md:flex" : undefined}>
         <FormSubmit pendingLabel="Saving…">{platform ? "Save platform" : "Add platform"}</FormSubmit>
       </FormActions>
     </ActionForm>
@@ -273,11 +274,11 @@ function localParts(event: ListingEvent | undefined): { date: string; time: stri
 }
 
 /** A concert to promote: the facts every listing asks for. */
-export function EventForm({ event }: { event?: ListingEvent }) {
+export function EventForm({ event, id, onDone }: { event?: ListingEvent; id?: string; onDone?: () => void }) {
   const p = event ? `e-${event.id}` : "e-new";
   const { date, time } = localParts(event);
   return (
-    <ActionForm action={saveEventAction.bind(null, event?.id ?? null)} className="flex flex-col gap-3">
+    <ActionForm id={id} onDone={onDone} action={saveEventAction.bind(null, event?.id ?? null)} className="flex flex-col gap-3">
       <input type="hidden" name="timeZone" value={event?.timeZone ?? DEFAULT_EVENT_TIME_ZONE} />
       <div className="grid gap-3 sm:grid-cols-[1fr_10rem_7rem]">
         <Field label="Concert" htmlFor={`${p}-title`}>
@@ -316,7 +317,7 @@ export function EventForm({ event }: { event?: ListingEvent }) {
       <Field label="Notes" htmlFor={`${p}-notes`}>
         <Textarea id={`${p}-notes`} name="notes" rows={2} maxLength={4000} defaultValue={event?.notes ?? ""} />
       </Field>
-      <FormActions>
+      <FormActions className={id ? "hidden md:flex" : undefined}>
         <FormSubmit pendingLabel="Saving…">{event ? "Save concert" : "Add concert"}</FormSubmit>
       </FormActions>
     </ActionForm>

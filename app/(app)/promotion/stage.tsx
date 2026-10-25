@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { ChevronRight, FileText, KeyRound, Mail, MoreHorizontal } from "lucide-react";
+import { ChevronRight, ExternalLink, FileText, KeyRound, Mail, MoreHorizontal } from "lucide-react";
 import type { ListingMethod, SubmissionStatus } from "@/lib/listings/constants";
 import type { PlatformForEvent } from "@/lib/queries/listings";
 import { cn } from "@/lib/utils";
@@ -141,5 +141,21 @@ export function ValueRow({ label, children }: { label: string; children: ReactNo
       <span className="shrink-0 text-[17px] text-fg md:text-sm">{label}</span>
       <span className="min-w-0 truncate text-right text-[17px] text-muted md:text-sm">{children}</span>
     </li>
+  );
+}
+
+/** The small "View" button beside a published site: opens the listing as the public sees it. */
+export function ViewLink({ href, name }: { href: string; name: string }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer noopener"
+      aria-label={`View the listing on ${name}`}
+      className="my-auto inline-flex h-8 shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-3 text-[15px] font-medium text-emerald-700 active:opacity-60 md:h-7 md:text-xs dark:bg-emerald-950 dark:text-emerald-300"
+    >
+      View
+      <ExternalLink className="size-3.5" aria-hidden />
+    </a>
   );
 }

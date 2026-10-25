@@ -69,6 +69,8 @@ export function listingBrief(event: ListingEvent, platforms: PlatformForEvent[])
     "- No pagues nada, no crees cuentas nuevas y no aceptes condiciones comerciales sin mi permiso.",
     "- No dupliques fichas que ya existan; si encuentras una con datos erróneos, anótalo.",
     "- Si un captcha o un login te bloquea, déjalo como bloqueado y dime qué falta.",
+    "- Si no puedes enviar a una plataforma, escribe en Notas el motivo exacto (qué te bloquea y qué necesitas de mí). Lo reviso uno por uno.",
+    "- Cuando una ficha esté publicada, pon siempre el enlace público, para poder ver cómo ha quedado.",
     "",
     "## Cómo informarme",
     "Al terminar, devuélveme una tabla con una fila por plataforma: Plataforma | Estado (Sent, Received, Published, Rejected, Blocked o Skipped) | Fecha | Enlace de confirmación | Enlace público | Notas.",

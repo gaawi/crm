@@ -21,6 +21,8 @@ const date = z
   .transform((v) => v ?? null);
 
 export const relationshipSchema = z.object({
+  /** One short paragraph the owner reads at a glance. */
+  summary: text(1000),
   howItWorks: text(3000),
   priceToMembers: text(300),
   paidToUs: text(300),

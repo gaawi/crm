@@ -1,15 +1,20 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { ChevronRight, ExternalLink, Mail, Pencil } from "lucide-react";
+import { ExternalLink, Mail, Pencil } from "lucide-react";
 import { PageHeader } from "@/components/ui/layout";
 import { kindLabel, PLATFORM_TIERS } from "@/lib/listings/constants";
-import { getListingEvent, listListingEvents, listListingPlatforms, partnerThreads, platformsForEvent } from "@/lib/queries/listings";
+import { EmailTimeline } from "@/components/email-timeline";
+import { env } from "@/lib/env";
+import { getListingEvent, listListingEvents, listListingPlatforms, partnerHistory, platformsForEvent, type PlatformForEvent } from "@/lib/queries/listings";
+import { getOwnAddresses } from "@/lib/queries/stats";
+import { GroupTitle } from "../../../_components/ui";
 import { cn } from "@/lib/utils";
 import { hrefWith, param } from "../../../_lib/url";
-import { PlatformForm, StatusCell, SubmissionForm } from "../../forms";
-import { PartnerEmails, Relationship } from "../../parts";
-import { InsetGroup, MethodIcon, methodName, rowClass, splitByDate, statusOf, ValueRow } from "../../stage";
+import { StatusCell, SubmissionForm } from "../../forms";
+import { PartnerSummary } from "../../parts";
+import { PlatformSheetRow } from "../../sheets";
+import { InsetGroup, MethodIcon, methodName, rowClass, splitByDate, stageOf, statusOf, ValueRow, ViewLink } from "../../stage";
 
 export const metadata: Metadata = { title: "Promotion" };
 
@@ -28,9 +33,9 @@ export default async function PromotionPlatformPage({ params, searchParams }: Pa
     selected ? getListingEvent(selected.id) : Promise.resolve(null),
   ]);
   if (!platform) notFound();
-  const p = { submission: null, ...platform };
+  const p: PlatformForEvent = { submission: null, ...platform };
   const partner = p.kind === "partner";
-  const threads = partner && p.emailMatch.length ? await partnerThreads(p.emailMatch, 25) : [];
+  const [emails, self] = p.emailMatch.length ? await Promise.all([partnerHistory(p.emailMatch, 30), getOwnAddresses()]) : [[], new Set<string>()];
   const tier = PLATFORM_TIERS.find((t) => t.value === p.tier)?.label;
   const back = event && wanted ? { href: `/promotion/c/${event.id}`, label: event.title } : { href: "/promotion", label: "Promotion" };
   const target = p.submitUrl ?? p.website;
@@ -47,6 +52,14 @@ export default async function PromotionPlatformPage({ params, searchParams }: Pa
     <>
       <PageHeader title={p.name} description={[kindLabel(p.kind), tier].filter(Boolean).join(" · ")} back={back} />
       <div className="flex flex-col gap-7 md:max-w-2xl">
+        {p.relationship ? (
+          <InsetGroup title="In short">
+            <li className="px-4 py-3">
+              <PartnerSummary relationship={p.relationship} />
+            </li>
+          </InsetGroup>
+        ) : null}
+
         {event ? (
           <section>
             {events.length > 1 ? (
@@ -68,7 +81,8 @@ export default async function PromotionPlatformPage({ params, searchParams }: Pa
             ) : null}
             <InsetGroup title={event.title}>
               <li className={cn(rowClass, "justify-between")}>
-                <span className="text-[17px] text-fg md:text-sm">Status</span>
+                <span className="flex-1 text-[17px] text-fg md:text-sm">Status</span>
+                {stageOf(p) === "published" && p.submission?.publicUrl ? <ViewLink href={p.submission.publicUrl} name={p.name} /> : null}
                 <StatusCell key={`${p.id}-${event.id}-${statusOf(p)}`} eventId={event.id} platformId={p.id} status={statusOf(p)} />
               </li>
             </InsetGroup>
@@ -118,33 +132,16 @@ export default async function PromotionPlatformPage({ params, searchParams }: Pa
           </InsetGroup>
         ) : null}
 
-        {p.relationship ? (
-          <InsetGroup>
-            <li className="px-4 py-4">
-              <Relationship relationship={p.relationship} />
-            </li>
-          </InsetGroup>
-        ) : null}
-        {threads.length ? (
-          <InsetGroup>
-            <li className="px-4 py-4">
-              <PartnerEmails threads={threads} />
-            </li>
-          </InsetGroup>
+        {emails.length ? (
+          <section>
+            <GroupTitle>Emails</GroupTitle>
+            <EmailTimeline messages={emails} timezone={env.timezone} selfEmails={self} />
+          </section>
         ) : null}
 
         <InsetGroup>
           <li>
-            <details className="group">
-              <summary className="flex min-h-[52px] cursor-pointer list-none items-center gap-3 px-4 active:bg-surface-2 md:min-h-11 [&::-webkit-details-marker]:hidden">
-                <Pencil className="size-4 text-muted" aria-hidden />
-                <span className="flex-1 text-[17px] text-fg md:text-sm">Edit this site</span>
-                <ChevronRight className="size-5 text-subtle/70 transition-transform group-open:rotate-90" aria-hidden />
-              </summary>
-              <div className="border-t border-border px-4 py-4">
-                <PlatformForm platform={p} />
-              </div>
-            </details>
+            <PlatformSheetRow platform={p} tone="plain" icon={<Pencil className="size-4 text-muted" aria-hidden />} label="Edit this site" />
           </li>
         </InsetGroup>
       </div>

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { sql } from "@/lib/db";
 import { applyListings, listingsOverview } from "@/lib/assistant/listings";
 import { listingBrief } from "@/lib/listings/brief";
-import { getListingEvent, partnerThreads, platformsForEvent, saveEvent, savePlatform, saveSubmission } from "@/lib/queries/listings";
+import { getListingEvent, partnerHistory, platformsForEvent, saveEvent, savePlatform, saveSubmission } from "@/lib/queries/listings";
 
 import { insertAccount, useTestDatabase } from "../setup/db";
 
@@ -78,7 +78,7 @@ describe("listings", () => {
       kind: "partner",
       tier: "always",
       emailMatch: ["piptix.com"],
-      relationship: { howItWorks: "Molly sends a list.", priceToMembers: "15 USD", paidToUs: "10 USD", typicalTickets: "20", login: null, contacts: [], concerts: [], timeline: [], openItems: [], notes: null, reviewedAt: "2026-10-25" },
+      relationship: { summary: "Members buy at 15 USD.", howItWorks: "Molly sends a list.", priceToMembers: "15 USD", paidToUs: "10 USD", typicalTickets: "20", login: null, contacts: [], concerts: [], timeline: [], openItems: [], notes: null, reviewedAt: "2026-10-25" },
     });
     await saveSubmission(eventId, piptix, { status: "sent", ticketsOffered: 20, memberPrice: "15 USD" });
     await saveSubmission(eventId, piptix, { ticketsTaken: 14 });
@@ -93,7 +93,8 @@ describe("listings", () => {
     await insert("a", "t1", "molly@piptix.com", "2026-10-01");
     await insert("b", "t1", "info@own.test", "2026-10-02", "outbound");
     await insert("c", "t2", "someone@else.test", "2026-10-03");
-    const threads = await partnerThreads(["piptix.com"]);
-    expect(threads.map((t) => [t.threadId, t.count, t.lastDirection])).toEqual([["t1", 1, "inbound"]]);
+    await sql`insert into message_participants (message_id, email, role) select id, from_email, 'from' from messages on conflict do nothing`;
+    const emails = await partnerHistory(["piptix.com"]);
+    expect(emails.map((m) => m.subject)).toEqual(["Tickets t1"]);
   });
 });

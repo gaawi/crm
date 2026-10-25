@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { ChevronRight, ExternalLink, Pencil } from "lucide-react";
+import { ExternalLink, Pencil } from "lucide-react";
 import { PageHeader } from "@/components/ui/layout";
 import { listingBrief } from "@/lib/listings/brief";
 import { getListingEvent, platformsForEvent, type PlatformForEvent } from "@/lib/queries/listings";
 import { cn } from "@/lib/utils";
-import { CopyBrief, EventForm, StatusCell } from "../../forms";
-import { concertGroups, InsetGroup, MethodIcon, methodName, ProgressBar, rowClass, statusOf, stageOf } from "../../stage";
+import { CopyBrief, StatusCell } from "../../forms";
+import { EventSheetRow } from "../../sheets";
+import { concertGroups, InsetGroup, MethodIcon, methodName, ProgressBar, rowClass, statusOf, stageOf, ViewLink } from "../../stage";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -20,8 +21,6 @@ export async function generateMetadata({ params }: PageProps<"/promotion/c/[id]"
 function when(e: { startsAt: Date; timeZone: string }): string {
   return new Intl.DateTimeFormat("en-US", { timeZone: e.timeZone, weekday: "long", month: "long", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }).format(e.startsAt);
 }
-
-const plainSummary = "flex min-h-[52px] cursor-pointer list-none items-center gap-3 px-4 active:bg-surface-2 md:min-h-11 [&::-webkit-details-marker]:hidden";
 
 /** One concert's checklist: ticketing partners and listing sites, each with its status. */
 export default async function PromotionConcertPage({ params }: PageProps<"/promotion/c/[id]">) {
@@ -82,40 +81,15 @@ export default async function PromotionConcertPage({ params }: PageProps<"/promo
 
         {sometimes.length ? (
           <InsetGroup title="Listings, some concerts" footer="Optional: send when the program fits their audience.">
-            {started.map((p) => (
+            {[...started, ...notStarted].map((p) => (
               <SiteRow key={p.id} platform={p} eventId={event.id} />
             ))}
-            {notStarted.length ? (
-              <li>
-                <details className="group">
-                  <summary className={plainSummary}>
-                    <span className="flex-1 text-[17px] text-fg md:text-sm">{started.length ? "The others" : "Show them"}</span>
-                    <span className="text-[17px] text-muted md:text-sm">{notStarted.length}</span>
-                    <ChevronRight className="size-5 text-subtle/70 transition-transform group-open:rotate-90" aria-hidden />
-                  </summary>
-                  <ul className="border-t border-border [&>li+li]:border-t [&>li+li]:border-border">
-                    {notStarted.map((p) => (
-                      <SiteRow key={p.id} platform={p} eventId={event.id} />
-                    ))}
-                  </ul>
-                </details>
-              </li>
-            ) : null}
           </InsetGroup>
         ) : null}
 
         <InsetGroup title="Concert" footer="Date, venue, prices, links and the description the forms ask for.">
           <li>
-            <details className="group">
-              <summary className={plainSummary}>
-                <Pencil className="size-4 text-muted" aria-hidden />
-                <span className="flex-1 text-[17px] text-fg md:text-sm">Edit concert details</span>
-                <ChevronRight className="size-5 text-subtle/70 transition-transform group-open:rotate-90" aria-hidden />
-              </summary>
-              <div className="border-t border-border px-4 py-4">
-                <EventForm event={event} />
-              </div>
-            </details>
+            <EventSheetRow event={event} tone="plain" icon={<Pencil className="size-4 text-muted" aria-hidden />} label="Edit concert details" />
           </li>
         </InsetGroup>
       </div>
@@ -132,20 +106,35 @@ function Stat({ n, label, className }: { n: number; label: string; className: st
   );
 }
 
-/** A site in the checklist: tap the name for its screen, tap the status to change it. */
+/** Why a pending site is still pending, as ChatGPT (or whoever) noted it. */
+function pendingReason(p: PlatformForEvent): string | null {
+  if (stageOf(p) !== "pending") return null;
+  if (p.submission?.notes) return p.submission.notes;
+  return statusOf(p) === "blocked" ? "Blocked: no reason noted yet." : "Not sent yet.";
+}
+
+/**
+ * A site in the checklist: tap the name for its screen, tap the status to
+ * change it. Pending rows say what is holding them; published rows link to
+ * the listing itself.
+ */
 function SiteRow({ platform: p, eventId }: { platform: PlatformForEvent; eventId: string }) {
   const s = p.submission;
+  const stage = stageOf(p);
   const detail =
     p.kind === "partner" && s && (s.ticketsOffered != null || s.memberPrice)
       ? [s.ticketsOffered != null ? `${s.ticketsOffered} tickets` : null, s.memberPrice, s.ticketsTaken != null ? `${s.ticketsTaken} taken` : null].filter(Boolean).join(" · ")
-      : s?.sentAt
-        ? s.sentAt
-        : p.cost === "paid"
-          ? "Paid"
-          : null;
+      : stage === "published" && !s?.publicUrl
+        ? "No public link saved"
+        : s?.sentAt
+          ? s.sentAt
+          : p.cost === "paid"
+            ? "Paid"
+            : null;
+  const reason = pendingReason(p);
   return (
     <li className="flex min-h-[60px] items-stretch pr-4 md:min-h-12">
-      <Link href={`/promotion/p/${p.id}?event=${eventId}`} className="flex min-w-0 flex-1 items-center gap-3 py-2 pl-4 active:bg-surface-2 md:hover:bg-surface-2">
+      <Link href={`/promotion/p/${p.id}?event=${eventId}`} className="flex min-w-0 flex-1 items-center gap-3 py-2.5 pl-4 active:bg-surface-2 md:hover:bg-surface-2">
         <MethodIcon method={p.method} />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[17px] leading-snug text-fg md:text-sm">{p.name}</span>
@@ -153,9 +142,10 @@ function SiteRow({ platform: p, eventId }: { platform: PlatformForEvent; eventId
             {methodName(p.method)}
             {detail ? ` · ${detail}` : ""}
           </span>
+          {reason ? <span className="mt-0.5 line-clamp-2 text-[13px] leading-snug text-amber-700 md:text-xs dark:text-amber-400">{reason}</span> : null}
         </span>
-        {s?.publicUrl ? <ExternalLink className="size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-label="Has a public listing" /> : null}
       </Link>
+      {stage === "published" && s?.publicUrl ? <ViewLink href={s.publicUrl} name={p.name} /> : null}
       <StatusCell key={`${p.id}-${statusOf(p)}`} eventId={eventId} platformId={p.id} status={statusOf(p)} />
     </li>
   );
