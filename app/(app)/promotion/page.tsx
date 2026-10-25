@@ -252,11 +252,11 @@ function PlatformRow({ platform: p, eventId, status }: { platform: PlatformForEv
               }
               title={p.costNote ?? undefined}
             >
-              {p.cost === "free" ? "Free" : p.cost === "paid" ? `Paid${p.costNote ? `: ${p.costNote}` : ""}` : "Cost ?"}
+              {p.cost === "free" ? "Free" : p.cost === "paid" ? (p.costNote && p.costNote.length <= 30 ? `Paid: ${p.costNote}` : "Paid") : "Cost ?"}
             </Badge>
-            <Badge title={p.loginAccount ?? undefined}>
-              <KeyRound className="size-3" aria-hidden />
-              {p.loginRequired ? (p.loginAccount ? `Login: ${p.loginAccount}` : "Login") : "No login"}
+            <Badge title={p.loginAccount ?? undefined} className="max-w-[16rem]">
+              <KeyRound className="size-3 shrink-0" aria-hidden />
+              <span className="truncate">{p.loginRequired ? (p.loginAccount ? `Login: ${p.loginAccount}` : "Login") : "No login"}</span>
             </Badge>
             {p.leadDays != null ? <Badge>{p.leadDays} days ahead</Badge> : null}
           </div>
@@ -270,7 +270,7 @@ function PlatformRow({ platform: p, eventId, status }: { platform: PlatformForEv
             {p.submitUrl && p.website && hostOf(p.website) !== hostOf(p.submitUrl) ? <span>{hostOf(p.website)}</span> : null}
             {p.audience ? <span>{p.audience}</span> : null}
           </div>
-          {p.notes ? <p className="mt-1 text-[13px] text-muted md:text-xs">{p.notes}</p> : null}
+          {p.notes ? <p className="mt-1 line-clamp-2 text-[13px] text-muted md:text-xs">{p.notes}</p> : null}
           {s && (s.sentAt || s.sentBy || s.confirmationUrl || s.publicUrl || s.notes) ? (
             <div className="mt-2 flex flex-wrap gap-x-3 gap-y-0.5 rounded-md bg-surface-2 px-2.5 py-1.5 text-[13px] text-muted md:text-xs">
               {s.sentAt ? <span>{statusLabel(status)} {s.sentAt}</span> : null}
@@ -303,6 +303,12 @@ function PlatformRow({ platform: p, eventId, status }: { platform: PlatformForEv
           </div>
           <div>
             <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-subtle">The platform</h3>
+            {p.costNote ? (
+              <p className="mb-2 text-[13px] text-muted md:text-xs">
+                <span className="font-medium text-fg">Cost:</span> {p.costNote}
+              </p>
+            ) : null}
+            {p.notes ? <p className="mb-2 whitespace-pre-line text-[13px] text-muted md:text-xs">{p.notes}</p> : null}
             {p.fields ? (
               <p className="mb-2 whitespace-pre-line text-[13px] text-muted md:text-xs">
                 <span className="font-medium text-fg">They ask for:</span> {p.fields}
