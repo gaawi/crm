@@ -1,7 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { Check, ClipboardCopy } from "lucide-react";
+import { useRef, useState, type ReactNode } from "react";
+import { Check, ChevronsUpDown, ClipboardCopy, ExternalLink } from "lucide-react";
 import { Checkbox, Field, Input, Select, Textarea } from "@/components/ui/field";
 import { buttonClass } from "@/components/ui/button";
 import {
@@ -18,24 +18,34 @@ import type { ListingEvent, ListingPlatform, ListingSubmission } from "@/lib/que
 import { cn } from "@/lib/utils";
 import { ActionForm, FormSubmit } from "../_components/action-form";
 import { FormActions } from "../_components/ui";
+import { InsetGroup } from "./stage";
 import { saveEventAction, savePlatformAction, saveSubmissionAction, setStatusAction } from "./actions";
 
-export const STATUS_STYLE: Record<SubmissionStatus, string> = {
-  todo: "bg-surface-2 text-muted",
-  sent: "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
-  received: "bg-sky-50 text-sky-700 dark:bg-sky-950 dark:text-sky-300",
-  published: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
-  rejected: "bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300",
-  blocked: "bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
-  skipped: "bg-surface-2 text-subtle",
+const STATUS_TEXT: Record<SubmissionStatus, string> = {
+  todo: "text-amber-600 dark:text-amber-400",
+  blocked: "text-amber-700 dark:text-amber-300",
+  sent: "text-blue-600 dark:text-blue-400",
+  received: "text-blue-600 dark:text-blue-400",
+  published: "text-emerald-600 dark:text-emerald-400",
+  rejected: "text-red-600 dark:text-red-400",
+  skipped: "text-subtle",
 };
 
-/** The status of a platform for this concert: picking another saves it at once. */
-export function StatusPicker({ eventId, platformId, status }: { eventId: string; platformId: string; status: SubmissionStatus }) {
+/**
+ * The status as the trailing value of a list row, iOS style: colored text
+ * over a transparent native select, so a tap opens the system picker and
+ * the choice saves at once.
+ */
+export function StatusCell({ eventId, platformId, status }: { eventId: string; platformId: string; status: SubmissionStatus }) {
   const form = useRef<HTMLFormElement>(null);
   const [value, setValue] = useState(status);
+  const label = SUBMISSION_STATUSES.find((s) => s.value === value)?.label ?? value;
   return (
-    <form ref={form} action={setStatusAction.bind(null, eventId, platformId)}>
+    <form ref={form} action={setStatusAction.bind(null, eventId, platformId)} className="relative flex shrink-0 items-center self-stretch">
+      <span className={cn("pointer-events-none flex items-center gap-0.5 pl-2 text-[15px] md:text-sm", STATUS_TEXT[value])}>
+        {label}
+        <ChevronsUpDown className="size-3.5 opacity-60" aria-hidden />
+      </span>
       <select
         name="status"
         value={value}
@@ -45,10 +55,7 @@ export function StatusPicker({ eventId, platformId, status }: { eventId: string;
           setValue(e.target.value as SubmissionStatus);
           form.current?.requestSubmit();
         }}
-        className={cn(
-          "h-9 rounded-full border-0 py-0 pl-3 pr-7 text-[13px] font-medium focus:outline-none focus:ring-2 focus:ring-ring/30 md:h-7 md:text-xs",
-          STATUS_STYLE[value],
-        )}
+        className="absolute inset-0 w-full cursor-pointer appearance-none opacity-0"
       >
         {SUBMISSION_STATUSES.map((s) => (
           <option key={s.value} value={s.value}>
@@ -60,7 +67,40 @@ export function StatusPicker({ eventId, platformId, status }: { eventId: string;
   );
 }
 
-/** Everything about this concert on this platform: date, who sent it, links, notes. */
+const cellInput =
+  "min-w-0 flex-1 bg-transparent text-right text-[17px] text-muted placeholder:text-subtle/60 focus:text-fg focus:outline-none md:text-sm";
+
+/** One settings-style row: label on the left, the value typed on the right. */
+function Cell({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <li>
+      <label className="flex min-h-[52px] items-center gap-3 px-4 md:min-h-11">
+        <span className="shrink-0 text-[17px] text-fg md:text-sm">{label}</span>
+        {children}
+      </label>
+    </li>
+  );
+}
+
+/** A link field, with a button to open what is already saved. */
+function UrlCell({ label, name, value }: { label: string; name: string; value: string | null }) {
+  return (
+    <Cell label={label}>
+      <input name={name} inputMode="url" autoCapitalize="off" autoCorrect="off" defaultValue={value ?? ""} placeholder="https://" className={cellInput} />
+      {value ? (
+        <a href={value} target="_blank" rel="noreferrer noopener" aria-label={`Open ${label.toLowerCase()}`} className="-mr-1 shrink-0 p-1 text-blue-600 dark:text-blue-400">
+          <ExternalLink className="size-4" aria-hidden />
+        </a>
+      ) : null}
+    </Cell>
+  );
+}
+
+/**
+ * This concert on this site, as grouped rows: tickets (partners), when and
+ * by whom it went out, the confirmation and public links, notes. The status
+ * has its own row above, so this form leaves it as it is.
+ */
 export function SubmissionForm({
   eventId,
   platformId,
@@ -73,59 +113,54 @@ export function SubmissionForm({
   /** Ticketing partner: tickets offered, member price, tickets taken. */
   partner?: boolean;
 }) {
-  const p = `s-${platformId}`;
+  const s = submission;
   return (
-    <ActionForm action={saveSubmissionAction.bind(null, eventId, platformId)} className="flex flex-col gap-3">
+    <ActionForm action={saveSubmissionAction.bind(null, eventId, platformId)} className="flex flex-col gap-7" messageClassName="px-4">
       {partner ? (
-        <div className="grid gap-3 sm:grid-cols-3">
-          <Field label="Tickets offered" htmlFor={`${p}-offered`}>
-            <Input id={`${p}-offered`} name="ticketsOffered" inputMode="numeric" maxLength={5} defaultValue={submission?.ticketsOffered ?? ""} />
-          </Field>
-          <Field label="Members pay" htmlFor={`${p}-price`}>
-            <Input id={`${p}-price`} name="memberPrice" maxLength={100} defaultValue={submission?.memberPrice ?? ""} placeholder="Free, 25 USD…" />
-          </Field>
-          <Field label="Tickets taken" htmlFor={`${p}-taken`}>
-            <Input id={`${p}-taken`} name="ticketsTaken" inputMode="numeric" maxLength={5} defaultValue={submission?.ticketsTaken ?? ""} />
-          </Field>
-        </div>
+        <InsetGroup title="Tickets">
+          <Cell label="Offered">
+            <input name="ticketsOffered" inputMode="numeric" maxLength={5} defaultValue={s?.ticketsOffered ?? ""} placeholder="0" className={cellInput} />
+          </Cell>
+          <Cell label="Members pay">
+            <input name="memberPrice" maxLength={100} defaultValue={s?.memberPrice ?? ""} placeholder="Free, 25 USD" className={cellInput} />
+          </Cell>
+          <Cell label="Taken">
+            <input name="ticketsTaken" inputMode="numeric" maxLength={5} defaultValue={s?.ticketsTaken ?? ""} placeholder="0" className={cellInput} />
+          </Cell>
+        </InsetGroup>
       ) : (
         <>
-          <input type="hidden" name="ticketsOffered" value={submission?.ticketsOffered ?? ""} />
-          <input type="hidden" name="ticketsTaken" value={submission?.ticketsTaken ?? ""} />
-          <input type="hidden" name="memberPrice" value={submission?.memberPrice ?? ""} />
+          <input type="hidden" name="ticketsOffered" value={s?.ticketsOffered ?? ""} />
+          <input type="hidden" name="ticketsTaken" value={s?.ticketsTaken ?? ""} />
+          <input type="hidden" name="memberPrice" value={s?.memberPrice ?? ""} />
         </>
       )}
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Field label="Status" htmlFor={`${p}-status`}>
-          <Select id={`${p}-status`} name="status" defaultValue={submission?.status ?? "todo"}>
-            {SUBMISSION_STATUSES.map((s) => (
-              <option key={s.value} value={s.value}>
-                {s.label}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label="Sent on" htmlFor={`${p}-sent`}>
-          <Input id={`${p}-sent`} name="sentAt" type="date" defaultValue={submission?.sentAt ?? ""} />
-        </Field>
-        <Field label="Sent by" htmlFor={`${p}-by`}>
-          <Input id={`${p}-by`} name="sentBy" defaultValue={submission?.sentBy ?? ""} placeholder="Guillermo, ChatGPT…" maxLength={100} />
-        </Field>
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Confirmation link" htmlFor={`${p}-conf`}>
-          <Input id={`${p}-conf`} name="confirmationUrl" inputMode="url" autoCapitalize="off" defaultValue={submission?.confirmationUrl ?? ""} placeholder="https://" />
-        </Field>
-        <Field label="Public listing" htmlFor={`${p}-pub`}>
-          <Input id={`${p}-pub`} name="publicUrl" inputMode="url" autoCapitalize="off" defaultValue={submission?.publicUrl ?? ""} placeholder="https://" />
-        </Field>
-      </div>
-      <Field label="Notes for this concert" htmlFor={`${p}-notes`}>
-        <Textarea id={`${p}-notes`} name="notes" rows={2} defaultValue={submission?.notes ?? ""} maxLength={4000} />
-      </Field>
-      <FormActions>
-        <FormSubmit pendingLabel="Saving…">Save</FormSubmit>
-      </FormActions>
+      <InsetGroup title="Sent" footer="The links let ChatGPT check later whether it was published, and follow up.">
+        <Cell label="On">
+          <input name="sentAt" type="date" defaultValue={s?.sentAt ?? ""} className={cn(cellInput, "appearance-none")} />
+        </Cell>
+        <Cell label="By">
+          <input name="sentBy" maxLength={100} defaultValue={s?.sentBy ?? ""} placeholder="Guillermo, ChatGPT" className={cellInput} />
+        </Cell>
+        <UrlCell label="Confirmation" name="confirmationUrl" value={s?.confirmationUrl ?? null} />
+        <UrlCell label="Public listing" name="publicUrl" value={s?.publicUrl ?? null} />
+      </InsetGroup>
+      <InsetGroup title="Notes for this concert">
+        <li>
+          <textarea
+            name="notes"
+            rows={4}
+            maxLength={4000}
+            defaultValue={s?.notes ?? ""}
+            aria-label="Notes for this concert"
+            placeholder="What they answered, what is missing…"
+            className="block min-h-28 w-full resize-none bg-transparent px-4 py-3 [field-sizing:content] text-[17px] leading-relaxed text-fg placeholder:text-subtle/60 focus:outline-none md:text-sm"
+          />
+        </li>
+      </InsetGroup>
+      <FormSubmit pendingLabel="Saving…" className="h-[52px] w-full rounded-xl text-[17px] md:h-9 md:w-auto md:self-start md:rounded-md md:text-sm">
+        Save
+      </FormSubmit>
     </ActionForm>
   );
 }
@@ -289,12 +324,12 @@ export function EventForm({ event }: { event?: ListingEvent }) {
 }
 
 /** Copies the brief (concert facts + platforms still to do) for ChatGPT or an assistant. */
-export function CopyBrief({ text, pending }: { text: string; pending: number }) {
+export function CopyBrief({ text, pending, className }: { text: string; pending: number; className?: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <button
       type="button"
-      className={buttonClass("secondary", "sm")}
+      className={className ?? buttonClass("secondary", "sm")}
       onClick={async () => {
         try {
           await navigator.clipboard.writeText(text);

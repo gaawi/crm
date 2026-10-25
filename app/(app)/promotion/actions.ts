@@ -160,7 +160,7 @@ export async function saveEventAction(eventId: string | null, _prev: ActionResul
     return { error: errorMessage(error) };
   }
   revalidatePath("/promotion", "layout");
-  if (!id) redirect(`/promotion?event=${saved}`);
+  if (!id) redirect(`/promotion/c/${saved}`);
   return { message: "Saved." };
 }
 
@@ -182,7 +182,8 @@ const submissionSchema = z.object({
   ticketsOffered: ticketCount,
   ticketsTaken: ticketCount,
   memberPrice: text(100),
-  status: statusSchema,
+  /** Left out when the screen changes the status on its own. */
+  status: statusSchema.optional(),
   sentAt: optionalDateSchema,
   sentBy: text(100),
   confirmationUrl: urlSchema,
@@ -197,7 +198,7 @@ export async function saveSubmissionAction(eventId: string, platformId: string, 
     ticketsOffered: field(formData, "ticketsOffered"),
     ticketsTaken: field(formData, "ticketsTaken"),
     memberPrice: field(formData, "memberPrice"),
-    status: field(formData, "status"),
+    status: field(formData, "status") || undefined,
     sentAt: field(formData, "sentAt"),
     sentBy: field(formData, "sentBy"),
     confirmationUrl: field(formData, "confirmationUrl"),
