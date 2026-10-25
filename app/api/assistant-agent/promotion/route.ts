@@ -15,9 +15,12 @@ import { assistantWrite } from "@/lib/assistant/write-route";
  *       "platforms"?: [{name, kind?: partner|editorial|calendar|newsletter|aggregator|other,
  *                       tier?: always|sometimes|skip, website?, submitUrl?, email?, method?: form|email|account|other,
  *                       loginRequired?, loginAccount?, cost?: free|paid|unknown, costNote?, leadDays?,
- *                       audience?, fields?, instructions?, notes?}],          (matched by name)
+ *                       audience?, fields?, instructions?, notes?, emailMatch?: ["molly@piptix.com", "tdf.org"],
+ *                       relationship?: {howItWorks, priceToMembers, paidToUs, typicalTickets, login, contacts,
+ *                                       concerts, timeline, openItems, notes, reviewedAt}}],          (matched by name)
  *       "submissions"?: [{event: id|title, platform: id|name, status?: todo|sent|received|published|
- *                         rejected|blocked|skipped, sentAt?, sentBy?, confirmationUrl?, publicUrl?, notes?}]}
+ *                         rejected|blocked|skipped, sentAt?, sentBy?, confirmationUrl?, publicUrl?, notes?,
+ *                         ticketsOffered?, ticketsTaken?, memberPrice?: "Free" | "25 USD"}]}
  *      Only the fields sent change. Never a password: loginAccount names the account.
  */
 

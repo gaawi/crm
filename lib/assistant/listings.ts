@@ -21,6 +21,7 @@ import {
   savePlatform,
   saveSubmission,
 } from "@/lib/queries/listings";
+import { relationshipSchema } from "@/lib/listings/relationship";
 import { noEmDash } from "@/lib/text/no-em-dash";
 import { isValidEmail } from "@/lib/utils";
 
@@ -88,6 +89,12 @@ const platformSchema = z.object({
   fields: txt(2000),
   instructions: txt(4000),
   notes: txt(4000),
+  /** Addresses or domains we talk to them from ("molly@piptix.com", "tdf.org"). */
+  emailMatch: z
+    .array(z.string().trim().toLowerCase().min(3).max(320).regex(/^[^\s@]*@?[a-z0-9.-]+\.[a-z]{2,}$/, "an email address or a domain"))
+    .max(20)
+    .optional(),
+  relationship: relationshipSchema.nullish(),
 });
 
 const eventSchema = z.object({
@@ -117,6 +124,9 @@ const submissionSchema = z.object({
   confirmationUrl: url,
   publicUrl: url,
   notes: txt(4000),
+  ticketsOffered: z.number().int().min(0).max(10000).nullish(),
+  ticketsTaken: z.number().int().min(0).max(10000).nullish(),
+  memberPrice: txt(100),
 });
 
 const bodySchema = z.object({

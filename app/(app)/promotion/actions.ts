@@ -67,6 +67,11 @@ const platformSchema = z.object({
   fields: text(2000),
   instructions: text(4000),
   notes: text(4000),
+  emailMatch: z
+    .string()
+    .max(2000)
+    .transform((v) => [...new Set(v.split(/[\s,;]+/).map((e) => e.trim().toLowerCase()).filter(Boolean))])
+    .refine((list) => list.length <= 20 && list.every((e) => /^[^\s@]*@?[a-z0-9.-]+\.[a-z]{2,}$/.test(e)), "Emails to match: addresses or domains, separated by commas."),
 });
 
 function platformFields(formData: FormData) {
@@ -87,6 +92,7 @@ function platformFields(formData: FormData) {
     fields: field(formData, "fields"),
     instructions: field(formData, "instructions"),
     notes: field(formData, "notes"),
+    emailMatch: field(formData, "emailMatch"),
   });
 }
 
@@ -166,7 +172,16 @@ export async function setStatusAction(eventId: string, platformId: string, formD
   revalidatePath("/promotion");
 }
 
+const ticketCount = z
+  .string()
+  .trim()
+  .regex(/^\d{0,5}$/, "Tickets is a number.")
+  .transform((v) => (v ? Number(v) : null));
+
 const submissionSchema = z.object({
+  ticketsOffered: ticketCount,
+  ticketsTaken: ticketCount,
+  memberPrice: text(100),
   status: statusSchema,
   sentAt: optionalDateSchema,
   sentBy: text(100),
@@ -179,6 +194,9 @@ const submissionSchema = z.object({
 export async function saveSubmissionAction(eventId: string, platformId: string, _prev: ActionResult, formData: FormData): Promise<ActionResult> {
   await requireSession();
   const parsed = submissionSchema.safeParse({
+    ticketsOffered: field(formData, "ticketsOffered"),
+    ticketsTaken: field(formData, "ticketsTaken"),
+    memberPrice: field(formData, "memberPrice"),
     status: field(formData, "status"),
     sentAt: field(formData, "sentAt"),
     sentBy: field(formData, "sentBy"),

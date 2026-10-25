@@ -8,6 +8,7 @@ import {
   type PlatformTier,
   type SubmissionStatus,
 } from "@/lib/listings/constants";
+import type { PartnerRelationship } from "@/lib/listings/relationship";
 
 /**
  * Promotion: the partners and outlets every concert is sent to
@@ -33,6 +34,9 @@ export interface ListingPlatform {
   fields: string | null;
   instructions: string | null;
   notes: string | null;
+  /** Addresses or domains we talk to them from: their emails show on the card. */
+  emailMatch: string[];
+  relationship: PartnerRelationship | null;
 }
 
 export interface ListingEvent {
@@ -60,6 +64,10 @@ export interface ListingSubmission {
   confirmationUrl: string | null;
   publicUrl: string | null;
   notes: string | null;
+  /** Ticketing partners: tickets we offered, what their members pay, how many they took. */
+  ticketsOffered: number | null;
+  ticketsTaken: number | null;
+  memberPrice: string | null;
   updatedAt: Date;
 }
 
@@ -74,7 +82,7 @@ export interface PlatformForEvent extends ListingPlatform {
 
 const platformColumns = sql`
   p.id, p.name, p.kind, p.tier, p.website, p.submit_url, p.email, p.method, p.login_required, p.login_account,
-  p.cost, p.cost_note, p.lead_days, p.audience, p.fields, p.instructions, p.notes
+  p.cost, p.cost_note, p.lead_days, p.audience, p.fields, p.instructions, p.notes, p.email_match, p.relationship
 `;
 
 const eventColumns = sql`
@@ -104,7 +112,7 @@ export async function platformsForEvent(eventId: string | null): Promise<Platfor
     select ${platformColumns},
       (select to_jsonb(s) from (
         select s.id, s.event_id, s.platform_id, s.status, s.sent_at, s.sent_by, s.confirmation_url,
-               s.public_url, s.notes, s.updated_at
+               s.public_url, s.notes, s.tickets_offered, s.tickets_taken, s.member_price, s.updated_at
         from listing_submissions s where s.platform_id = p.id and s.event_id = ${eventId}
       ) s) as submission
     from listing_platforms p
@@ -125,6 +133,9 @@ function toSubmission(raw: Record<string, unknown>): ListingSubmission {
     confirmationUrl: get("confirmation_url") as string | null,
     publicUrl: get("public_url") as string | null,
     notes: get("notes") as string | null,
+    ticketsOffered: get("tickets_offered") as number | null,
+    ticketsTaken: get("tickets_taken") as number | null,
+    memberPrice: get("member_price") as string | null,
     updatedAt: new Date(get("updated_at") as string),
   };
 }
@@ -150,6 +161,8 @@ export interface PlatformInput {
   fields?: string | null;
   instructions?: string | null;
   notes?: string | null;
+  emailMatch?: string[];
+  relationship?: PartnerRelationship | null;
 }
 
 /** Creates the platform, or updates the one with that id. Only the fields given change on an update. */
@@ -171,6 +184,8 @@ export async function savePlatform(input: PlatformInput, id?: string): Promise<s
     fields: input.fields ?? null,
     instructions: input.instructions ?? null,
     notes: input.notes ?? null,
+    email_match: input.emailMatch ?? [],
+    relationship: input.relationship ? sql.json(input.relationship as never) : null,
   };
   if (id) {
     const keys = Object.keys(values).filter((k) => {
@@ -248,6 +263,9 @@ export interface SubmissionInput {
   confirmationUrl?: string | null;
   publicUrl?: string | null;
   notes?: string | null;
+  ticketsOffered?: number | null;
+  ticketsTaken?: number | null;
+  memberPrice?: string | null;
 }
 
 /**
@@ -264,12 +282,17 @@ export async function saveSubmission(eventId: string, platformId: string, input:
     confirmationUrl: input.confirmationUrl !== undefined,
     publicUrl: input.publicUrl !== undefined,
     notes: input.notes !== undefined,
+    ticketsOffered: input.ticketsOffered !== undefined,
+    ticketsTaken: input.ticketsTaken !== undefined,
+    memberPrice: input.memberPrice !== undefined,
   };
   const [row] = await sql<{ id: string }[]>`
-    insert into listing_submissions (event_id, platform_id, status, sent_at, sent_by, confirmation_url, public_url, notes)
+    insert into listing_submissions (event_id, platform_id, status, sent_at, sent_by, confirmation_url, public_url, notes,
+                                     tickets_offered, tickets_taken, member_price)
     values (${eventId}, ${platformId}, ${input.status ?? "todo"},
             ${defaultDate ? sql`current_date` : sql`${input.sentAt ?? null}::date`},
-            ${input.sentBy ?? null}, ${input.confirmationUrl ?? null}, ${input.publicUrl ?? null}, ${input.notes ?? null})
+            ${input.sentBy ?? null}, ${input.confirmationUrl ?? null}, ${input.publicUrl ?? null}, ${input.notes ?? null},
+            ${input.ticketsOffered ?? null}, ${input.ticketsTaken ?? null}, ${input.memberPrice ?? null})
     on conflict (event_id, platform_id) do update set
       status = case when ${has.status} then excluded.status else listing_submissions.status end,
       sent_at = case when ${has.sentAt} then excluded.sent_at
@@ -278,7 +301,50 @@ export async function saveSubmission(eventId: string, platformId: string, input:
       sent_by = case when ${has.sentBy} then excluded.sent_by else listing_submissions.sent_by end,
       confirmation_url = case when ${has.confirmationUrl} then excluded.confirmation_url else listing_submissions.confirmation_url end,
       public_url = case when ${has.publicUrl} then excluded.public_url else listing_submissions.public_url end,
-      notes = case when ${has.notes} then excluded.notes else listing_submissions.notes end
+      notes = case when ${has.notes} then excluded.notes else listing_submissions.notes end,
+      tickets_offered = case when ${has.ticketsOffered} then excluded.tickets_offered else listing_submissions.tickets_offered end,
+      tickets_taken = case when ${has.ticketsTaken} then excluded.tickets_taken else listing_submissions.tickets_taken end,
+      member_price = case when ${has.memberPrice} then excluded.member_price else listing_submissions.member_price end
     returning id`;
   return row.id;
+}
+
+export interface PartnerThread {
+  accountId: string;
+  threadId: string;
+  subject: string | null;
+  lastAt: Date;
+  count: number;
+  lastDirection: "inbound" | "outbound";
+  lastFrom: string | null;
+}
+
+/**
+ * The latest email threads with a partner: messages from or to any of its
+ * addresses ("molly@piptix.com") or domains ("piptix.com"), newest first.
+ */
+export async function partnerThreads(emailMatch: string[], limit = 25): Promise<PartnerThread[]> {
+  const items = emailMatch.map((e) => e.trim().toLowerCase()).filter(Boolean);
+  if (!items.length) return [];
+  const addresses = items.filter((e) => e.includes("@"));
+  const domains = items.filter((e) => !e.includes("@"));
+  return sql<PartnerThread[]>`
+    with hits as (
+      select m.account_id, m.gmail_thread_id, m.subject, m.sent_at, m.direction, m.from_email
+      from messages m
+      where lower(m.from_email) = any(${addresses}) or split_part(lower(m.from_email), '@', 2) = any(${domains})
+         or exists (
+           select 1 from message_participants p
+           where p.message_id = m.id
+             and (lower(p.email) = any(${addresses}) or split_part(lower(p.email), '@', 2) = any(${domains})))
+    )
+    select account_id, gmail_thread_id as thread_id,
+           (array_agg(subject order by sent_at desc))[1] as subject,
+           max(sent_at) as last_at, count(*)::int as count,
+           (array_agg(direction order by sent_at desc))[1] as last_direction,
+           (array_agg(from_email order by sent_at desc))[1] as last_from
+    from hits
+    group by account_id, gmail_thread_id
+    order by max(sent_at) desc
+    limit ${limit}`;
 }

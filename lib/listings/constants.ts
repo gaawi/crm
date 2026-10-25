@@ -5,7 +5,7 @@
  */
 
 export const PLATFORM_KINDS = [
-  { value: "partner", label: "Partner", hint: "Sells or offers tickets to its members (TDF, Culture Pass)" },
+  { value: "partner", label: "Ticketing partner", hint: "Sells or gives our tickets to its members (TDF, Culture Pass, Gold Club, PipTix)" },
   { value: "editorial", label: "Press", hint: "Editors and critics (Time Out, BroadwayWorld)" },
   { value: "calendar", label: "Calendar", hint: "Publishes the listing on its event calendar" },
   { value: "newsletter", label: "Newsletter", hint: "Curated picks sent to subscribers (The Skint)" },

@@ -65,14 +65,36 @@ export function SubmissionForm({
   eventId,
   platformId,
   submission,
+  partner = false,
 }: {
   eventId: string;
   platformId: string;
   submission: ListingSubmission | null;
+  /** Ticketing partner: tickets offered, member price, tickets taken. */
+  partner?: boolean;
 }) {
   const p = `s-${platformId}`;
   return (
     <ActionForm action={saveSubmissionAction.bind(null, eventId, platformId)} className="flex flex-col gap-3">
+      {partner ? (
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Field label="Tickets offered" htmlFor={`${p}-offered`}>
+            <Input id={`${p}-offered`} name="ticketsOffered" inputMode="numeric" maxLength={5} defaultValue={submission?.ticketsOffered ?? ""} />
+          </Field>
+          <Field label="Members pay" htmlFor={`${p}-price`}>
+            <Input id={`${p}-price`} name="memberPrice" maxLength={100} defaultValue={submission?.memberPrice ?? ""} placeholder="Free, 25 USD…" />
+          </Field>
+          <Field label="Tickets taken" htmlFor={`${p}-taken`}>
+            <Input id={`${p}-taken`} name="ticketsTaken" inputMode="numeric" maxLength={5} defaultValue={submission?.ticketsTaken ?? ""} />
+          </Field>
+        </div>
+      ) : (
+        <>
+          <input type="hidden" name="ticketsOffered" value={submission?.ticketsOffered ?? ""} />
+          <input type="hidden" name="ticketsTaken" value={submission?.ticketsTaken ?? ""} />
+          <input type="hidden" name="memberPrice" value={submission?.memberPrice ?? ""} />
+        </>
+      )}
       <div className="grid gap-3 sm:grid-cols-3">
         <Field label="Status" htmlFor={`${p}-status`}>
           <Select id={`${p}-status`} name="status" defaultValue={submission?.status ?? "todo"}>
@@ -189,6 +211,9 @@ export function PlatformForm({ platform }: { platform?: ListingPlatform }) {
       </Field>
       <Field label="Notes" htmlFor={`${p}-notes`}>
         <Textarea id={`${p}-notes`} name="notes" rows={2} maxLength={4000} defaultValue={platform?.notes ?? ""} />
+      </Field>
+      <Field label="Their emails" htmlFor={`${p}-match`} hint="Addresses or domains we talk to them from (molly@piptix.com, tdf.org): their emails show on the card.">
+        <Input id={`${p}-match`} name="emailMatch" autoCapitalize="off" defaultValue={platform?.emailMatch.join(", ") ?? ""} />
       </Field>
       <FormActions>
         <FormSubmit pendingLabel="Saving…">{platform ? "Save platform" : "Add platform"}</FormSubmit>

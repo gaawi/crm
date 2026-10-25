@@ -2,8 +2,9 @@ import { describe, expect, it } from "vitest";
 import { sql } from "@/lib/db";
 import { applyListings, listingsOverview } from "@/lib/assistant/listings";
 import { listingBrief } from "@/lib/listings/brief";
-import { getListingEvent, platformsForEvent, saveEvent, savePlatform, saveSubmission } from "@/lib/queries/listings";
-import { useTestDatabase } from "../setup/db";
+import { getListingEvent, partnerThreads, platformsForEvent, saveEvent, savePlatform, saveSubmission } from "@/lib/queries/listings";
+
+import { insertAccount, useTestDatabase } from "../setup/db";
 
 describe("listings", () => {
   useTestDatabase();
@@ -68,5 +69,31 @@ describe("listings", () => {
     expect(nmu).toMatchObject({ cost: "free", submitUrl: "https://www.newmusicusa.org/submit", notes: "Publishes in a few days" });
     const timeout = overview.platforms.find((p) => p.name === "Time Out New York");
     expect(timeout).toMatchObject({ email: "classical.ny@timeout.com", submission: { status: "sent", sentAt: "2026-10-24", sentBy: "ChatGPT" } });
+  });
+
+  it("keeps a ticketing partner's tickets, relationship and email threads", async () => {
+    const eventId = await saveEvent({ title: "Currents", date: "2026-10-30", time: "19:30" });
+    const piptix = await savePlatform({
+      name: "PipTix",
+      kind: "partner",
+      tier: "always",
+      emailMatch: ["piptix.com"],
+      relationship: { howItWorks: "Molly sends a list.", priceToMembers: "15 USD", paidToUs: "10 USD", typicalTickets: "20", login: null, contacts: [], concerts: [], timeline: [], openItems: [], notes: null, reviewedAt: "2026-10-25" },
+    });
+    await saveSubmission(eventId, piptix, { status: "sent", ticketsOffered: 20, memberPrice: "15 USD" });
+    await saveSubmission(eventId, piptix, { ticketsTaken: 14 });
+    const [p] = await platformsForEvent(eventId);
+    expect(p).toMatchObject({ kind: "partner", emailMatch: ["piptix.com"], relationship: { paidToUs: "10 USD" } });
+    expect(p.submission).toMatchObject({ status: "sent", ticketsOffered: 20, ticketsTaken: 14, memberPrice: "15 USD" });
+
+    const account = await insertAccount("info@own.test", { status: "active" });
+    const insert = (id: string, thread: string, from: string, at: string, direction = "inbound") => sql`
+      insert into messages (account_id, gmail_message_id, gmail_thread_id, direction, from_email, subject, body_text, sent_at)
+      values (${account}, ${id}, ${thread}, ${direction}, ${from}, ${"Tickets " + thread}, '', ${at})`;
+    await insert("a", "t1", "molly@piptix.com", "2026-10-01");
+    await insert("b", "t1", "info@own.test", "2026-10-02", "outbound");
+    await insert("c", "t2", "someone@else.test", "2026-10-03");
+    const threads = await partnerThreads(["piptix.com"]);
+    expect(threads.map((t) => [t.threadId, t.count, t.lastDirection])).toEqual([["t1", 1, "inbound"]]);
   });
 });
