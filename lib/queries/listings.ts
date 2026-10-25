@@ -1,0 +1,276 @@
+import "server-only";
+import { sql } from "@/lib/db";
+import {
+  DEFAULT_EVENT_TIME_ZONE,
+  type ListingCost,
+  type ListingMethod,
+  type SubmissionStatus,
+} from "@/lib/listings/constants";
+
+/**
+ * Listings: the sites and outlets where we post our concerts
+ * (listing_platforms), the concerts we promote (listing_events) and, for
+ * each concert, what was done on each platform (listing_submissions).
+ */
+
+export interface ListingPlatform {
+  id: string;
+  name: string;
+  website: string | null;
+  submitUrl: string | null;
+  email: string | null;
+  method: ListingMethod;
+  loginRequired: boolean;
+  loginAccount: string | null;
+  cost: ListingCost;
+  costNote: string | null;
+  leadDays: number | null;
+  audience: string | null;
+  instructions: string | null;
+  notes: string | null;
+  active: boolean;
+}
+
+export interface ListingEvent {
+  id: string;
+  title: string;
+  startsAt: Date;
+  timeZone: string;
+  venue: string | null;
+  address: string | null;
+  ticketUrl: string | null;
+  infoUrl: string | null;
+  imageUrl: string | null;
+  prices: string | null;
+  description: string | null;
+  notes: string | null;
+}
+
+export interface ListingSubmission {
+  id: string;
+  eventId: string;
+  platformId: string;
+  status: SubmissionStatus;
+  sentAt: string | null;
+  sentBy: string | null;
+  confirmationUrl: string | null;
+  publicUrl: string | null;
+  notes: string | null;
+  updatedAt: Date;
+}
+
+export interface EventSummary extends ListingEvent {
+  counts: Partial<Record<SubmissionStatus, number>>;
+}
+
+/** A platform with what happened on it for one concert (no row yet = to do). */
+export interface PlatformForEvent extends ListingPlatform {
+  submission: ListingSubmission | null;
+}
+
+const platformColumns = sql`
+  p.id, p.name, p.website, p.submit_url, p.email, p.method, p.login_required, p.login_account,
+  p.cost, p.cost_note, p.lead_days, p.audience, p.instructions, p.notes, p.active
+`;
+
+const eventColumns = sql`
+  e.id, e.title, e.starts_at, e.time_zone, e.venue, e.address, e.ticket_url, e.info_url, e.image_url,
+  e.prices, e.description, e.notes
+`;
+
+export async function listListingEvents(): Promise<EventSummary[]> {
+  const rows = await sql<(ListingEvent & { counts: Record<string, number> | null })[]>`
+    select ${eventColumns},
+      (select jsonb_object_agg(status, n) from (
+        select status, count(*)::int n from listing_submissions s where s.event_id = e.id group by status
+      ) c) as counts
+    from listing_events e
+    order by e.starts_at desc`;
+  return rows.map((r) => ({ ...r, counts: r.counts ?? {} }));
+}
+
+export async function getListingEvent(id: string): Promise<ListingEvent | null> {
+  const [row] = await sql<ListingEvent[]>`select ${eventColumns} from listing_events e where e.id = ${id}`;
+  return row ?? null;
+}
+
+/** Every platform (active first, then by name) with this concert's submission, when there is one. */
+export async function platformsForEvent(eventId: string | null): Promise<PlatformForEvent[]> {
+  const rows = await sql<(ListingPlatform & { submission: ListingSubmission | null })[]>`
+    select ${platformColumns},
+      (select to_jsonb(s) from (
+        select s.id, s.event_id, s.platform_id, s.status, s.sent_at, s.sent_by, s.confirmation_url,
+               s.public_url, s.notes, s.updated_at
+        from listing_submissions s where s.platform_id = p.id and s.event_id = ${eventId}
+      ) s) as submission
+    from listing_platforms p
+    order by p.active desc, lower(p.name)`;
+  return rows.map((r) => ({ ...r, submission: r.submission ? toSubmission(r.submission as unknown as Record<string, unknown>) : null }));
+}
+
+/** The nested json row (its keys may arrive in snake_case or camelCase, depending on the driver's transform). */
+function toSubmission(raw: Record<string, unknown>): ListingSubmission {
+  const get = (snake: string) => raw[snake] ?? raw[snake.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase())] ?? null;
+  return {
+    id: get("id") as string,
+    eventId: get("event_id") as string,
+    platformId: get("platform_id") as string,
+    status: get("status") as SubmissionStatus,
+    sentAt: get("sent_at") as string | null,
+    sentBy: get("sent_by") as string | null,
+    confirmationUrl: get("confirmation_url") as string | null,
+    publicUrl: get("public_url") as string | null,
+    notes: get("notes") as string | null,
+    updatedAt: new Date(get("updated_at") as string),
+  };
+}
+
+export async function listListingPlatforms(): Promise<ListingPlatform[]> {
+  return sql<ListingPlatform[]>`select ${platformColumns} from listing_platforms p order by p.active desc, lower(p.name)`;
+}
+
+export interface PlatformInput {
+  name: string;
+  website?: string | null;
+  submitUrl?: string | null;
+  email?: string | null;
+  method?: ListingMethod;
+  loginRequired?: boolean;
+  loginAccount?: string | null;
+  cost?: ListingCost;
+  costNote?: string | null;
+  leadDays?: number | null;
+  audience?: string | null;
+  instructions?: string | null;
+  notes?: string | null;
+  active?: boolean;
+}
+
+/** Creates the platform, or updates the one with that id. Only the fields given change on an update. */
+export async function savePlatform(input: PlatformInput, id?: string): Promise<string> {
+  const values = {
+    name: input.name.trim(),
+    website: input.website ?? null,
+    submit_url: input.submitUrl ?? null,
+    email: input.email ?? null,
+    method: input.method ?? "form",
+    login_required: input.loginRequired ?? false,
+    login_account: input.loginAccount ?? null,
+    cost: input.cost ?? "unknown",
+    cost_note: input.costNote ?? null,
+    lead_days: input.leadDays ?? null,
+    audience: input.audience ?? null,
+    instructions: input.instructions ?? null,
+    notes: input.notes ?? null,
+    active: input.active ?? true,
+  };
+  if (id) {
+    const keys = Object.keys(values).filter((k) => {
+      const camel = k.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase()) as keyof PlatformInput;
+      return k === "name" || input[camel] !== undefined;
+    }) as (keyof typeof values)[];
+    const [row] = await sql<{ id: string }[]>`
+      update listing_platforms set ${sql(values, keys)} where id = ${id} returning id`;
+    if (!row) throw new Error("That platform no longer exists.");
+    return row.id;
+  }
+  const [row] = await sql<{ id: string }[]>`insert into listing_platforms ${sql(values)} returning id`;
+  return row.id;
+}
+
+export async function findPlatformByName(name: string): Promise<ListingPlatform | null> {
+  const [row] = await sql<ListingPlatform[]>`
+    select ${platformColumns} from listing_platforms p where lower(p.name) = lower(${name.trim()})`;
+  return row ?? null;
+}
+
+export async function deletePlatform(id: string): Promise<void> {
+  await sql`delete from listing_platforms where id = ${id}`;
+}
+
+export interface EventInput {
+  title: string;
+  /** Local date and time where the concert happens. */
+  date: string;
+  time: string;
+  timeZone?: string;
+  venue?: string | null;
+  address?: string | null;
+  ticketUrl?: string | null;
+  infoUrl?: string | null;
+  imageUrl?: string | null;
+  prices?: string | null;
+  description?: string | null;
+  notes?: string | null;
+}
+
+export async function saveEvent(input: EventInput, id?: string): Promise<string> {
+  const tz = input.timeZone || DEFAULT_EVENT_TIME_ZONE;
+  const values = {
+    title: input.title.trim(),
+    time_zone: tz,
+    venue: input.venue ?? null,
+    address: input.address ?? null,
+    ticket_url: input.ticketUrl ?? null,
+    info_url: input.infoUrl ?? null,
+    image_url: input.imageUrl ?? null,
+    prices: input.prices ?? null,
+    description: input.description ?? null,
+    notes: input.notes ?? null,
+  };
+  const startsAt = sql`((${input.date}::date + ${input.time}::time) at time zone ${tz})`;
+  if (id) {
+    const [row] = await sql<{ id: string }[]>`
+      update listing_events set ${sql(values)}, starts_at = ${startsAt} where id = ${id} returning id`;
+    if (!row) throw new Error("That concert no longer exists.");
+    return row.id;
+  }
+  const [row] = await sql<{ id: string }[]>`
+    insert into listing_events (title, time_zone, venue, address, ticket_url, info_url, image_url, prices, description, notes, starts_at)
+    values (${values.title}, ${values.time_zone}, ${values.venue}, ${values.address}, ${values.ticket_url}, ${values.info_url},
+            ${values.image_url}, ${values.prices}, ${values.description}, ${values.notes}, ${startsAt})
+    returning id`;
+  return row.id;
+}
+
+export interface SubmissionInput {
+  status?: SubmissionStatus;
+  sentAt?: string | null;
+  sentBy?: string | null;
+  confirmationUrl?: string | null;
+  publicUrl?: string | null;
+  notes?: string | null;
+}
+
+/**
+ * The submission of a concert on a platform: created on first change, then
+ * only the given fields change. Marking it sent (or further) without a date
+ * records today, and never overwrites a date already there.
+ */
+export async function saveSubmission(eventId: string, platformId: string, input: SubmissionInput): Promise<string> {
+  const defaultDate = input.sentAt === undefined && input.status !== undefined && input.status !== "todo" && input.status !== "skipped";
+  const has = {
+    status: input.status !== undefined,
+    sentAt: input.sentAt !== undefined,
+    sentBy: input.sentBy !== undefined,
+    confirmationUrl: input.confirmationUrl !== undefined,
+    publicUrl: input.publicUrl !== undefined,
+    notes: input.notes !== undefined,
+  };
+  const [row] = await sql<{ id: string }[]>`
+    insert into listing_submissions (event_id, platform_id, status, sent_at, sent_by, confirmation_url, public_url, notes)
+    values (${eventId}, ${platformId}, ${input.status ?? "todo"},
+            ${defaultDate ? sql`current_date` : sql`${input.sentAt ?? null}::date`},
+            ${input.sentBy ?? null}, ${input.confirmationUrl ?? null}, ${input.publicUrl ?? null}, ${input.notes ?? null})
+    on conflict (event_id, platform_id) do update set
+      status = case when ${has.status} then excluded.status else listing_submissions.status end,
+      sent_at = case when ${has.sentAt} then excluded.sent_at
+                     when ${defaultDate} then coalesce(listing_submissions.sent_at, excluded.sent_at)
+                     else listing_submissions.sent_at end,
+      sent_by = case when ${has.sentBy} then excluded.sent_by else listing_submissions.sent_by end,
+      confirmation_url = case when ${has.confirmationUrl} then excluded.confirmation_url else listing_submissions.confirmation_url end,
+      public_url = case when ${has.publicUrl} then excluded.public_url else listing_submissions.public_url end,
+      notes = case when ${has.notes} then excluded.notes else listing_submissions.notes end
+    returning id`;
+  return row.id;
+}

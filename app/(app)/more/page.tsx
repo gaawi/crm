@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { Building2, ChevronRight, FolderKanban, History, LayoutList, LogOut, Music, Search, Send, Settings, Sparkles, type LucideIcon } from "lucide-react";
+import { Building2, ChevronRight, FolderKanban, History, LayoutList, ListChecks, LogOut, Music, Search, Send, Settings, Sparkles, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/ui/layout";
 import { logout } from "@/app/(auth)/login/actions";
 import { env } from "@/lib/env";
@@ -18,6 +18,7 @@ const GROUPS: { title: string; items: { href: string; label: string; icon: Lucid
       { href: "/organizations", label: "Organizations", icon: Building2, tint: "bg-blue-500" },
       { href: "/musicians", label: "Musicians", icon: Music, tint: "bg-emerald-500" },
       { href: "/projects", label: "Projects", icon: FolderKanban, tint: "bg-violet-500" },
+      { href: "/listings", label: "Listings (where to post concerts)", icon: ListChecks, tint: "bg-pink-500" },
       { href: "/approvals", label: "Approvals list & mailings", icon: Send, tint: "bg-sky-500" },
       { href: "/assistant-runs", label: "Daily assistant runs", icon: History, tint: "bg-orange-500" },
       { href: "/pipeline", label: "Pipeline", icon: LayoutList, tint: "bg-amber-500" },

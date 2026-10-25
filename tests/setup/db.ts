@@ -20,7 +20,8 @@ export function useTestDatabase() {
 export async function resetDatabase() {
   await sql.unsafe(`
     truncate table activities, email_templates, email_drafts, email_campaigns, app_settings, login_attempts, message_participants, messages, opportunities,
-      contact_projects, contact_emails, contacts, organizations, projects, gmail_accounts, triage_senders restart identity cascade;
+      contact_projects, contact_emails, contacts, organizations, projects, gmail_accounts, triage_senders,
+      listing_submissions, listing_events, listing_platforms restart identity cascade;
     insert into projects (name, color, sort_order) values
       ('CreArtBox','violet',1),('ADAR','blue',2),('Personal','green',3),
       ('Booking','amber',4),('Press','rose',5),('Grants','teal',6),

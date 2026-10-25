@@ -7,6 +7,7 @@ import {
   CalendarCheck,
   FolderKanban,
   LayoutList,
+  ListChecks,
   Mail,
   Megaphone,
   Menu,
@@ -32,6 +33,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/organizations", label: "Organizations", icon: Building2 },
   { href: "/musicians", label: "Musicians", icon: Music },
   { href: "/projects", label: "Projects", icon: FolderKanban },
+  { href: "/listings", label: "Listings", icon: ListChecks },
   { href: "/pipeline", label: "Pipeline", icon: LayoutList },
   { href: "/campaigns", label: "Campaigns", icon: Megaphone },
   { href: "/assistant", label: "Claude", icon: Sparkles },
@@ -48,7 +50,7 @@ const TAB_ITEMS: NavItem[] = [
 ];
 
 /** Routes reached through "More" keep the More tab highlighted. */
-const MORE_ROUTES = ["/more", "/organizations", "/musicians", "/projects", "/pipeline", "/settings", "/search", "/assistant"];
+const MORE_ROUTES = ["/more", "/organizations", "/musicians", "/projects", "/listings", "/pipeline", "/settings", "/search", "/assistant"];
 
 function isActive(pathname: string, href: string) {
   // Approvals are part of Today.
