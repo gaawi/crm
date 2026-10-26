@@ -7,7 +7,7 @@ import { DateTile, InsetGroup, LinkRow } from "../promotion/stage";
 
 export const metadata: Metadata = { title: "Concert list" };
 
-/** Every upcoming concert, soonest first: each opens its promotion, tickets sold, guest list and staff. */
+/** Every upcoming concert, soonest first: each opens its tickets sold, guest list and staff. */
 export default async function ConcertListPage() {
   const events = await upcomingGuestListEvents();
   const sold = await ticketsSoldByEvent(events.map((e) => e.id));
@@ -31,7 +31,7 @@ export default async function ConcertListPage() {
 
   return (
     <>
-      <PageHeader title="Concert list" description="Promotion, tickets sold, guests and staff of each concert." />
+      <PageHeader title="Concert list" description="Tickets sold, guests and staff of each concert." />
       <div className="flex flex-col gap-8 md:max-w-2xl">
         {next ? (
           <>

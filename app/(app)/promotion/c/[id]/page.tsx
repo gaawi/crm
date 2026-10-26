@@ -4,12 +4,11 @@ import type { Metadata } from "next";
 import { ExternalLink, Pencil, Ticket } from "lucide-react";
 import { PageHeader } from "@/components/ui/layout";
 import { listingBrief } from "@/lib/listings/brief";
-import { listGuests } from "@/lib/queries/guests";
 import { getListingEvent, platformsForEvent, type PlatformForEvent } from "@/lib/queries/listings";
 import { cn } from "@/lib/utils";
 import { CopyBrief, StatusCell } from "../../forms";
 import { EventSheetRow } from "../../sheets";
-import { concertGroups, CountsLine, InsetGroup, LinkRow, MethodIcon, methodName, ProgressBar, rowClass, statusOf, stageOf, ViewLink } from "../../stage";
+import { concertGroups, CountsLine, InsetGroup, MethodIcon, methodName, ProgressBar, rowClass, statusOf, stageOf, ViewLink } from "../../stage";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -27,7 +26,7 @@ function when(e: { startsAt: Date; timeZone: string }): string {
 export default async function PromotionConcertPage({ params }: PageProps<"/promotion/c/[id]">) {
   const { id } = await params;
   if (!UUID.test(id)) notFound();
-  const [event, platforms, guests] = await Promise.all([getListingEvent(id), platformsForEvent(id), listGuests(id)]);
+  const [event, platforms] = await Promise.all([getListingEvent(id), platformsForEvent(id)]);
   if (!event) notFound();
   const { partners, always, sometimes, counts } = concertGroups(platforms);
   const started = sometimes.filter((p) => statusOf(p) !== "todo");
@@ -84,15 +83,6 @@ export default async function PromotionConcertPage({ params }: PageProps<"/promo
           </InsetGroup>
         ) : null}
 
-        <InsetGroup title="Guest list">
-          <LinkRow href={`/promotion/c/${event.id}/guests`}>
-            <Ticket className="size-5 shrink-0 text-violet-600 dark:text-violet-400" aria-hidden />
-            <span className="flex-1 text-[17px] text-fg md:text-sm">Guest list</span>
-            <span className="text-[15px] tabular-nums text-muted md:text-xs">
-              {guests.length ? `${guests.length} · ${guests.reduce((n, g) => n + g.tickets, 0)} tickets` : "Empty"}
-            </span>
-          </LinkRow>
-        </InsetGroup>
 
         <InsetGroup title="Concert" footer="Date, venue, prices, links and the description the forms ask for.">
           <li>
