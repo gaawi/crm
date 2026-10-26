@@ -47,24 +47,65 @@ export async function removeGuestAction(guestId: string): Promise<Done> {
 
 const kindSchema = z.enum(GUEST_KINDS.map((k) => k.value) as [GuestKind, ...GuestKind[]]);
 
-/** Someone added by hand on the concert's guest list page (not necessarily in the CRM). */
+function personFields(formData: FormData) {
+  const time = field(formData, "callTime").trim();
+  return {
+    name: field(formData, "name").trim().slice(0, 200),
+    email: field(formData, "email").trim().toLowerCase(),
+    tickets: Number(field(formData, "tickets") || 1),
+    kind: kindSchema.safeParse(field(formData, "kind") || "guest"),
+    note: field(formData, "note").trim().slice(0, 1000) || null,
+    role: field(formData, "role").trim().slice(0, 100) || null,
+    phone: field(formData, "phone").trim().slice(0, 40) || null,
+    callTime: time ? time.slice(0, 5) : null,
+  };
+}
+
+/**
+ * Someone added on the concert's page: a guest, or staff and artists (role,
+ * phone, call time). With a contact (picked from the search) they are linked
+ * to it; anyone else goes by name.
+ */
 export async function addGuestAction(eventId: string, _prev: ActionResult, formData: FormData): Promise<ActionResult> {
   await requireSession();
-  const name = field(formData, "name").trim().slice(0, 200);
-  const email = field(formData, "email").trim().toLowerCase();
-  const tickets = Number(field(formData, "tickets") || 2);
-  const kind = kindSchema.safeParse(field(formData, "kind") || "guest");
-  const note = field(formData, "note").trim().slice(0, 1000) || null;
-  if (!name) return { error: "Write the guest's name." };
-  if (email && !isValidEmail(email)) return { error: "That email address doesn't look right." };
-  if (!kind.success) return { error: "Pick who they are." };
+  const f = personFields(formData);
+  const contactId = field(formData, "contactId");
+  if (!f.name && !contactId) return { error: "Write their name." };
+  if (f.email && !isValidEmail(f.email)) return { error: "That email address doesn't look right." };
+  if (!f.kind.success) return { error: "Pick who they are." };
   try {
-    await addGuest({ eventId: parseId(eventId), name, email: email || null, tickets, kind: kind.data, note });
+    await addGuest({
+      eventId: parseId(eventId),
+      contactId: contactId ? parseId(contactId) : null,
+      name: f.name,
+      email: f.email || null,
+      tickets: f.tickets,
+      kind: f.kind.data,
+      note: f.note,
+      role: f.role,
+      phone: f.phone,
+      callTime: f.callTime,
+    });
   } catch (error) {
     return { error: errorMessage(error) };
   }
   refresh();
   return { message: "Added." };
+}
+
+/** Change someone's details (name, who they are, role, phone, call time, note). */
+export async function updateGuestAction(guestId: string, _prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  await requireSession();
+  const f = personFields(formData);
+  if (!f.name) return { error: "Write their name." };
+  if (!f.kind.success) return { error: "Pick who they are." };
+  try {
+    await updateGuest(parseId(guestId), { name: f.name, kind: f.kind.data, note: f.note, role: f.role, phone: f.phone, callTime: f.callTime });
+  } catch (error) {
+    return { error: errorMessage(error) };
+  }
+  refresh();
+  return { message: "Saved." };
 }
 
 /** A contact's places on the guest lists (for the chips on an approval card). */
