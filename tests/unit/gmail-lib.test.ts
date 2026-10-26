@@ -31,6 +31,26 @@ describe("mime", () => {
     expect(Buffer.from(body.replace(/\r\n/g, ""), "base64").toString("utf8")).toBe("Hola Anna,\r\n¿Qué tal?");
   });
 
+  it("sends **bold** words as an HTML alternative, with plain text without the asterisks", () => {
+    const raw = buildRawMessage({
+      from: { email: "me@own.test", name: null },
+      to: [{ email: "anna@school.test", name: null }],
+      subject: "Students",
+      bodyText: "Hi Anna,\n\n**Come to a rehearsal** <with friends> & more.\nThanks",
+    });
+    const text = decodeRaw(raw);
+    const boundary = text.match(/boundary="([^"]+)"/)![1];
+    expect(text).toContain("Content-Type: multipart/alternative");
+    const parts = text.split(`--${boundary}`).slice(1, 3);
+    const decode = (part: string) => Buffer.from(part.split("\r\n\r\n")[1].replace(/\r\n/g, ""), "base64").toString("utf8");
+    expect(parts[0]).toContain("Content-Type: text/plain");
+    expect(decode(parts[0])).toBe("Hi Anna,\r\n\r\nCome to a rehearsal <with friends> & more.\r\nThanks");
+    expect(parts[1]).toContain("Content-Type: text/html");
+    expect(decode(parts[1])).toBe(
+      '<div dir="ltr"><p>Hi Anna,</p><p><strong>Come to a rehearsal</strong> &lt;with friends&gt; &amp; more.<br>Thanks</p></div>',
+    );
+  });
+
   it("blocks header injection through subjects and names", () => {
     const text = decodeRaw(
       buildRawMessage({

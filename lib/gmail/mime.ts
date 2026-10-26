@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import type { Address } from "@/lib/types";
 
 const CRLF = "\r\n";
@@ -68,6 +69,8 @@ function wrapBase64(value: string): string {
 /**
  * Build an RFC 2822 message for users.drafts.create.
  * - UTF-8 text/plain body, Content-Transfer-Encoding: base64 (76-char lines).
+ *   A body with **bold** words goes out as multipart/alternative: the plain
+ *   text without the asterisks, plus a minimal HTML version with <strong>.
  * - Non-ASCII header values RFC 2047 encoded; display names quoted as needed.
  * - Header injection safe: CR/LF stripped from every header value.
  * - In-Reply-To / References set when replying (References = previous
@@ -117,13 +120,44 @@ export function buildRawMessage(params: {
   }
 
   headers.push("MIME-Version: 1.0");
-  headers.push("Content-Type: text/plain; charset=UTF-8");
-  headers.push("Content-Transfer-Encoding: base64");
+  const text = String(params.bodyText ?? "");
+  const encode = (value: string) => wrapBase64(Buffer.from(value.replace(/\r\n|\r|\n/g, CRLF), "utf8").toString("base64"));
 
-  const body = String(params.bodyText ?? "").replace(/\r\n|\r|\n/g, CRLF);
-  const encodedBody = wrapBase64(Buffer.from(body, "utf8").toString("base64"));
-  const message = `${headers.join(CRLF)}${CRLF}${CRLF}${encodedBody}${CRLF}`;
+  if (!hasBold(text)) {
+    headers.push("Content-Type: text/plain; charset=UTF-8");
+    headers.push("Content-Transfer-Encoding: base64");
+    const message = `${headers.join(CRLF)}${CRLF}${CRLF}${encode(text)}${CRLF}`;
+    return Buffer.from(message, "utf8").toString("base64url");
+  }
+
+  const boundary = `vela-${randomBytes(12).toString("hex")}`;
+  headers.push(`Content-Type: multipart/alternative; boundary="${boundary}"`);
+  const part = (type: string, value: string) =>
+    [`--${boundary}`, `Content-Type: ${type}; charset=UTF-8`, "Content-Transfer-Encoding: base64", "", encode(value)].join(CRLF);
+  const message = [headers.join(CRLF), "", part("text/plain", stripBold(text)), part("text/html", boldHtml(text)), `--${boundary}--`, ""].join(CRLF);
   return Buffer.from(message, "utf8").toString("base64url");
+}
+
+const BOLD = /\*\*([^*\n]+?)\*\*/g;
+
+/** The body marks words to stress with **double asterisks** (one line at most). */
+export function hasBold(text: string): boolean {
+  return /\*\*[^*\n]+?\*\*/.test(text);
+}
+
+/** The plain-text part: the same words, without the asterisks. */
+export function stripBold(text: string): string {
+  return text.replace(BOLD, "$1");
+}
+
+/** A plain email as minimal HTML: paragraphs, line breaks and <strong> for **bold**. */
+export function boldHtml(text: string): string {
+  const escape = (v: string) => v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const paragraphs = text
+    .replace(/\r\n|\r/g, "\n")
+    .split(/\n{2,}/)
+    .map((p) => `<p>${escape(p).replace(BOLD, "<strong>$1</strong>").replace(/\n/g, "<br>")}</p>`);
+  return `<div dir="ltr">${paragraphs.join("")}</div>`;
 }
 
 /** "Re: Hello" stays; "Hello" → "Re: Hello"; handles "RE:", "Fwd:" prefixes sensibly. */
