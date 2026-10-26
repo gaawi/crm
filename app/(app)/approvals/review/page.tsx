@@ -14,11 +14,14 @@ export default async function ReviewPage({ searchParams }: PageProps<"/approvals
   const sp = await searchParams;
   const startId = param(sp, "start", 60) || null;
   const [{ drafts }, upcoming] = await Promise.all([loadPendingApprovals(new Date()), upcomingGuestListEvents()]);
-  // The next concerts (at most four) as guest list chips on each card.
-  const concerts = upcoming.slice(0, 4).map((e) => ({
+  // The upcoming concerts for the guest list rows on each card (the next one shown, the rest under "More").
+  const part = (e: (typeof upcoming)[number], o: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat("en-US", { timeZone: e.timeZone, ...o }).format(e.startsAt);
+  const concerts = upcoming.map((e) => ({
     id: e.id,
     title: e.title,
-    when: new Intl.DateTimeFormat("en-US", { timeZone: e.timeZone, month: "short", day: "numeric" }).format(e.startsAt),
+    when: part(e, { month: "short", day: "numeric" }),
+    month: part(e, { month: "short" }),
+    day: part(e, { day: "numeric" }),
   }));
   // The first two cards arrive with the page (conversation and back), so nothing loads after it opens.
   const open = drafts.filter((d) => d.status !== "sent" && d.status !== "discarded");

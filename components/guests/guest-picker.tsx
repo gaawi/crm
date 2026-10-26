@@ -11,6 +11,9 @@ export interface PickerEvent {
   title: string;
   /** "Fri, Oct 30" */
   when: string;
+  /** For a calendar tile: "OCT", "30". */
+  month?: string;
+  day?: string;
 }
 
 export interface PickerEntry {
