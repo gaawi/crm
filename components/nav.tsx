@@ -14,6 +14,7 @@ import {
   Music,
   Settings,
   Sparkles,
+  Ticket,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -36,6 +37,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/pipeline", label: "Pipeline", icon: LayoutList },
   { href: "/campaigns", label: "Campaigns", icon: Megaphone },
   { href: "/promotion", label: "Promotion", icon: ListChecks },
+  { href: "/guests", label: "Guest lists", icon: Ticket },
   { href: "/assistant", label: "Claude", icon: Sparkles },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
@@ -50,7 +52,7 @@ const TAB_ITEMS: NavItem[] = [
 ];
 
 /** Routes reached through "More" keep the More tab highlighted. */
-const MORE_ROUTES = ["/more", "/organizations", "/musicians", "/projects", "/promotion", "/pipeline", "/settings", "/search", "/assistant"];
+const MORE_ROUTES = ["/more", "/organizations", "/musicians", "/projects", "/promotion", "/guests", "/pipeline", "/settings", "/search", "/assistant"];
 
 function isActive(pathname: string, href: string) {
   // Approvals are part of Today.

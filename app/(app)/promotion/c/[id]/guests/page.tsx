@@ -32,7 +32,7 @@ export default async function GuestListPage({ params }: PageProps<"/promotion/c/
       <PageHeader
         title="Guest list"
         description={[event.title, when, event.venue].filter(Boolean).join(" · ")}
-        back={event.promote ? { href: `/promotion/c/${event.id}`, label: event.title } : { href: "/promotion", label: "Promotion" }}
+        back={event.promote ? { href: `/promotion/c/${event.id}`, label: event.title } : { href: "/guests", label: "Guest lists" }}
       />
       <div className="flex flex-col gap-8 md:max-w-2xl">
         <section aria-label="Guests" className="flex flex-col gap-3">

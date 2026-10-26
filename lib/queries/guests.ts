@@ -45,6 +45,8 @@ export interface GuestListEvent {
   venue: string | null;
   guests: number;
   tickets: number;
+  /** Of them, staff and artists. */
+  crew: number;
 }
 
 const guestColumns = sql`g.id, g.event_id, g.contact_id, g.name, g.email, g.tickets, g.kind, g.note, g.role, g.phone,
@@ -54,7 +56,8 @@ const guestColumns = sql`g.id, g.event_id, g.contact_id, g.name, g.email, g.tick
 export async function upcomingGuestListEvents(now: Date = new Date()): Promise<GuestListEvent[]> {
   return sql<GuestListEvent[]>`
     select e.id, e.title, e.starts_at, e.time_zone, e.venue,
-           count(g.id)::int as guests, coalesce(sum(g.tickets), 0)::int as tickets
+           count(g.id)::int as guests, coalesce(sum(g.tickets) filter (where g.kind not in ('staff', 'artist')), 0)::int as tickets,
+           (count(g.id) filter (where g.kind in ('staff', 'artist')))::int as crew
       from listing_events e
       left join concert_guests g on g.event_id = e.id
      where e.starts_at >= ${new Date(now.getTime() - 6 * 3_600_000)}
