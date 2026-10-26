@@ -7,7 +7,8 @@ import { env } from "@/lib/env";
 import { CREW_KINDS, listGuests } from "@/lib/queries/guests";
 import { getListingEvent, platformsForEvent } from "@/lib/queries/listings";
 import { ticketSales } from "@/lib/queries/ticket-sales";
-import { concertGroups, CountsLine, InsetGroup, LinkRow, rowClass } from "../../promotion/stage";
+import { concertGroups, CountsLine, InsetGroup, LinkRow } from "../../promotion/stage";
+import { SalesRows } from "./sales";
 
 export const metadata: Metadata = { title: "Concert" };
 
@@ -47,23 +48,13 @@ export default async function ConcertPage({ params }: PageProps<"/concerts/[id]"
           </InsetGroup>
         ) : null}
 
-        {sales.length ? (
-          <InsetGroup
-            title="Tickets sold"
-            aside={reported.length ? `${totalSold} total` : undefined}
-            footer={lastUpdate ? `Updated ${formatRelative(lastUpdate, env.timezone)}. ChatGPT keeps these up to date.` : "Not reported yet. ChatGPT fills these in."}
-          >
-            {sales.map((s) => (
-              <li key={s.id} className={rowClass}>
-                <span className={rowText}>
-                  {s.channel}
-                  {s.note ? <span className="block truncate text-[13px] text-subtle md:text-xs">{s.note}</span> : null}
-                </span>
-                <span className={value}>{s.sold ?? "Not reported"}</span>
-              </li>
-            ))}
-          </InsetGroup>
-        ) : null}
+        <InsetGroup
+          title="Tickets sold"
+          aside={reported.length ? `${totalSold} total` : undefined}
+          footer={`${lastUpdate ? `Updated ${formatRelative(lastUpdate, env.timezone)}. ` : ""}ChatGPT keeps these up to date; tap one to change it.`}
+        >
+          <SalesRows eventId={event.id} sales={sales.map((s) => ({ id: s.id, channel: s.channel, sold: s.sold, note: s.note }))} />
+        </InsetGroup>
 
         <InsetGroup title="People">
           <LinkRow href={guestsHref}>

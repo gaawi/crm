@@ -33,3 +33,29 @@ export async function ticketsSoldByEvent(eventIds: string[]): Promise<Map<string
      group by event_id`;
   return new Map(rows.map((r) => [r.eventId, r.sold]));
 }
+
+function checkSold(sold: number | null) {
+  if (sold !== null && (!Number.isInteger(sold) || sold < 0 || sold > 100_000)) throw new Error("Tickets sold is a whole number.");
+}
+
+/** A channel's number set by hand (null = not reported). */
+export async function updateTicketSale(id: string, patch: { sold: number | null; note: string | null }): Promise<void> {
+  checkSold(patch.sold);
+  await sql`update concert_ticket_sales set sold = ${patch.sold}, note = ${patch.note} where id = ${id}`;
+}
+
+/** A channel added by hand; one already there (any capitalization) gets the number instead. */
+export async function addTicketChannel(eventId: string, input: { channel: string; sold: number | null; note: string | null }): Promise<void> {
+  const channel = input.channel.trim();
+  if (!channel) throw new Error("Name the channel.");
+  checkSold(input.sold);
+  await sql`
+    insert into concert_ticket_sales (event_id, channel, sold, note)
+    values (${eventId}, ${channel}, ${input.sold}, ${input.note})
+    on conflict (event_id, lower(channel))
+    do update set sold = excluded.sold, note = coalesce(excluded.note, concert_ticket_sales.note)`;
+}
+
+export async function removeTicketChannel(id: string): Promise<void> {
+  await sql`delete from concert_ticket_sales where id = ${id}`;
+}
