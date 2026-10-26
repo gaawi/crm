@@ -56,7 +56,7 @@ export default async function GuestListPage({ params }: PageProps<"/promotion/c/
           />
         ) : (
           <p className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-[15px] text-muted md:rounded-lg md:text-sm">
-            Nobody yet. Add people from their email in Mail (one tap on their card), or by hand below.
+            Nobody yet. Add people from their email in Mail (one tap on their card), or search your contacts below.
           </p>
         )}
         <AddGuestRow eventId={event.id} kinds={GUEST_KINDS.map((k) => ({ value: k.value, label: k.label }))} />

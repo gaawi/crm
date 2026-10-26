@@ -28,9 +28,9 @@ async function attempt(run: () => Promise<unknown>): Promise<Done> {
   return { ok: true };
 }
 
-/** One tap on a contact card: the contact goes on the concert's list with 2 tickets. */
-export async function addContactGuestAction(eventId: string, contactId: string): Promise<Done> {
-  return attempt(() => addGuest({ eventId: parseId(eventId), contactId: parseId(contactId), name: "" }));
+/** One tap on a contact card (2 tickets), or a contact picked on the guest list page (with its tickets). */
+export async function addContactGuestAction(eventId: string, contactId: string, tickets?: number): Promise<Done> {
+  return attempt(() => addGuest({ eventId: parseId(eventId), contactId: parseId(contactId), name: "", tickets }));
 }
 
 export async function setGuestTicketsAction(guestId: string, tickets: number): Promise<Done> {
