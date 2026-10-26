@@ -2,7 +2,7 @@ import "server-only";
 import { sql } from "@/lib/db";
 import { approveAndSend, DraftUnavailableError } from "@/lib/ai/approvals";
 import { accountSentLast24h, sentToday } from "@/lib/campaigns/campaigns";
-import { inSendingWindow, jitteredGapMs } from "@/lib/campaigns/schedule";
+import { accountGapMs, inSendingWindow, jitteredGapMs } from "@/lib/campaigns/schedule";
 import { ACCOUNT_DAILY_SEND_CAP } from "@/lib/campaigns/types";
 import { formatDate } from "@/lib/dates";
 import { env } from "@/lib/env";
@@ -17,9 +17,11 @@ import { errorMessage } from "@/lib/utils";
  *
  *   - inside the sending window in the campaign's timezone (weekdays only
  *     when asked);
- *   - at least 3600 / per_hour seconds (±20%, stable per send) after the
- *     previous send — within a run it waits for the gap while its lease
- *     (4 minutes, minus a margin) and the deadline allow;
+ *   - at least 3600 / per_hour seconds (±40%, stable per send) after the
+ *     previous send, and 2 to 4 minutes after the account's last email of
+ *     any campaign, so two mailings never go out together; within a run it
+ *     waits for the gap while its lease (4 minutes, minus a margin) and the
+ *     deadline allow;
  *   - under the campaign's daily cap (its timezone's day) and the account's
  *     ACCOUNT_DAILY_SEND_CAP over 24 hours (all campaigns together);
  *   - at most ceil(per_hour / 12) sends per run.
@@ -149,6 +151,13 @@ async function campaignStatus(id: string): Promise<CampaignStatus | null> {
 }
 
 /** The account cannot send: a sentence for the owner, else null. */
+/** The account's last email sent by any campaign (two mailings never go out back to back). */
+async function accountLastSentAt(accountId: string): Promise<Date | null> {
+  const [row] = await sql<{ at: Date | null }[]>`
+    select max(sent_at) as at from email_drafts where account_id = ${accountId} and campaign_id is not null and status = 'sent'`;
+  return row?.at ?? null;
+}
+
 async function accountProblem(accountId: string): Promise<string | null> {
   const [account] = await sql<{ email: string; status: string; scopes: string[]; monitorOnly: boolean }[]>`
     select email, status, scopes, monitor_only from gmail_accounts where id = ${accountId}`;
@@ -265,8 +274,12 @@ async function runOne(
       result.waiting = "account_cap";
       break;
     }
-    if (lastSentAt) {
-      const due = lastSentAt.getTime() + jitteredGapMs(c.perHour, `${c.id}:${lastSentAt.toISOString()}`);
+    const accountLast = await accountLastSentAt(c.accountId);
+    if (lastSentAt || accountLast) {
+      const due = Math.max(
+        lastSentAt ? lastSentAt.getTime() + jitteredGapMs(c.perHour, `${c.id}:${lastSentAt.toISOString()}`) : 0,
+        accountLast ? accountLast.getTime() + accountGapMs(`${c.accountId}:${accountLast.toISOString()}`) : 0,
+      );
       const wait = due - now.getTime();
       if (wait > 0) {
         // Wait inside this run only while the lease and the deadline allow; else the next run sends.

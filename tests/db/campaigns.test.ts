@@ -168,44 +168,46 @@ describe.skipIf(process.env.SKIP_DB_TESTS === "1")("gradual campaigns", () => {
 
   it("keeps the per-hour gap between sends", async () => {
     const { campaignId } = await campaignOf(4);
-    await startCampaign(campaignId, { perHour: 10 }); // 6 min ± 20%, one per run
+    await startCampaign(campaignId, { perHour: 10 }); // 6 min ± 40%, one per run
     expect((await run(MON_10)).sent).toBe(1);
-    // 1 min later the gap (4.8–7.2 min) is further away than this run's lease allows waiting.
-    expect((await run(minutes(MON_10, 1))).campaigns[0]).toMatchObject({ sent: 0, waiting: "gap" });
-    expect((await run(minutes(MON_10, 8))).sent).toBe(1); // past 7.2 min: at once
+    // Right after, the gap (3.6–8.4 min) is further away than this run's lease allows waiting.
+    expect((await run(MON_10)).campaigns[0]).toMatchObject({ sent: 0, waiting: "gap" });
+    expect((await run(minutes(MON_10, 9))).sent).toBe(1); // past 8.4 min: at once
     const second = new Date((await getCampaign(campaignId))!.lastSentAt!).getTime();
-    expect(second - minutes(MON_10, 8).getTime()).toBeLessThan(5_000); // the clock moves with real time
-    // The next cron run (5 min later) waits for the rest of the gap, then sends.
-    expect((await run(minutes(MON_10, 13))).sent).toBe(1);
+    expect(second - minutes(MON_10, 9).getTime()).toBeLessThan(5_000); // the clock moves with real time
+    expect((await run(minutes(MON_10, 17.5))).sent).toBe(1);
     const third = new Date((await getCampaign(campaignId))!.lastSentAt!).getTime() - second;
-    expect(third).toBeGreaterThanOrEqual(288_000);
-    expect(third).toBeLessThanOrEqual(432_000 + 60_000);
+    expect(third).toBeGreaterThanOrEqual(216_000);
+    expect(third).toBeLessThanOrEqual(8.5 * 60_000 + 5_000);
 
-    // Faster campaigns send a few per run, still spaced.
+    // Faster campaigns still never send two emails from the account within 2 minutes.
     await updateCampaignSettings(campaignId, { perHour: 60 });
     await sql`update email_drafts set status = 'proposed' where campaign_id = ${campaignId} and status = 'queued'`;
     const more = await campaignOf(6);
     await startCampaign(more.campaignId, { perHour: 60 });
-    const result = await run(MON_10);
+    const result = await run(minutes(MON_10, 30));
     const sent = result.campaigns.find((c) => c.id === more.campaignId)!.sent;
-    expect(sent).toBeGreaterThanOrEqual(3);
-    expect(sent).toBeLessThanOrEqual(5); // ceil(60 / 12)
+    expect(sent).toBeGreaterThanOrEqual(1);
+    expect(sent).toBeLessThanOrEqual(2);
     const times = await sql<{ sentAt: Date }[]>`
-      select sent_at from email_drafts where campaign_id = ${more.campaignId} and status = 'sent' order by sent_at`;
+      select sent_at from email_drafts where account_id = ${accountId} and status = 'sent' order by sent_at`;
     for (let i = 1; i < times.length; i++) {
-      expect(times[i].sentAt.getTime() - times[i - 1].sentAt.getTime()).toBeGreaterThanOrEqual(48_000);
+      expect(times[i].sentAt.getTime() - times[i - 1].sentAt.getTime()).toBeGreaterThanOrEqual(120_000);
     }
   });
 
   it("stops at the daily cap and continues the next day", async () => {
     const { campaignId } = await campaignOf(5);
     await startCampaign(campaignId, { perHour: 60, dailyCap: 2 });
-    const first = await run(MON_10);
-    expect(first.campaigns[0]).toMatchObject({ sent: 2, waiting: "daily_cap" });
+    // Two minutes at least between sends: two cron runs reach the cap.
+    const monday = (await run(MON_10)).sent + (await run(minutes(MON_10, 5))).sent;
+    expect(monday).toBe(2);
+    expect((await run(minutes(MON_10, 10))).campaigns[0]).toMatchObject({ sent: 0, waiting: "daily_cap" });
     expect((await run(minutes(MON_10, 60))).sent).toBe(0);
     expect((await getCampaignSummary(campaignId, minutes(MON_10, 60)))?.sentToday).toBe(2);
     // Tuesday.
-    expect((await run(minutes(MON_10, 24 * 60))).sent).toBe(2);
+    const tuesday = (await run(minutes(MON_10, 24 * 60))).sent + (await run(minutes(MON_10, 24 * 60 + 5))).sent;
+    expect(tuesday).toBe(2);
     expect(state.sent).toHaveLength(4);
   });
 
@@ -401,7 +403,9 @@ describe.skipIf(process.env.SKIP_DB_TESTS === "1")("gradual campaigns", () => {
     const edited = await saveDraftEdits(draftIds[0], { subject: "Hola 1", body: "Edited body", to: ["c1@venue.test"], cc: [] });
     expect(edited.status).toBe("queued");
     await discardDraft(draftIds[1]);
+    // Sends are at least 2 minutes apart from one account: two cron runs.
     await run(MON_10);
+    await run(minutes(MON_10, 5));
     expect(state.sent.map((s) => s.body)).toEqual(["Edited body", "Body 3"]);
     expect(await statuses(campaignId)).toEqual(["sent", "discarded", "sent"]);
     await expect(saveDraftEdits(draftIds[0], { subject: "x", body: "y", to: ["c1@venue.test"], cc: [] })).rejects.toThrow(/no longer be edited/);

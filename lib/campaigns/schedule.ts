@@ -117,11 +117,17 @@ function unitHash(seed: string): number {
 }
 
 /**
- * The gap before the next send: minGapMs(perHour) ±20%, the same for a given
+ * The gap before the next send: minGapMs(perHour) ±40%, the same for a given
  * seed (campaign id + last send), so every run agrees on the next send time.
+ * Wide on purpose: a person sending emails one by one is never regular.
  */
 export function jitteredGapMs(perHour: number, seed: string): number {
-  return Math.round(minGapMs(perHour) * (0.8 + 0.4 * unitHash(seed)));
+  return Math.round(minGapMs(perHour) * (0.6 + 0.8 * unitHash(seed)));
+}
+
+/** At least this long between two sends from one account, whatever the campaigns (2 to 4 minutes, varied per send). */
+export function accountGapMs(seed: string): number {
+  return Math.round(120_000 * (1 + unitHash(seed)));
 }
 
 /**

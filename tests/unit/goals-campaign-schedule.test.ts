@@ -3,6 +3,7 @@ import {
   estimateSends,
   inSendingWindow,
   isValidTimeZone,
+  accountGapMs,
   jitteredGapMs,
   minGapMs,
   nextWindowOpening,
@@ -122,14 +123,17 @@ describe("campaign schedule", () => {
     expect(startOfZonedDay("2026-10-05", "Europe/Madrid").toISOString()).toBe("2026-10-04T22:00:00.000Z");
   });
 
-  it("spaces sends with a stable ±20% jitter", () => {
+  it("spaces sends with a stable ±40% jitter, and keeps 2 to 4 minutes between an account's sends", () => {
     expect(minGapMs(10)).toBe(360_000);
     expect(minGapMs(60)).toBe(60_000);
     const gaps = Array.from({ length: 200 }, (_, i) => jitteredGapMs(10, `c:${i}`));
-    expect(Math.min(...gaps)).toBeGreaterThanOrEqual(288_000);
-    expect(Math.max(...gaps)).toBeLessThanOrEqual(432_000);
+    expect(Math.min(...gaps)).toBeGreaterThanOrEqual(216_000);
+    expect(Math.max(...gaps)).toBeLessThanOrEqual(504_000);
     expect(new Set(gaps).size).toBeGreaterThan(50);
     expect(jitteredGapMs(10, "same")).toBe(jitteredGapMs(10, "same"));
+    const account = Array.from({ length: 200 }, (_, i) => accountGapMs(`a:${i}`));
+    expect(Math.min(...account)).toBeGreaterThanOrEqual(120_000);
+    expect(Math.max(...account)).toBeLessThanOrEqual(240_000);
   });
 
   it("estimates the next and the last send", () => {
