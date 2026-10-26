@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireSession } from "@/lib/auth";
-import { addGuest, GUEST_KINDS, removeGuest, updateGuest, type GuestKind } from "@/lib/queries/guests";
+import { addGuest, GUEST_KINDS, guestEntriesForContact, removeGuest, updateGuest, type GuestKind } from "@/lib/queries/guests";
 import { errorMessage, isValidEmail } from "@/lib/utils";
 import type { ActionResult } from "../_components/action-form";
 import { field, parseId } from "../_lib/validation";
@@ -65,4 +65,11 @@ export async function addGuestAction(eventId: string, _prev: ActionResult, formD
   }
   refresh();
   return { message: "Added." };
+}
+
+/** A contact's places on the guest lists (for the chips on an approval card). */
+export async function guestEntriesAction(contactId: string): Promise<{ id: string; eventId: string; tickets: number }[]> {
+  await requireSession();
+  const entries = await guestEntriesForContact(parseId(contactId));
+  return entries.map((g) => ({ id: g.id, eventId: g.eventId, tickets: g.tickets }));
 }

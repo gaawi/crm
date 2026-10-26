@@ -23,6 +23,8 @@ import { MailingFace, type MailingCardData } from "./mailing-card";
 import { CampaignPill } from "@/components/campaign-pill";
 import { TheyWroteBadge } from "./they-wrote";
 import { DraftConversation } from "./thread-face";
+import { GuestChips } from "@/components/guests/guest-chips";
+import type { PickerEvent } from "@/components/guests/guest-picker";
 import { discardCampaignAction, startCampaignAction } from "@/app/(app)/approvals/actions";
 
 const PURPOSE: Record<EmailDraft["purpose"], string> = {
@@ -76,9 +78,12 @@ export function Flashcards({
   today,
   startId,
   initialCards = {},
+  concerts = [],
 }: {
   drafts: EmailDraft[];
   mailings?: MailingCardData[];
+  /** Upcoming concerts, to put the person on a guest list from the card. */
+  concerts?: PickerEvent[];
   timezone: string;
   today: string;
   startId?: string | null;
@@ -496,6 +501,7 @@ export function Flashcards({
                   ) : null}
                   {draft.error ? <p className="rounded-md bg-warning/10 px-2.5 py-1.5 text-[12px] text-warning">{draft.error}</p> : null}
                   <DraftConversation draft={draft} thread={threads[draft.id]} timezone={timezone} />
+                  {draft.contact && concerts.length ? <GuestChips key={draft.contact.id} contactId={draft.contact.id} events={concerts} /> : null}
                 </div>
               )}
             </>
