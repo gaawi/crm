@@ -65,6 +65,18 @@ export async function upcomingGuestListEvents(now: Date = new Date()): Promise<G
      order by e.starts_at`;
 }
 
+/** The upcoming concerts as the guest list pickers show them ("Oct 30", a calendar tile). */
+export function pickerEvents(events: GuestListEvent[]) {
+  const part = (e: GuestListEvent, o: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat("en-US", { timeZone: e.timeZone, ...o }).format(e.startsAt);
+  return events.map((e) => ({
+    id: e.id,
+    title: e.title,
+    when: part(e, { month: "short", day: "numeric" }),
+    month: part(e, { month: "short" }),
+    day: part(e, { day: "numeric" }),
+  }));
+}
+
 export async function listGuests(eventId: string): Promise<ConcertGuest[]> {
   return sql<ConcertGuest[]>`
     select ${guestColumns} from concert_guests g where g.event_id = ${eventId}

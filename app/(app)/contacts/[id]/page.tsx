@@ -8,6 +8,7 @@ import { ContactOrgAvatar } from "@/components/contact-org-avatar";
 import { DraftFollowUp } from "@/components/draft-follow-up";
 import { PhoneLink } from "@/components/booking/phone-actions";
 import { EmailTimeline } from "@/components/email-timeline";
+import { GuestChips } from "@/components/guests/guest-chips";
 import { OrgProfileLine } from "@/components/organizations/profile-card";
 import { RowList } from "@/components/contact-row";
 import { Badge, ProjectDot, StatusBadge, TagBadge } from "@/components/ui/badge";
@@ -28,6 +29,7 @@ import { getOrganizationWithProfile } from "@/lib/queries/org-profiles";
 import { listOrganizations } from "@/lib/queries/organizations";
 import { listProjects } from "@/lib/queries/projects";
 import { getOwnAddresses } from "@/lib/queries/stats";
+import { pickerEvents, upcomingGuestListEvents } from "@/lib/queries/guests";
 import type { Contact, ContactSummary, Opportunity, Project } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { ActionForm, FormSubmit } from "../../_components/action-form";
@@ -140,7 +142,7 @@ export default async function ContactPage({ params, searchParams }: PageProps<"/
     );
   }
 
-  const [history, activities, selfEmails, deals, duplicates, projects, accounts, organizations, orgProfile, musician, gigs] = await Promise.all([
+  const [history, activities, selfEmails, deals, duplicates, projects, accounts, organizations, orgProfile, musician, gigs, concerts] = await Promise.all([
     getContactHistory(contact.id, { limit: HISTORY_PAGE, before, q: q || undefined }),
     listActivities({ contactId: contact.id, before, limit: ACTIVITY_PAGE }),
     getOwnAddresses(),
@@ -153,6 +155,7 @@ export default async function ContactPage({ params, searchParams }: PageProps<"/
     // The private rating is only on this page (folded away) and never given to Claude.
     getMusicianProfile(contact.id, { withRating: true }),
     listGigs(contact.id),
+    upcomingGuestListEvents().then(pickerEvents),
   ]);
 
   const openDeals = deals.filter((d) => d.stage !== "won" && d.stage !== "lost");
@@ -184,6 +187,12 @@ export default async function ContactPage({ params, searchParams }: PageProps<"/
       {notice === "merged" ? (
         <div className="mb-5">
           <Notice tone="success">Contacts merged. Addresses, email history, projects and goals are all here now.</Notice>
+        </div>
+      ) : null}
+
+      {concerts.length ? (
+        <div className="mb-5">
+          <GuestChips contactId={contact.id} events={concerts} />
         </div>
       ) : null}
 
