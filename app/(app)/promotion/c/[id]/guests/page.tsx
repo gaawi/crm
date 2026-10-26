@@ -32,7 +32,7 @@ export default async function GuestListPage({ params }: PageProps<"/promotion/c/
       <PageHeader
         title="Guest list"
         description={[event.title, when, event.venue].filter(Boolean).join(" · ")}
-        back={event.promote ? { href: `/promotion/c/${event.id}`, label: event.title } : { href: "/guests", label: "Guest lists" }}
+        back={{ href: `/concerts/${event.id}`, label: event.title }}
       />
       <div className="flex flex-col gap-8 md:max-w-2xl">
         <section aria-label="Guests" className="flex flex-col gap-3">
@@ -64,7 +64,7 @@ export default async function GuestListPage({ params }: PageProps<"/promotion/c/
           <AddGuestRow eventId={event.id} kinds={guestKinds} />
         </section>
 
-        <section aria-label="Staff and artists" className="flex flex-col gap-3">
+        <section id="staff" aria-label="Staff and artists" className="flex scroll-mt-4 flex-col gap-3">
           <h2 className={title}>
             <span>Staff &amp; artists</span>
             <span className="normal-case tracking-normal">
