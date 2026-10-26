@@ -54,6 +54,8 @@ export interface ListingEvent {
   prices: string | null;
   description: string | null;
   notes: string | null;
+  /** Sent to the New York listing sites (Promotion); false for concerts elsewhere, which only keep a guest list. */
+  promote: boolean;
 }
 
 export interface ListingSubmission {
@@ -91,16 +93,18 @@ const platformColumns = sql`
 
 const eventColumns = sql`
   e.id, e.title, e.starts_at, e.time_zone, e.venue, e.address, e.ticket_url, e.info_url, e.image_url,
-  e.prices, e.description, e.notes
+  e.prices, e.description, e.notes, e.promote
 `;
 
-export async function listListingEvents(): Promise<EventSummary[]> {
+/** Concerts, newest first: the ones Promotion sends to listing sites, or every one (`all`, for guest lists). */
+export async function listListingEvents(options: { all?: boolean } = {}): Promise<EventSummary[]> {
   const rows = await sql<(ListingEvent & { counts: Record<string, number> | null })[]>`
     select ${eventColumns},
       (select jsonb_object_agg(status, n) from (
         select status, count(*)::int n from listing_submissions s where s.event_id = e.id group by status
       ) c) as counts
     from listing_events e
+    ${options.all ? sql`` : sql`where e.promote`}
     order by e.starts_at desc`;
   return rows.map((r) => ({ ...r, counts: r.counts ?? {} }));
 }
@@ -230,6 +234,8 @@ export interface EventInput {
   prices?: string | null;
   description?: string | null;
   notes?: string | null;
+  /** Sent to New York listing sites (default true); left as it is on update when omitted. */
+  promote?: boolean;
 }
 
 export async function saveEvent(input: EventInput, id?: string): Promise<string> {
@@ -249,14 +255,15 @@ export async function saveEvent(input: EventInput, id?: string): Promise<string>
   const startsAt = sql`((${input.date}::date + ${input.time}::time) at time zone ${tz})`;
   if (id) {
     const [row] = await sql<{ id: string }[]>`
-      update listing_events set ${sql(values)}, starts_at = ${startsAt} where id = ${id} returning id`;
+      update listing_events set ${sql(values)}, starts_at = ${startsAt}, promote = coalesce(${input.promote ?? null}::boolean, promote)
+       where id = ${id} returning id`;
     if (!row) throw new Error("That concert no longer exists.");
     return row.id;
   }
   const [row] = await sql<{ id: string }[]>`
-    insert into listing_events (title, time_zone, venue, address, ticket_url, info_url, image_url, prices, description, notes, starts_at)
+    insert into listing_events (title, time_zone, venue, address, ticket_url, info_url, image_url, prices, description, notes, starts_at, promote)
     values (${values.title}, ${values.time_zone}, ${values.venue}, ${values.address}, ${values.ticket_url}, ${values.info_url},
-            ${values.image_url}, ${values.prices}, ${values.description}, ${values.notes}, ${startsAt})
+            ${values.image_url}, ${values.prices}, ${values.description}, ${values.notes}, ${startsAt}, ${input.promote ?? true})
     returning id`;
   return row.id;
 }

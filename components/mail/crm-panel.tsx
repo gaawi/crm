@@ -8,7 +8,9 @@ import { stageLabel } from "@/lib/constants";
 import { formatDue, formatRelative, todayIn } from "@/lib/dates";
 import { env } from "@/lib/env";
 import { getContactByEmail } from "@/lib/queries/contacts";
+import { guestEntriesForContact, upcomingGuestListEvents } from "@/lib/queries/guests";
 import { listOpportunities } from "@/lib/queries/opportunities";
+import { GuestPicker, type PickerEntry, type PickerEvent } from "@/components/guests/guest-picker";
 import type { Address, Contact, Opportunity } from "@/lib/types";
 import { cn, initials } from "@/lib/utils";
 import { ClaudePanel } from "./claude-panel";
@@ -42,8 +44,17 @@ export async function CrmPanel({
   const entries = people
     .map((p, i) => ({ address: p, contact: contacts[i] }))
     .filter((e) => !e.contact || (!seen.has(e.contact.id) && seen.add(e.contact.id)));
-  const deals = await Promise.all(entries.map((e) => (e.contact ? listOpportunities({ contactId: e.contact.id }) : Promise.resolve([]))));
+  const [deals, guests, upcoming] = await Promise.all([
+    Promise.all(entries.map((e) => (e.contact ? listOpportunities({ contactId: e.contact.id }) : Promise.resolve([])))),
+    Promise.all(entries.map((e) => (e.contact ? guestEntriesForContact(e.contact.id) : Promise.resolve([])))),
+    upcomingGuestListEvents(),
+  ]);
   const today = todayIn(env.timezone);
+  const concerts: PickerEvent[] = upcoming.map((e) => ({
+    id: e.id,
+    title: e.title,
+    when: new Intl.DateTimeFormat("en-US", { timeZone: e.timeZone, weekday: "short", month: "short", day: "numeric" }).format(e.startsAt),
+  }));
 
   return (
     <div className="flex flex-col gap-4">
@@ -55,7 +66,15 @@ export async function CrmPanel({
           <div className="flex flex-col gap-3">
             {entries.map((e, i) =>
               e.contact ? (
-                <ContactCard key={e.contact.id} contact={e.contact} deals={deals[i]} today={today} returnPath={returnPath} />
+                <ContactCard
+                  key={e.contact.id}
+                  contact={e.contact}
+                  deals={deals[i]}
+                  today={today}
+                  returnPath={returnPath}
+                  concerts={concerts}
+                  guestEntries={guests[i].map((g) => ({ id: g.id, eventId: g.eventId, tickets: g.tickets }))}
+                />
               ) : (
                 <UnknownCard key={e.address.email} address={e.address} />
               ),
@@ -75,7 +94,21 @@ export async function CrmPanel({
   );
 }
 
-function ContactCard({ contact, deals, today, returnPath }: { contact: Contact; deals: Opportunity[]; today: string; returnPath: string }) {
+function ContactCard({
+  contact,
+  deals,
+  today,
+  returnPath,
+  concerts,
+  guestEntries,
+}: {
+  contact: Contact;
+  deals: Opportunity[];
+  today: string;
+  returnPath: string;
+  concerts: PickerEvent[];
+  guestEntries: PickerEntry[];
+}) {
   const due = contact.followUpAt;
   const overdue = due !== null && due < today;
   const presets: { key: "1w" | "2w" | "1m"; label: string }[] = [
@@ -151,6 +184,8 @@ function ContactCard({ contact, deals, today, returnPath }: { contact: Contact; 
           </form>
         ) : null}
       </div>
+
+      <GuestPicker contactId={contact.id} events={concerts} entries={guestEntries} />
 
       <RemindLater contactId={contact.id} today={today} />
 

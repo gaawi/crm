@@ -1,0 +1,171 @@
+"use client";
+
+import Link from "next/link";
+import { useId, useState, useTransition } from "react";
+import { CheckCircle2, Circle, Loader2, Minus, Plus, Trash2 } from "lucide-react";
+import { Field, Input, Select, Textarea } from "@/components/ui/field";
+import { Sheet } from "@/components/ui/sheet";
+import { cn } from "@/lib/utils";
+import { ActionForm } from "../_components/action-form";
+import { addGuestAction, checkInGuestAction, removeGuestAction, setGuestTicketsAction } from "./guest-actions";
+
+export interface GuestRow {
+  id: string;
+  contactId: string | null;
+  name: string;
+  email: string | null;
+  tickets: number;
+  kindLabel: string;
+  note: string | null;
+  checkedIn: boolean;
+}
+
+type Done = { ok: true } | { ok: false; error: string };
+
+/**
+ * The concert's list as rows: tap the circle to check someone in at the door,
+ * − / + for their tickets, the bin to take them off (two taps).
+ */
+export function GuestRows({ guests }: { guests: GuestRow[] }) {
+  const [pending, start] = useTransition();
+  const [busy, setBusy] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const run = (key: string, action: () => Promise<Done>) => {
+    setBusy(key);
+    setError(null);
+    start(async () => {
+      const r = await action().catch(() => ({ ok: false as const, error: "Not saved. Try again." }));
+      if (!r.ok) setError(r.error);
+      setBusy(null);
+      setConfirm(null);
+    });
+  };
+  const spin = (key: string) => pending && busy === key;
+
+  return (
+    <>
+      {error ? <p className="mb-2 px-4 text-[13px] text-danger md:px-0">{error}</p> : null}
+      <ul className="overflow-hidden rounded-xl border border-border bg-surface md:rounded-lg [&>li+li]:border-t [&>li+li]:border-border">
+        {guests.map((g) => (
+          <li key={g.id} className={cn("flex min-h-[60px] items-center gap-2 py-2 pl-2 pr-3 md:min-h-12", g.checkedIn && "bg-emerald-50/60 dark:bg-emerald-950/30")}>
+            <button
+              type="button"
+              aria-label={g.checkedIn ? `${g.name} arrived: undo` : `Check in ${g.name}`}
+              aria-pressed={g.checkedIn}
+              disabled={pending}
+              onClick={() => run(`${g.id}in`, () => checkInGuestAction(g.id, !g.checkedIn))}
+              className="inline-flex size-11 shrink-0 items-center justify-center rounded-full active:bg-surface-2 md:size-8"
+            >
+              {spin(`${g.id}in`) ? (
+                <Loader2 className="size-5 animate-spin text-muted" />
+              ) : g.checkedIn ? (
+                <CheckCircle2 className="size-6 text-emerald-600 dark:text-emerald-400" />
+              ) : (
+                <Circle className="size-6 text-subtle" />
+              )}
+            </button>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[17px] leading-snug text-fg md:text-sm">
+                {g.contactId ? (
+                  <Link href={`/contacts/${g.contactId}`} className="hover:underline">
+                    {g.name}
+                  </Link>
+                ) : (
+                  g.name
+                )}
+              </span>
+              <span className="block truncate text-[13px] text-subtle md:text-xs">
+                {g.kindLabel}
+                {g.note ? ` · ${g.note}` : g.email ? ` · ${g.email}` : ""}
+              </span>
+            </span>
+            <span className="flex shrink-0 items-center gap-1">
+              <button
+                type="button"
+                aria-label="One ticket less"
+                disabled={pending || g.tickets <= 1}
+                onClick={() => run(`${g.id}-`, () => setGuestTicketsAction(g.id, g.tickets - 1))}
+                className="inline-flex size-9 items-center justify-center rounded-full border border-border active:bg-surface-2 disabled:opacity-40 md:size-7"
+              >
+                <Minus className="size-4 md:size-3.5" />
+              </button>
+              <span className="w-7 text-center text-[17px] font-semibold tabular-nums md:text-sm">
+                {spin(`${g.id}-`) || spin(`${g.id}+`) ? <Loader2 className="mx-auto size-4 animate-spin" /> : g.tickets}
+              </span>
+              <button
+                type="button"
+                aria-label="One ticket more"
+                disabled={pending || g.tickets >= 20}
+                onClick={() => run(`${g.id}+`, () => setGuestTicketsAction(g.id, g.tickets + 1))}
+                className="inline-flex size-9 items-center justify-center rounded-full border border-border active:bg-surface-2 disabled:opacity-40 md:size-7"
+              >
+                <Plus className="size-4 md:size-3.5" />
+              </button>
+              <button
+                type="button"
+                aria-label={confirm === g.id ? `Tap again to remove ${g.name}` : `Remove ${g.name}`}
+                disabled={pending}
+                onClick={() => (confirm === g.id ? run(`${g.id}x`, () => removeGuestAction(g.id)) : setConfirm(g.id))}
+                className={cn(
+                  "ml-1 inline-flex size-9 items-center justify-center rounded-full active:bg-surface-2 md:size-7",
+                  confirm === g.id ? "bg-red-600 text-white" : "text-subtle",
+                )}
+              >
+                {spin(`${g.id}x`) ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4 md:size-3.5" />}
+              </button>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
+/** "Add a guest" row: a sheet with name, email, tickets, who they are and a note. */
+export function AddGuestRow({ eventId, kinds }: { eventId: string; kinds: { value: string; label: string }[] }) {
+  const [open, setOpen] = useState(false);
+  const id = useId();
+  const formId = `${id}-guest`;
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="flex min-h-[52px] w-full items-center gap-3 rounded-xl border border-border bg-surface px-4 text-left text-[17px] text-blue-600 active:bg-surface-2 md:min-h-11 md:rounded-lg md:text-sm dark:text-blue-400"
+      >
+        <Plus className="size-5" aria-hidden />
+        Add someone by hand
+      </button>
+      {open ? (
+        <Sheet open onClose={() => setOpen(false)} title="Add a guest" primary={{ label: "Add", form: formId }}>
+          <ActionForm id={formId} action={addGuestAction.bind(null, eventId)} onDone={() => setOpen(false)} className="flex flex-col gap-3">
+            <Field label="Name" htmlFor={`${id}-name`}>
+              <Input id={`${id}-name`} name="name" required maxLength={200} autoComplete="off" />
+            </Field>
+            <Field label="Email (optional)" htmlFor={`${id}-email`}>
+              <Input id={`${id}-email`} name="email" type="email" autoCapitalize="off" />
+            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Tickets" htmlFor={`${id}-tickets`}>
+                <Input id={`${id}-tickets`} name="tickets" type="number" min={1} max={20} defaultValue={2} inputMode="numeric" />
+              </Field>
+              <Field label="Who" htmlFor={`${id}-kind`}>
+                <Select id={`${id}-kind`} name="kind" defaultValue="guest">
+                  {kinds.map((k) => (
+                    <option key={k.value} value={k.value}>
+                      {k.label}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            </div>
+            <Field label="Note for the door (optional)" htmlFor={`${id}-note`}>
+              <Textarea id={`${id}-note`} name="note" rows={2} maxLength={1000} />
+            </Field>
+          </ActionForm>
+        </Sheet>
+      ) : null}
+    </>
+  );
+}

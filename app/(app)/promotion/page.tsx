@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { Plus } from "lucide-react";
+import { Plus, Ticket } from "lucide-react";
 import { Notice, PageHeader } from "@/components/ui/layout";
+import { upcomingGuestListEvents } from "@/lib/queries/guests";
 import { listListingEvents, listListingPlatforms, platformsForEvent, type EventSummary } from "@/lib/queries/listings";
 import { param } from "../_lib/url";
 import { EventSheetRow, PlatformSheetRow } from "./sheets";
@@ -38,9 +39,10 @@ export default async function PromotionPage({ searchParams }: PageProps<"/promot
     );
   }
   const { upcoming, past } = splitByDate(all);
-  const [counts, platforms] = await Promise.all([
+  const [counts, platforms, guestLists] = await Promise.all([
     Promise.all(all.map(async (e) => [e.id, concertGroups(await platformsForEvent(e.id)).counts] as const)).then((rows) => new Map(rows)),
     listListingPlatforms(),
+    upcomingGuestListEvents(),
   ]);
   const skipped = platforms.filter((p) => p.tier === "skip").length;
   const row = (e: EventSummary) => {
@@ -69,6 +71,24 @@ export default async function PromotionPage({ searchParams }: PageProps<"/promot
         </InsetGroup>
 
         {past.length ? <InsetGroup title="Past concerts">{past.map(row)}</InsetGroup> : null}
+
+        {guestLists.length ? (
+          <InsetGroup title="Guest lists" footer="Add people from their email in Mail with one tap; check them in at the door here.">
+            {guestLists.map((e) => (
+              <LinkRow key={e.id} href={`/promotion/c/${e.id}/guests`}>
+                <Ticket className="size-5 shrink-0 text-violet-600 dark:text-violet-400" aria-hidden />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[17px] text-fg md:text-sm">{e.title}</span>
+                  <span className="block truncate text-[13px] text-subtle md:text-xs">
+                    {new Intl.DateTimeFormat("en-US", { timeZone: e.timeZone, weekday: "short", month: "short", day: "numeric" }).format(e.startsAt)}
+                    {e.venue ? ` · ${e.venue}` : ""}
+                  </span>
+                </span>
+                <span className="shrink-0 text-[15px] tabular-nums text-muted md:text-xs">{e.guests ? `${e.guests} · ${e.tickets} tix` : "Empty"}</span>
+              </LinkRow>
+            ))}
+          </InsetGroup>
+        ) : null}
 
         <InsetGroup title="Sites" footer="Partners and listing sites live here; each concert shows the ones it goes to.">
           <li>

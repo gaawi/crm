@@ -111,6 +111,8 @@ const eventSchema = z.object({
   prices: txt(300),
   description: txt(6000),
   notes: txt(4000),
+  /** false: a concert away from New York (guest list only, not sent to listing sites). */
+  promote: z.boolean().optional(),
 });
 
 const submissionSchema = z.object({
