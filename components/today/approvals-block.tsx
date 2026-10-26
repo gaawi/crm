@@ -6,18 +6,35 @@ import type { PendingApprovals } from "@/lib/approvals/pending";
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 /**
- * Top of Today: everything waiting for the owner's OK (single emails and
- * mailings), opened as flashcards. Approvals has no tab of its own any more.
+ * Top of Today: everything waiting for the owner's OK. Mass mailings (many
+ * emails approved at once) come first, in red, each opening its full list;
+ * single emails are reviewed one by one as flashcards (blue).
  */
 export function ApprovalsBlock({ pending }: { pending: PendingApprovals }) {
   const { drafts, mailings, waitingVersion, total } = pending;
   if (!total && !waitingVersion) return null;
-  const parts = [mailings.length ? plural(mailings.length, "mailing") : "", drafts.length ? plural(drafts.length, "email") : ""].filter(Boolean);
   const faces = drafts.flatMap((d) => (d.contact ? [d.contact] : [])).slice(0, 5);
 
   return (
     <section aria-label="To approve" className="flex flex-col gap-2">
-      {total ? (
+      {mailings.map((m) => (
+        <Link
+          key={m.id}
+          href={`/approvals/mailings/${m.id}`}
+          className="flex items-center gap-3 rounded-2xl bg-red-600 px-4 py-4 text-white shadow-sm active:opacity-90 md:rounded-xl md:py-3.5 md:hover:opacity-95 dark:bg-red-700"
+        >
+          <Send className="size-6 shrink-0" aria-hidden />
+          <span className="min-w-0 flex-1">
+            <span className="block text-[11px] font-semibold uppercase tracking-wide text-white/80">Mass mailing · approve all at once</span>
+            <span className="block truncate text-[17px] font-semibold leading-tight md:text-[15px]">{m.name}</span>
+            <span className="block truncate text-[13px] text-white/85">
+              {plural(m.count, "email")} from {m.accountEmail} · read them all before approving
+            </span>
+          </span>
+          <ChevronRight className="size-5 shrink-0" aria-hidden />
+        </Link>
+      ))}
+      {drafts.length ? (
         <Link
           href="/approvals/review"
           // Downloaded in full while Today is open: the cards open at once.
@@ -27,11 +44,9 @@ export function ApprovalsBlock({ pending }: { pending: PendingApprovals }) {
           <Layers className="size-6 shrink-0" aria-hidden />
           <span className="min-w-0 flex-1">
             <span className="block text-[17px] font-semibold leading-tight md:text-[15px]">
-              {total === 1 ? "1 to approve" : `${total} to approve`}
+              {drafts.length === 1 ? "1 email to approve" : `${drafts.length} emails to approve`}
             </span>
-            <span className="block truncate text-[13px] text-white/80">
-              {parts.join(" · ")} · review them one by one
-            </span>
+            <span className="block truncate text-[13px] text-white/80">One by one</span>
           </span>
           {faces.length ? (
             <span className="hidden shrink-0 -space-x-2 sm:flex" aria-hidden>
@@ -39,8 +54,6 @@ export function ApprovalsBlock({ pending }: { pending: PendingApprovals }) {
                 <ContactAvatar key={c.id} contact={c} size="sm" className="ring-2 ring-brand" />
               ))}
             </span>
-          ) : mailings.length ? (
-            <Send className="size-5 shrink-0 opacity-80" aria-hidden />
           ) : null}
           <ChevronRight className="size-5 shrink-0" aria-hidden />
         </Link>

@@ -212,7 +212,12 @@ export function CampaignPanel({
   let primary: ReactNode = null;
   if (canApprove) {
     primary = (
-      <Button variant="primary" className="w-full md:w-auto" disabled={busy || Boolean(formError) || c.accountStatus !== "active"} onClick={() => setConfirm("approve")}>
+      <Button
+        variant="primary"
+        className="w-full md:w-auto border-red-600 bg-red-600 text-white hover:bg-red-700 dark:border-red-700 dark:bg-red-700"
+        disabled={busy || Boolean(formError) || c.accountStatus !== "active"}
+        onClick={() => setConfirm("approve")}
+      >
         <ShieldCheck className="size-4" strokeWidth={2} />
         Approve {plural(approvable, "email")} and start sending
       </Button>
@@ -617,7 +622,7 @@ function ApproveSheet({
           <Button variant="ghost" onClick={onClose} disabled={pending}>
             Cancel
           </Button>
-          <Button variant="primary" onClick={onConfirm} disabled={pending}>
+          <Button variant="primary" className="border-red-600 bg-red-600 text-white hover:bg-red-700 dark:border-red-700 dark:bg-red-700" onClick={onConfirm} disabled={pending}>
             {pending ? <VelaLoader size={16} label="Starting" /> : <ShieldCheck className="size-4" strokeWidth={2} />}
             {label}
           </Button>

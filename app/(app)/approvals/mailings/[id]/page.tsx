@@ -16,6 +16,7 @@ import { oneOf } from "../../../_lib/url";
 import { CampaignStatusBadge, CountList } from "../../campaign-ui";
 import { CampaignEmails } from "./campaign-emails";
 import { CampaignPanel } from "./campaign-panel";
+import { ReadAll } from "./read-all";
 
 export const metadata: Metadata = { title: "Mailing" };
 
@@ -64,6 +65,10 @@ export default async function CampaignPage({ params, searchParams }: PageProps<"
   const tab: Tab = requested || (TABS.map((t) => t.value).find((t) => groups[t].length) ?? "send");
   const visibleTabs = TABS.filter((t) => t.value === tab || t.value === "send" || groups[t.value].length);
   const shown = groups[tab];
+  // Before approval, the emails to send are read in full by default; "Edit" switches to the editable rows.
+  const waiting = campaign.status === "draft";
+  const readAll = waiting && tab === "send" && oneOf(sp, "view", ["edit", "read"]) !== "edit";
+  const openId = oneOf(sp, "open", shown.map((d) => d.id)) || null;
 
   return (
     <>
@@ -90,6 +95,13 @@ export default async function CampaignPage({ params, searchParams }: PageProps<"
         </div>
         <CountList parts={countParts(campaign.counts, held, { discarded: true })} />
       </PageHeader>
+
+      {waiting ? (
+        <p className="mb-5 rounded-xl border border-red-300 border-l-4 border-l-red-600 bg-red-50 px-4 py-3 text-[14px] leading-snug text-red-800 md:rounded-lg md:text-sm dark:border-red-900 dark:bg-red-950/50 dark:text-red-200">
+          <span className="font-semibold">Mass mailing: {campaign.counts.proposed + campaign.counts.failed} emails go out when you approve.</span> Read them all below,
+          edit or discard any of them, then approve once. They are sent a few at a time, never before you approve.
+        </p>
+      ) : null}
 
       <div className="grid gap-8 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:items-start [&>*]:min-w-0">
         <div className="lg:sticky lg:top-6">
@@ -124,8 +136,21 @@ export default async function CampaignPage({ params, searchParams }: PageProps<"
               Held back: the person got in touch after the email was prepared, so it was not sent. Check the conversation, then queue it again, edit, send it now or discard it.
             </p>
           ) : null}
-          {shown.length ? (
-            <CampaignEmails key={tab} drafts={shown} timezone={timezone} defaultOpen={tab === "attention"} />
+          {waiting && tab === "send" && shown.length ? (
+            <Segmented
+              label="View"
+              className="mb-3"
+              equal={false}
+              segments={[
+                { href: `/approvals/mailings/${campaign.id}?show=send`, label: "Read all", active: readAll },
+                { href: `/approvals/mailings/${campaign.id}?show=send&view=edit`, label: "Edit one by one", active: !readAll },
+              ]}
+            />
+          ) : null}
+          {shown.length && readAll ? (
+            <ReadAll drafts={shown} mailingId={campaign.id} />
+          ) : shown.length ? (
+            <CampaignEmails key={`${tab}-${openId}`} drafts={shown} timezone={timezone} defaultOpen={tab === "attention"} openId={openId} />
           ) : (
             <EmptyState title={tab === "send" ? "Nothing left to send" : "No emails here"}>
               {tab === "send" ? "Every email of this mailing was sent, set aside or discarded." : null}

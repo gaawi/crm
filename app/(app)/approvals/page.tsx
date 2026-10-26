@@ -50,7 +50,7 @@ export default async function ApprovalsPage() {
 
       {campaigns.length ? (
         <section className="mb-8" aria-label="Mailings">
-          <SectionTitle count={campaigns.length}>Mailings</SectionTitle>
+          <SectionTitle count={campaigns.length}>Mass mailings</SectionTitle>
           <div className="flex flex-col gap-3">
             {campaigns.map((c) => (
               <CampaignCard key={c.id} campaign={c} held={held[c.id] ?? 0} now={now} />
@@ -59,7 +59,7 @@ export default async function ApprovalsPage() {
         </section>
       ) : null}
 
-      {open.filter((d) => d.status === "proposed" || d.status === "failed").length + waitingCampaigns ? (
+      {open.filter((d) => d.status === "proposed" || d.status === "failed").length ? (
         <Link
           href="/approvals/review"
           className="mb-6 flex items-center gap-3 rounded-xl bg-brand px-4 py-3.5 text-white shadow-sm active:opacity-90 md:rounded-lg md:py-3 md:hover:opacity-95"
@@ -68,8 +68,7 @@ export default async function ApprovalsPage() {
           <span className="min-w-0 flex-1">
             <span className="block text-[16px] font-semibold md:text-sm">Review one by one</span>
             <span className="block text-[13px] text-white/80 md:text-xs">
-              {plural(open.filter((d) => d.status === "proposed" || d.status === "failed").length + waitingCampaigns, "card")} · emails and mailings,
-              swipe to the next
+              {plural(open.filter((d) => d.status === "proposed" || d.status === "failed").length, "email")} · swipe to the next
             </span>
           </span>
           <ChevronRight className="size-5 shrink-0" aria-hidden />

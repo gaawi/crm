@@ -70,8 +70,19 @@ function statusBadge(draft: EmailDraft, timezone: string) {
   }
 }
 
-export function CampaignEmails({ drafts, timezone, defaultOpen = false }: { drafts: EmailDraft[]; timezone: string; defaultOpen?: boolean }) {
-  const [open, setOpen] = useState<Set<string>>(() => new Set(defaultOpen ? drafts.map((d) => d.id) : []));
+export function CampaignEmails({
+  drafts,
+  timezone,
+  defaultOpen = false,
+  openId = null,
+}: {
+  drafts: EmailDraft[];
+  timezone: string;
+  defaultOpen?: boolean;
+  /** An email to start open and scroll to (from "Edit" in the read-all list). */
+  openId?: string | null;
+}) {
+  const [open, setOpen] = useState<Set<string>>(() => new Set(defaultOpen ? drafts.map((d) => d.id) : openId ? [openId] : []));
   const toggle = (id: string) =>
     setOpen((prev) => {
       const next = new Set(prev);
@@ -86,7 +97,7 @@ export function CampaignEmails({ drafts, timezone, defaultOpen = false }: { draf
         const expanded = open.has(d.id);
         const reason = d.status === "failed" || isHeldBack(d) ? d.error : null;
         return (
-          <li key={d.id} className="min-w-0">
+          <li key={d.id} id={`email-${d.id}`} className="min-w-0 scroll-mt-20" ref={d.id === openId ? (el) => el?.scrollIntoView({ block: "start" }) : undefined}>
             <button
               type="button"
               aria-expanded={expanded}

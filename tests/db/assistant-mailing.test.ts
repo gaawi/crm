@@ -98,5 +98,20 @@ describe("assistant mailing API", () => {
     await sql`update projects set send_account_id = null where id = ${projectId}`;
     expect((await post({ projectId, name: "N", emails: [email(ids[1], 1)] })).status).toBe(409);
     expect((await post({ projectId, emails: [email(ids[1], 1)] })).status).toBe(400);
+    // A mailing that started cannot be discarded through the API.
+    expect((await post({ projectId, discardMailingId: mailingId })).status).toBe(409);
+  });
+
+  it("discards a mailing still waiting for approval, with its Gmail drafts", async () => {
+    const { projectId, ids } = await seed();
+    const { mailingId } = await (await post({ projectId, name: "Old templates", emails: [email(ids[0], 0), email(ids[1], 1)] })).json();
+    expect(state.drafts.size).toBe(2);
+    const res = await (await post({ projectId, discardMailingId: mailingId })).json();
+    expect(res).toEqual({ ok: true, discarded: 2 });
+    expect(state.drafts.size).toBe(0);
+    const [m] = await sql<{ status: string }[]>`select status from email_campaigns where id = ${mailingId}`;
+    expect(m.status).toBe("cancelled");
+    // The rows are free for a new mailing.
+    expect((await (await post({ projectId, name: "New templates", emails: [email(ids[0], 0)] })).json()).created).toHaveLength(1);
   });
 });

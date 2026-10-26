@@ -2,7 +2,7 @@ import "server-only";
 import { z } from "zod";
 import { sql } from "@/lib/db";
 import { DraftError, proposeEmail } from "@/lib/ai/approvals";
-import { CampaignError, createCampaign } from "@/lib/campaigns/campaigns";
+import { CampaignError, createCampaign, discardCampaign } from "@/lib/campaigns/campaigns";
 import { noEmDash } from "@/lib/text/no-em-dash";
 import { errorMessage } from "@/lib/utils";
 
@@ -68,7 +68,26 @@ export interface MailingResult {
   skipped: { opportunityId: string; reason: string }[];
 }
 
-export async function applyMailing(raw: unknown): Promise<MailingResult> {
+const discardSchema = z.object({ projectId: z.guid(), discardMailingId: z.guid() });
+
+/**
+ * Replace a mailing that was never approved (e.g. rewritten with other
+ * templates): its emails are discarded and their Gmail drafts deleted. Only a
+ * mailing still waiting for approval, in this campaign; nothing was sent.
+ */
+async function discardMailing(raw: unknown): Promise<{ ok: true; discarded: number }> {
+  const parsed = discardSchema.safeParse(raw);
+  if (!parsed.success) throw new MailingError("Send {projectId, discardMailingId}.", 400);
+  const [mailing] = await sql<{ status: string; sent: number }[]>`
+    select c.status, (select count(*)::int from email_drafts d where d.campaign_id = c.id and d.status in ('sent', 'sending')) as sent
+      from email_campaigns c where c.id = ${parsed.data.discardMailingId} and c.project_id = ${parsed.data.projectId}`;
+  if (!mailing) throw new MailingError("Mailing not found in this campaign.", 404);
+  if (mailing.status !== "draft" || mailing.sent) throw new MailingError("Only a mailing still waiting for approval can be discarded here.", 409);
+  return { ok: true, discarded: await discardCampaign(parsed.data.discardMailingId) };
+}
+
+export async function applyMailing(raw: unknown): Promise<MailingResult | { ok: true; discarded: number }> {
+  if (raw && typeof raw === "object" && "discardMailingId" in raw) return discardMailing(raw);
   const parsed = mailingSchema.safeParse(raw);
   if (!parsed.success)
     throw new MailingError(`Invalid request: ${parsed.error.issues.map((i) => `${i.path.join(".") || "body"}: ${i.message}`).join("; ")}`, 400);

@@ -29,9 +29,10 @@ export function CampaignCard({ campaign: c, held, now }: { campaign: CampaignSum
             : `${c.counts.sent} sent before it was cancelled`;
 
   const attentionText = [held ? `${held} held back` : "", c.counts.failed ? `${c.counts.failed} failed` : ""].filter(Boolean).join(", ");
+  const waiting = c.status === "draft";
   const review = (className: string) => (
-    <span className={cn(buttonClass(c.status === "draft" ? "primary" : "secondary", "sm"), className)}>
-      Review
+    <span className={cn(buttonClass(waiting ? "primary" : "secondary", "sm"), waiting && "border-red-600 bg-red-600 text-white hover:bg-red-700", className)}>
+      {waiting ? "Read all" : "Review"}
       <ChevronRight className="-mr-1 size-4 md:hidden" aria-hidden />
     </span>
   );
@@ -39,10 +40,21 @@ export function CampaignCard({ campaign: c, held, now }: { campaign: CampaignSum
   return (
     <Link
       href={`/approvals/mailings/${c.id}`}
-      className="group block overflow-hidden rounded-xl border border-border bg-surface active:bg-surface-2 md:rounded-lg md:hover:border-border-strong"
+      className={cn(
+        "group block overflow-hidden rounded-xl border bg-surface active:bg-surface-2 md:rounded-lg",
+        waiting ? "border-red-300 border-l-4 border-l-red-600 dark:border-red-900" : "border-border md:hover:border-border-strong",
+      )}
     >
+      {waiting ? (
+        <p className="bg-red-50 px-4 py-1.5 text-[12px] font-semibold uppercase tracking-wide text-red-700 dark:bg-red-950/50 dark:text-red-300">
+          Mass mailing · {c.counts.proposed + c.counts.failed} emails go out when you approve
+        </p>
+      ) : null}
       <div className="flex items-start gap-3 px-4 py-3">
-        <span aria-hidden className="mt-0.5 hidden size-8 shrink-0 items-center justify-center rounded-full bg-surface-2 text-muted md:inline-flex">
+        <span
+          aria-hidden
+          className={cn("mt-0.5 hidden size-8 shrink-0 items-center justify-center rounded-full md:inline-flex", waiting ? "bg-red-600 text-white" : "bg-surface-2 text-muted")}
+        >
           <Mails className="size-4" strokeWidth={1.75} />
         </span>
         <div className="min-w-0 flex-1">
