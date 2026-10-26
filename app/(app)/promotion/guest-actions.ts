@@ -58,6 +58,8 @@ function personFields(formData: FormData) {
     role: field(formData, "role").trim().slice(0, 100) || null,
     phone: field(formData, "phone").trim().slice(0, 40) || null,
     callTime: time ? time.slice(0, 5) : null,
+    // Only the staff form has the box; elsewhere it stays as it is.
+    backup: formData.has("backupField") ? field(formData, "backup") === "on" : undefined,
   };
 }
 
@@ -85,6 +87,7 @@ export async function addGuestAction(eventId: string, _prev: ActionResult, formD
       role: f.role,
       phone: f.phone,
       callTime: f.callTime,
+      backup: f.backup,
     });
   } catch (error) {
     return { error: errorMessage(error) };
@@ -93,14 +96,14 @@ export async function addGuestAction(eventId: string, _prev: ActionResult, formD
   return { message: "Added." };
 }
 
-/** Change someone's details (name, who they are, role, phone, call time, note). */
+/** Change someone's details (name, who they are, role, phone, call time, backup, note). */
 export async function updateGuestAction(guestId: string, _prev: ActionResult, formData: FormData): Promise<ActionResult> {
   await requireSession();
   const f = personFields(formData);
   if (!f.name) return { error: "Write their name." };
   if (!f.kind.success) return { error: "Pick who they are." };
   try {
-    await updateGuest(parseId(guestId), { name: f.name, kind: f.kind.data, note: f.note, role: f.role, phone: f.phone, callTime: f.callTime });
+    await updateGuest(parseId(guestId), { name: f.name, kind: f.kind.data, note: f.note, role: f.role, phone: f.phone, callTime: f.callTime, backup: f.backup });
   } catch (error) {
     return { error: errorMessage(error) };
   }

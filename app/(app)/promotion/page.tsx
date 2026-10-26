@@ -84,7 +84,7 @@ export default async function PromotionPage({ searchParams }: PageProps<"/promot
                     {e.venue ? ` · ${e.venue}` : ""}
                   </span>
                 </span>
-                <span className="shrink-0 text-[15px] tabular-nums text-muted md:text-xs">{e.guests - e.crew ? `${e.guests - e.crew} · ${e.tickets} tix` : "Empty"}</span>
+                <span className="shrink-0 text-[15px] tabular-nums text-muted md:text-xs">{e.guests ? `${e.guests} · ${e.tickets} tix` : "Empty"}</span>
               </LinkRow>
             ))}
           </InsetGroup>

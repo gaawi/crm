@@ -23,7 +23,8 @@ export default async function ConcertPage({ params }: PageProps<"/concerts/[id]"
   if (!event) notFound();
   const promotion = event.promote ? concertGroups(await platformsForEvent(id)).counts : null;
   const when = new Intl.DateTimeFormat("en-US", { timeZone: event.timeZone, weekday: "long", month: "long", day: "numeric", hour: "numeric", minute: "2-digit" }).format(event.startsAt);
-  const crew = everyone.filter((g) => CREW_KINDS.includes(g.kind));
+  const crew = everyone.filter((g) => CREW_KINDS.includes(g.kind) && !g.backup);
+  const backups = everyone.filter((g) => CREW_KINDS.includes(g.kind) && g.backup).length;
   const guests = everyone.filter((g) => !CREW_KINDS.includes(g.kind));
   const reported = sales.filter((s) => s.sold !== null);
   const totalSold = reported.reduce((n, s) => n + (s.sold ?? 0), 0);
@@ -73,7 +74,10 @@ export default async function ConcertPage({ params }: PageProps<"/concerts/[id]"
           <LinkRow href={`${guestsHref}#staff`}>
             <Users className="size-5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
             <span className={rowText}>Staff &amp; artists</span>
-            <span className={value}>{crew.length || "None yet"}</span>
+            <span className={value}>
+              {crew.length || (backups ? 0 : "None yet")}
+              {backups ? ` + ${backups} backup${backups === 1 ? "" : "s"}` : ""}
+            </span>
           </LinkRow>
         </InsetGroup>
       </div>

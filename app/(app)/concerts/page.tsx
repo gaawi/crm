@@ -13,7 +13,7 @@ export default async function ConcertListPage() {
   const sold = await ticketsSoldByEvent(events.map((e) => e.id));
   const [next, ...later] = events;
   const row = (e: (typeof events)[number]) => {
-    const guests = e.guests - e.crew;
+    const guests = e.guests;
     const counts = [sold.has(e.id) ? `${sold.get(e.id)} sold` : null, guests ? `${guests} ${guests === 1 ? "guest" : "guests"}` : null].filter(Boolean).join(" · ");
     return (
       <LinkRow key={e.id} href={`/concerts/${e.id}`}>

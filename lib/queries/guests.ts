@@ -29,6 +29,8 @@ export interface ConcertGuest {
   role: string | null;
   phone: string | null;
   callTime: string | null;
+  /** A stand-by (staff or artist): listed apart and not counted. */
+  backup: boolean;
   checkedInAt: Date | null;
   createdAt: Date;
 }
@@ -43,21 +45,22 @@ export interface GuestListEvent {
   startsAt: Date;
   timeZone: string;
   venue: string | null;
+  /** Guests (staff and artists aside) and their tickets. */
   guests: number;
   tickets: number;
-  /** Of them, staff and artists. */
+  /** Staff and artists, backups aside. */
   crew: number;
 }
 
 const guestColumns = sql`g.id, g.event_id, g.contact_id, g.name, g.email, g.tickets, g.kind, g.note, g.role, g.phone,
-  to_char(g.call_time, 'HH24:MI') as call_time, g.checked_in_at, g.created_at`;
+  to_char(g.call_time, 'HH24:MI') as call_time, g.backup, g.checked_in_at, g.created_at`;
 
 /** Concerts still to come (one stays "to come" until its evening is over), soonest first, with their list totals. */
 export async function upcomingGuestListEvents(now: Date = new Date()): Promise<GuestListEvent[]> {
   return sql<GuestListEvent[]>`
     select e.id, e.title, e.starts_at, e.time_zone, e.venue,
-           count(g.id)::int as guests, coalesce(sum(g.tickets) filter (where g.kind not in ('staff', 'artist')), 0)::int as tickets,
-           (count(g.id) filter (where g.kind in ('staff', 'artist')))::int as crew
+           (count(g.id) filter (where g.kind not in ('staff', 'artist')))::int as guests, coalesce(sum(g.tickets) filter (where g.kind not in ('staff', 'artist')), 0)::int as tickets,
+           (count(g.id) filter (where g.kind in ('staff', 'artist') and not g.backup))::int as crew
       from listing_events e
       left join concert_guests g on g.event_id = e.id
      where e.starts_at >= ${new Date(now.getTime() - 6 * 3_600_000)}
@@ -100,6 +103,7 @@ export interface GuestInput {
   phone?: string | null;
   /** "HH:MM" */
   callTime?: string | null;
+  backup?: boolean;
 }
 
 /**
@@ -128,23 +132,24 @@ export async function addGuest(input: GuestInput): Promise<string> {
   if (!Number.isInteger(tickets) || tickets < 1 || tickets > 20) throw new Error("Tickets go from 1 to 20.");
   if (input.contactId) {
     const [row] = await sql<{ id: string }[]>`
-      insert into concert_guests (event_id, contact_id, name, email, tickets, kind, note, role, phone, call_time)
+      insert into concert_guests (event_id, contact_id, name, email, tickets, kind, note, role, phone, call_time, backup)
       values (${input.eventId}, ${input.contactId}, ${name}, ${email}, ${tickets}, ${input.kind ?? "guest"}, ${input.note ?? null},
-              ${input.role ?? null}, ${phone}, ${callTime}::time)
+              ${input.role ?? null}, ${phone}, ${callTime}::time, ${input.backup ?? false})
       on conflict (event_id, contact_id) where contact_id is not null
       do update set tickets = case when ${input.tickets !== undefined} then excluded.tickets else concert_guests.tickets end,
                     kind = case when ${input.kind !== undefined} then excluded.kind else concert_guests.kind end,
                     note = coalesce(excluded.note, concert_guests.note),
                     role = coalesce(excluded.role, concert_guests.role),
                     phone = coalesce(excluded.phone, concert_guests.phone),
-                    call_time = coalesce(excluded.call_time, concert_guests.call_time)
+                    call_time = coalesce(excluded.call_time, concert_guests.call_time),
+                    backup = case when ${input.backup !== undefined} then excluded.backup else concert_guests.backup end
       returning id`;
     return row.id;
   }
   const [row] = await sql<{ id: string }[]>`
-    insert into concert_guests (event_id, name, email, tickets, kind, note, role, phone, call_time)
+    insert into concert_guests (event_id, name, email, tickets, kind, note, role, phone, call_time, backup)
     values (${input.eventId}, ${name}, ${email}, ${tickets}, ${input.kind ?? "guest"}, ${input.note ?? null},
-            ${input.role ?? null}, ${phone}, ${callTime}::time)
+            ${input.role ?? null}, ${phone}, ${callTime}::time, ${input.backup ?? false})
     returning id`;
   return row.id;
 }
@@ -160,6 +165,7 @@ export async function updateGuest(
     role?: string | null;
     phone?: string | null;
     callTime?: string | null;
+    backup?: boolean;
   },
 ): Promise<void> {
   if (patch.callTime && !/^([01]\d|2[0-3]):[0-5]\d$/.test(patch.callTime)) throw new Error("Give the call time as HH:MM.");
@@ -174,6 +180,7 @@ export async function updateGuest(
       role = case when ${patch.role !== undefined} then ${patch.role ?? null} else role end,
       phone = case when ${patch.phone !== undefined} then ${patch.phone ?? null} else phone end,
       call_time = case when ${patch.callTime !== undefined} then ${patch.callTime ?? null}::time else call_time end,
+      backup = coalesce(${patch.backup ?? null}::boolean, backup),
       name = coalesce(nullif(btrim(${patch.name ?? ""}), ''), name),
       checked_in_at = case when ${patch.checkedIn === undefined} then checked_in_at
                            when ${patch.checkedIn ?? false} then coalesce(checked_in_at, now()) else null end

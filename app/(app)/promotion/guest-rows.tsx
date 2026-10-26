@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useId, useRef, useState, useTransition } from "react";
 import { CheckCircle2, Circle, Loader2, Minus, Phone, Plus, Trash2 } from "lucide-react";
-import { Field, Input, Select, Textarea } from "@/components/ui/field";
+import { Checkbox, Field, Input, Select, Textarea } from "@/components/ui/field";
 import { Sheet } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { ActionForm } from "../_components/action-form";
@@ -342,7 +342,7 @@ function PersonFields({
 }: {
   id: string;
   kinds: { value: string; label: string }[];
-  person: { name?: string; kind?: string; role?: string | null; phone?: string | null; callTime?: string | null; note?: string | null };
+  person: { name?: string; kind?: string; role?: string | null; phone?: string | null; callTime?: string | null; note?: string | null; backup?: boolean };
 }) {
   return (
     <>
@@ -372,6 +372,14 @@ function PersonFields({
       <Field label="Note (optional)" htmlFor={`${id}-note`}>
         <Textarea id={`${id}-note`} name="note" rows={2} maxLength={1000} placeholder="Brings the camera, parks nearby…" defaultValue={person.note ?? ""} />
       </Field>
+      <input type="hidden" name="backupField" value="1" />
+      <label className="flex min-h-11 items-center gap-3 rounded-xl border border-border px-3 py-2.5 text-[15px] text-fg md:min-h-9 md:rounded-lg md:text-sm">
+        <Checkbox name="backup" defaultChecked={person.backup ?? false} />
+        <span className="flex-1">
+          Backup
+          <span className="block text-[13px] text-subtle md:text-xs">Only comes if needed. Listed apart, not counted.</span>
+        </span>
+      </label>
     </>
   );
 }
@@ -386,6 +394,7 @@ export interface StaffRow {
   phone: string | null;
   callTime: string | null;
   note: string | null;
+  backup: boolean;
   checkedIn: boolean;
 }
 
