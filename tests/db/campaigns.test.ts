@@ -368,7 +368,10 @@ describe.skipIf(process.env.SKIP_DB_TESTS === "1")("gradual campaigns", () => {
   it("finishes when nothing is queued", async () => {
     const { campaignId } = await campaignOf(2);
     await startCampaign(campaignId, { perHour: 60 });
+    // Two minutes at least between sends: the second email (and the finish) can take a second run.
     await run(MON_10);
+    await run(minutes(MON_10, 5));
+    await run(minutes(MON_10, 10));
     const done = await getCampaign(campaignId);
     expect(done).toMatchObject({ status: "done", counts: { sent: 2, queued: 0 } });
     expect(done?.finishedAt).not.toBeNull();
