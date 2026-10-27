@@ -48,7 +48,10 @@ const draftColumns = () => sql`
                            or (c.organization_id is not null and cop.organization_id = c.organization_id)))
           or exists (select 1 from contact_projects ccp where ccp.project_id = cp.id and ccp.contact_id = d.contact_id))
     order by (cp.id = (select aa.project_id from assistant_actions aa where aa.draft_id = d.id limit 1)) desc nulls last,
-             exists (select 1 from opportunities cop where cop.project_id = cp.id and cop.id = d.opportunity_id) desc, cp.name
+             exists (select 1 from opportunities cop where cop.project_id = cp.id and cop.id = d.opportunity_id) desc,
+             -- The person's own sheet before their organization's (a Juilliard student is not Juilliard the partner).
+             exists (select 1 from contact_projects ccp where ccp.project_id = cp.id and ccp.contact_id = d.contact_id) desc,
+             exists (select 1 from opportunities cop where cop.project_id = cp.id and cop.contact_id = d.contact_id) desc, cp.name
     limit 1) as campaign
 `;
 
