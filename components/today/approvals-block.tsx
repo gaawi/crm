@@ -1,19 +1,20 @@
 import Link from "next/link";
 import { ChevronRight, Hourglass, Layers, Send } from "lucide-react";
 import { ContactAvatar } from "@/components/contact-avatar";
-import type { PendingApprovals } from "@/lib/approvals/pending";
+import { draftsBySheet, type PendingApprovals } from "@/lib/approvals/pending";
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 /**
  * Top of Today: everything waiting for the owner's OK. Mass mailings (many
  * emails approved at once) come first, in red, each opening its full list;
- * single emails are reviewed one by one as flashcards (blue).
+ * single emails are reviewed one by one as flashcards (blue), one pile per
+ * booking sheet (European partners, Booking USA...) and "Other" for the rest.
  */
 export function ApprovalsBlock({ pending }: { pending: PendingApprovals }) {
   const { drafts, mailings, waitingVersion, total } = pending;
   if (!total && !waitingVersion) return null;
-  const faces = drafts.flatMap((d) => (d.contact ? [d.contact] : [])).slice(0, 5);
+  const groups = draftsBySheet(drafts);
 
   return (
     <section aria-label="To approve" className="flex flex-col gap-2">
@@ -34,30 +35,31 @@ export function ApprovalsBlock({ pending }: { pending: PendingApprovals }) {
           <ChevronRight className="size-5 shrink-0" aria-hidden />
         </Link>
       ))}
-      {drafts.length ? (
+      {groups.map((g, i) => (
         <Link
-          href="/approvals/review"
-          // Downloaded in full while Today is open: the cards open at once.
-          prefetch
+          key={g.key}
+          href={`/approvals/review?sheet=${g.key}`}
+          // The first pile is downloaded in full while Today is open: its cards open at once.
+          prefetch={i === 0}
           className="flex items-center gap-3 rounded-2xl bg-brand px-4 py-4 text-white shadow-sm active:opacity-90 md:rounded-xl md:py-3.5 md:hover:opacity-95"
         >
           <Layers className="size-6 shrink-0" aria-hidden />
           <span className="min-w-0 flex-1">
+            <span className="block truncate text-[11px] font-semibold uppercase tracking-wide text-white/80">{g.name}</span>
             <span className="block text-[17px] font-semibold leading-tight md:text-[15px]">
-              {drafts.length === 1 ? "1 email to approve" : `${drafts.length} emails to approve`}
+              {g.drafts.length === 1 ? "1 email to approve" : `${g.drafts.length} emails to approve`}
             </span>
-            <span className="block truncate text-[13px] text-white/80">One by one</span>
           </span>
-          {faces.length ? (
+          {g.faces.length ? (
             <span className="hidden shrink-0 -space-x-2 sm:flex" aria-hidden>
-              {faces.map((c) => (
+              {g.faces.map((c) => (
                 <ContactAvatar key={c.id} contact={c} size="sm" className="ring-2 ring-brand" />
               ))}
             </span>
           ) : null}
           <ChevronRight className="size-5 shrink-0" aria-hidden />
         </Link>
-      ) : null}
+      ))}
       <p className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-[13px] text-muted md:text-xs">
         {waitingVersion ? (
           <span className="inline-flex items-center gap-1">

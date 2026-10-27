@@ -22,6 +22,26 @@ export interface PendingApprovals {
   total: number;
 }
 
+/** The "?sheet=" of the emails that belong to no booking sheet. */
+export const OTHER_SHEET = "other";
+
+/**
+ * Single emails in piles by booking sheet (the campaign they are for), the
+ * biggest first and "Other" (no sheet) last.
+ */
+export function draftsBySheet(drafts: EmailDraft[]) {
+  const piles = new Map<string, { key: string; name: string; drafts: EmailDraft[] }>();
+  for (const d of drafts) {
+    const key = d.campaign?.id ?? OTHER_SHEET;
+    const pile = piles.get(key) ?? { key, name: d.campaign?.name ?? "Other", drafts: [] };
+    pile.drafts.push(d);
+    piles.set(key, pile);
+  }
+  return [...piles.values()]
+    .sort((a, b) => Number(a.key === OTHER_SHEET) - Number(b.key === OTHER_SHEET) || b.drafts.length - a.drafts.length)
+    .map((p) => ({ ...p, faces: p.drafts.flatMap((d) => (d.contact ? [d.contact] : [])).slice(0, 5) }));
+}
+
 export async function loadPendingApprovals(now: Date = new Date(), options: { details?: boolean } = {}): Promise<PendingApprovals> {
   await recoverStaleDrafts();
   // Postponed emails whose day has come are back in the pile.
