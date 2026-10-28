@@ -20,7 +20,7 @@ export interface TimelineExtra {
 }
 
 /**
- * Chronological email list (newest first). Each item expands (native
+ * Chronological email list (newest first; in reading mode oldest first, like Gmail). Each item expands (native
  * <details>, no JS) to show the full stripped body, attachments and a link to
  * the thread in Gmail. Shows every connected account that holds the message.
  * `extra` entries (calls, notes…) are slotted in by date.
@@ -57,9 +57,23 @@ export function EmailTimeline({
   ];
   // Stable: emails keep their order; at the same instant an extra entry sits above.
   if (extra.length) entries.sort((x, y) => y.at.getTime() - x.at.getTime() || (x.type === y.type ? 0 : x.type === "extra" ? -1 : 1));
+  // Read like Gmail: oldest at the top, the newest at the bottom (older pages above).
+  if (reading) entries.reverse();
+  const older = olderHref ? (
+    <div className={reading ? "mb-3 text-center" : "mt-3 text-center"}>
+      <Link
+        href={olderHref}
+        className="inline-flex h-11 items-center px-4 text-[15px] text-muted active:opacity-60 md:h-auto md:text-sm md:hover:text-fg"
+        scroll={false}
+      >
+        {reading ? "↑ Older emails" : "Older emails →"}
+      </Link>
+    </div>
+  ) : null;
 
   return (
     <div>
+      {reading ? older : null}
       <ol className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface md:rounded-lg">
         {entries.map((entry) => {
           if (entry.type === "extra") return <Fragment key={`x:${entry.key}`}>{entry.node}</Fragment>;
@@ -185,17 +199,7 @@ export function EmailTimeline({
           );
         })}
       </ol>
-      {olderHref ? (
-        <div className="mt-3 text-center">
-          <Link
-            href={olderHref}
-            className="inline-flex h-11 items-center px-4 text-[15px] text-muted active:opacity-60 md:h-auto md:text-sm md:hover:text-fg"
-            scroll={false}
-          >
-            Older emails →
-          </Link>
-        </div>
-      ) : null}
+      {reading ? null : older}
     </div>
   );
 }
