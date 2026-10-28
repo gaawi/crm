@@ -1,12 +1,11 @@
 import Link from "next/link";
 import {
-  AlarmClock,
   ChevronRight,
   Hourglass,
   Layers,
   Send,
 } from "lucide-react";
-import { PostponePile } from "./postpone-pile";
+import { LaterPile, PostponePile } from "./postpone-pile";
 import { ContactAvatar } from "@/components/contact-avatar";
 import { draftsBySheet, type PendingApprovals } from "@/lib/approvals/pending";
 
@@ -21,8 +20,9 @@ const plural = (n: number, one: string, many = `${one}s`) =>
  */
 export function ApprovalsBlock({ pending }: { pending: PendingApprovals }) {
   const { drafts, mailings, waitingVersion, total, postponed } = pending;
-  if (!total && !waitingVersion && !postponed.count) return null;
+  if (!total && !waitingVersion && !postponed.length) return null;
   const groups = draftsBySheet(drafts);
+  const later = draftsBySheet(postponed);
 
   return (
     <section aria-label="To approve" className="flex flex-col gap-2">
@@ -84,21 +84,19 @@ export function ApprovalsBlock({ pending }: { pending: PendingApprovals }) {
           <PostponePile ids={g.drafts.map((d) => d.id)} name={g.name} />
         </div>
       ))}
+      {later.length ? (
+        <div className="flex flex-col gap-1.5">
+          {later.map((g) => (
+            <LaterPile key={g.key} ids={g.drafts.map((d) => d.id)} name={g.name} until={g.until} />
+          ))}
+        </div>
+      ) : null}
       <p className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-[13px] text-muted md:text-xs">
         {waitingVersion ? (
           <span className="inline-flex items-center gap-1">
             <Hourglass className="size-3.5" aria-hidden />
             {plural(waitingVersion, "email")} waiting for the assistant&apos;s
             new version
-          </span>
-        ) : null}
-        {postponed.count ? (
-          <span className="inline-flex items-center gap-1">
-            <AlarmClock className="size-3.5" aria-hidden />
-            {plural(postponed.count, "email")} for later
-            {postponed.until
-              ? ` · back ${new Date(`${postponed.until}T12:00:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}`
-              : ""}
           </span>
         ) : null}
         <Link

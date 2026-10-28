@@ -7,6 +7,7 @@ import { approveAndSend, discardDraft, DraftError, saveDraftEdits } from "@/lib/
 import { draftErrorMessage } from "@/lib/ai/draft";
 import { DEFAULT_POSTPONE_DAYS, MAX_ACTION_COMMENT, MAX_BRIEF } from "@/lib/assistant/types";
 import { addDays, todayIn } from "@/lib/dates";
+import { sql } from "@/lib/db";
 import { env } from "@/lib/env";
 import { getDraft } from "@/lib/queries/drafts";
 import { postponeDraft, requestDraftChanges } from "@/lib/assistant/drafts";
@@ -176,4 +177,18 @@ export async function postponePileAction(ids: string[], days: number): Promise<R
   }
   refresh();
   return moved ? { ok: true, message: `${moved} postponed until ${until}` } : { ok: false, error: "These emails can no longer be postponed." };
+}
+
+/** Today → "Now" on a pile put off for later: its emails are back to approve today. */
+export async function bringBackPileAction(ids: string[]): Promise<Result> {
+  await requireSession();
+  if (!Array.isArray(ids) || !ids.length || ids.length > 500 || !ids.every((id) => uuid.safeParse(id).success)) {
+    return { ok: false, error: "Invalid emails" };
+  }
+  const back = await sql<{ id: string }[]>`
+    update email_drafts set status = 'proposed', postponed_until = null
+     where id = any(${ids}::uuid[]) and status = 'postponed' returning id`;
+  for (const row of back) await syncDraftAction(row.id, "open");
+  refresh();
+  return { ok: true, message: `${back.length} back to approve` };
 }

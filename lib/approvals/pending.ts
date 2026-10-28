@@ -20,8 +20,8 @@ export interface PendingApprovals {
   waitingVersion: number;
   /** Cards to review: emails + mailings. */
   total: number;
-  /** Emails put off for later ("Later" on a pile): how many, and the first day one comes back. */
-  postponed: { count: number; until: string | null };
+  /** Emails put off for later ("Later" on a pile), shown small under the piles with the day they come back. */
+  postponed: EmailDraft[];
 }
 
 /** The "?sheet=" of the emails that belong to no booking sheet. */
@@ -41,7 +41,12 @@ export function draftsBySheet(drafts: EmailDraft[]) {
   }
   return [...piles.values()]
     .sort((a, b) => Number(a.key === OTHER_SHEET) - Number(b.key === OTHER_SHEET) || b.drafts.length - a.drafts.length)
-    .map((p) => ({ ...p, faces: p.drafts.flatMap((d) => (d.contact ? [d.contact] : [])).slice(0, 5) }));
+    .map((p) => ({
+      ...p,
+      faces: p.drafts.flatMap((d) => (d.contact ? [d.contact] : [])).slice(0, 5),
+      /** Postponed piles: the first day one of them comes back ('YYYY-MM-DD'). */
+      until: p.drafts.reduce<string | null>((min, d) => (d.postponedUntil && (!min || d.postponedUntil < min) ? d.postponedUntil : min), null),
+    }));
 }
 
 export async function loadPendingApprovals(now: Date = new Date(), options: { details?: boolean } = {}): Promise<PendingApprovals> {
@@ -52,8 +57,7 @@ export async function loadPendingApprovals(now: Date = new Date(), options: { de
     listDrafts(),
     listCampaignSummaries({}, now),
     sql<{ n: number }[]>`select count(*)::int as n from email_drafts where status = 'changes_requested'`,
-    sql<{ n: number; until: string | null }[]>`
-      select count(*)::int as n, min(postponed_until)::text as until from email_drafts where status = 'postponed'`,
+    listDrafts({ statuses: ["postponed"] }),
   ]);
   const drafts = open.filter((d) => d.status === "proposed" || d.status === "failed");
   // Waiting for approval: prepared, or cancelled / done with emails left to approve.
@@ -105,6 +109,6 @@ export async function loadPendingApprovals(now: Date = new Date(), options: { de
     mailings,
     waitingVersion: waiting[0]?.n ?? 0,
     total: drafts.length + mailings.length,
-    postponed: { count: later[0]?.n ?? 0, until: later[0]?.until ?? null },
+    postponed: later,
   };
 }

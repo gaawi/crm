@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { AlarmClock, Loader2 } from "lucide-react";
-import { postponePileAction } from "@/lib/assistant/actions";
+import { bringBackPileAction, postponePileAction } from "@/lib/assistant/actions";
 
 const CHOICES = [
   { days: 1, label: "Tomorrow" },
@@ -57,6 +57,42 @@ export function PostponePile({ ids, name }: { ids: string[]; name: string }) {
           {error ? <p className="px-3 py-2 text-[12px] text-danger">{error}</p> : null}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * A pile put off for later, under the live ones: small and faded (it is
+ * there, but not for now), the day it comes back, and "Now" to bring it back.
+ */
+export function LaterPile({ ids, name, until }: { ids: string[]; name: string; until: string | null }) {
+  const [pending, start] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const day = until ? new Date(`${until}T12:00:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : null;
+  return (
+    <div className="flex items-center gap-2.5 rounded-xl border border-dashed border-brand/30 bg-brand/[0.04] px-3 py-2 text-brand/70 dark:bg-brand/10">
+      <AlarmClock className="size-4 shrink-0" aria-hidden />
+      <span className="min-w-0 flex-1 text-[13px] leading-tight md:text-xs">
+        <span className="block truncate font-semibold">{name}</span>
+        <span className="block truncate text-brand/60">
+          {ids.length === 1 ? "1 email" : `${ids.length} emails`} for later{day ? ` · back ${day}` : ""}
+          {error ? <span className="text-danger"> · {error}</span> : null}
+        </span>
+      </span>
+      <button
+        type="button"
+        disabled={pending}
+        onClick={() =>
+          start(async () => {
+            const r = await bringBackPileAction(ids).catch(() => ({ ok: false as const, error: "Not saved. Try again." }));
+            if (!r.ok) setError(r.error);
+          })
+        }
+        className="inline-flex h-8 shrink-0 items-center gap-1 rounded-full px-3 text-[13px] font-medium text-brand active:bg-brand/10 md:h-7 md:text-xs md:hover:bg-brand/10"
+      >
+        {pending ? <Loader2 className="size-3.5 animate-spin" /> : null}
+        Now
+      </button>
     </div>
   );
 }
