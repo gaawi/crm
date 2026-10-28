@@ -232,6 +232,7 @@ export default async function OrganizationPage({ params, searchParams }: PagePro
               </p>
             ) : null}
             <EmailTimeline
+              reading
               messages={history}
               timezone={timezone}
               selfEmails={selfEmails}

@@ -190,8 +190,11 @@ export default async function ContactPage({ params, searchParams }: PageProps<"/
         </div>
       ) : null}
 
+      {/* Wider than the other pages: the emails are what is read here. */}
+      <span data-wide hidden />
+
       {concerts.length ? (
-        <div className="mb-5">
+        <div className="mb-5 lg:hidden">
           <GuestChips contactId={contact.id} events={concerts} />
         </div>
       ) : null}
@@ -206,7 +209,7 @@ export default async function ContactPage({ params, searchParams }: PageProps<"/
         ]}
       />
 
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_21rem] xl:grid-cols-[minmax(0,1fr)_23rem] [&>*]:min-w-0">
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_19rem] xl:grid-cols-[minmax(0,1fr)_21rem] [&>*]:min-w-0">
         <section className={cn("flex-col", show("history"), tab === "history" && "flex")} aria-label="History">
           <GroupTitle className="hidden md:flex">
             History
@@ -239,6 +242,7 @@ export default async function ContactPage({ params, searchParams }: PageProps<"/
             selfEmails={selfEmails}
             olderHref={olderHref}
             extra={extras}
+            reading
             emptyText={
               q
                 ? `Nothing matches “${q}”.`
@@ -250,6 +254,11 @@ export default async function ContactPage({ params, searchParams }: PageProps<"/
         </section>
 
         <div className="flex flex-col gap-8 md:gap-7">
+          {concerts.length ? (
+            <div className="hidden lg:block">
+              <GuestChips contactId={contact.id} events={concerts} />
+            </div>
+          ) : null}
           <div className={cn("flex-col gap-8", show("details"), tab === "details" && "flex")}>
             <FollowUpSection contact={contact} today={today} />
           </div>

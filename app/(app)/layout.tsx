@@ -57,7 +57,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <ReauthBanner />
           </Suspense>
           {/* Pages whose root has data-fullbleed (Mail) use the whole width and manage their own padding. */}
-          <main className="mx-auto w-full max-w-6xl flex-1 px-4 pb-[calc(env(safe-area-inset-bottom)+5.5rem)] pt-[calc(env(safe-area-inset-top)+1rem)] has-[>[data-fullbleed]]:max-w-none has-[>[data-fullbleed]]:p-0 md:px-8 md:py-8">
+          <main className="mx-auto w-full max-w-6xl flex-1 px-4 pb-[calc(env(safe-area-inset-bottom)+5.5rem)] pt-[calc(env(safe-area-inset-top)+1rem)] has-[>[data-wide]]:max-w-[100rem] has-[>[data-fullbleed]]:max-w-none has-[>[data-fullbleed]]:p-0 md:px-8 md:py-8">
             {children}
           </main>
         </div>

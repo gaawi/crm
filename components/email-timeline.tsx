@@ -32,6 +32,7 @@ export function EmailTimeline({
   olderHref,
   extra = [],
   emptyText = "No emails yet.",
+  reading = false,
 }: {
   messages: EmailMessage[];
   timezone: string;
@@ -42,6 +43,11 @@ export function EmailTimeline({
   /** Other entries to interleave by date (newest first or in any order). */
   extra?: TimelineExtra[];
   emptyText?: string;
+  /**
+   * The conversation to read: every email open, its text first and the rest
+   * (who, subject, date) on one small line. Automated mail stays folded.
+   */
+  reading?: boolean;
 }) {
   if (!messages.length && !extra.length) return <p className="py-6 text-center text-sm text-muted">{emptyText}</p>;
 
@@ -65,6 +71,38 @@ export function EmailTimeline({
             recipients.length === 0
               ? ""
               : `${who(recipients[0], selfEmails)}${recipients.length > 1 ? ` +${recipients.length - 1}` : ""}`;
+          if (reading && !m.isAutomated) {
+            return (
+              <li key={m.id} className={cn("px-3 py-2.5 md:px-4", outbound && "bg-surface-2/40")}>
+                <div className="flex items-baseline gap-1.5 text-[11.5px] leading-tight text-subtle">
+                  <Icon className="size-3 shrink-0 self-center" strokeWidth={2} aria-label={outbound ? "Sent" : "Received"} />
+                  <span className={cn("shrink-0 font-semibold", outbound ? "text-muted" : "text-fg")}>{who(m.from, selfEmails)}</span>
+                  {toLabel ? <span className="shrink-0">→ {toLabel}</span> : null}
+                  <span className="min-w-0 truncate">· {m.subject || "(no subject)"}</span>
+                  {m.hasAttachments ? <Paperclip className="size-3 shrink-0 self-center" aria-label="Has attachments" /> : null}
+                  <span className="ml-auto shrink-0 tabular-nums" title={formatDateTime(m.sentAt, timezone)}>
+                    {formatDateTime(m.sentAt, timezone)}
+                  </span>
+                  <Link href={m.gmailUrl} target="_blank" rel="noreferrer" aria-label="Open in Gmail" className="shrink-0 self-center hover:text-fg">
+                    <ExternalLink className="size-3" />
+                  </Link>
+                </div>
+                <div className="prose-plain mt-1 text-[14px] leading-snug text-fg md:text-[13.5px]">
+                  {m.bodyText || m.snippet || <span className="text-muted">No text content.</span>}
+                </div>
+                {m.attachments.length ? (
+                  <p className="mt-1 flex flex-wrap gap-x-3 text-[11.5px] text-subtle">
+                    {m.attachments.map((a, i) => (
+                      <span key={`${a.filename}-${i}`} className="inline-flex items-center gap-1">
+                        <Paperclip className="size-3" />
+                        {a.filename}
+                      </span>
+                    ))}
+                  </p>
+                ) : null}
+              </li>
+            );
+          }
           return (
             <li key={m.id}>
               <details className="group">
