@@ -156,3 +156,24 @@ export async function saveAssistantBriefAction(projectId: string, brief: string)
     return { ok: false, error: error instanceof Error ? error.message : "Could not save." };
   }
 }
+
+/**
+ * Today → a whole pile ("N emails to approve" of one booking sheet) out of
+ * the way for some days: each email is marked postponed until that day
+ * (email_drafts.status = 'postponed', postponed_until) and comes back by itself.
+ */
+export async function postponePileAction(ids: string[], days: number): Promise<Result> {
+  await requireSession();
+  if (!Array.isArray(ids) || !ids.length || ids.length > 500 || !ids.every((id) => uuid.safeParse(id).success)) {
+    return { ok: false, error: "Invalid emails" };
+  }
+  if (!Number.isInteger(days) || days < 1 || days > 60) return { ok: false, error: "Pick how many days." };
+  const until = addDays(todayIn(env.timezone), days);
+  let moved = 0;
+  for (const id of ids) {
+    // One already sent or discarded meanwhile is simply left as it is.
+    if (await postponeDraft(id, until).then(() => true, () => false)) moved++;
+  }
+  refresh();
+  return moved ? { ok: true, message: `${moved} postponed until ${until}` } : { ok: false, error: "These emails can no longer be postponed." };
+}

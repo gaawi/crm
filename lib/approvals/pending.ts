@@ -20,6 +20,8 @@ export interface PendingApprovals {
   waitingVersion: number;
   /** Cards to review: emails + mailings. */
   total: number;
+  /** Emails put off for later ("Later" on a pile): how many, and the first day one comes back. */
+  postponed: { count: number; until: string | null };
 }
 
 /** The "?sheet=" of the emails that belong to no booking sheet. */
@@ -46,10 +48,12 @@ export async function loadPendingApprovals(now: Date = new Date(), options: { de
   await recoverStaleDrafts();
   // Postponed emails whose day has come are back in the pile.
   await releasePostponed();
-  const [open, campaigns, waiting] = await Promise.all([
+  const [open, campaigns, waiting, later] = await Promise.all([
     listDrafts(),
     listCampaignSummaries({}, now),
     sql<{ n: number }[]>`select count(*)::int as n from email_drafts where status = 'changes_requested'`,
+    sql<{ n: number; until: string | null }[]>`
+      select count(*)::int as n, min(postponed_until)::text as until from email_drafts where status = 'postponed'`,
   ]);
   const drafts = open.filter((d) => d.status === "proposed" || d.status === "failed");
   // Waiting for approval: prepared, or cancelled / done with emails left to approve.
@@ -96,5 +100,11 @@ export async function loadPendingApprovals(now: Date = new Date(), options: { de
     });
   }
 
-  return { drafts, mailings, waitingVersion: waiting[0]?.n ?? 0, total: drafts.length + mailings.length };
+  return {
+    drafts,
+    mailings,
+    waitingVersion: waiting[0]?.n ?? 0,
+    total: drafts.length + mailings.length,
+    postponed: { count: later[0]?.n ?? 0, until: later[0]?.until ?? null },
+  };
 }
