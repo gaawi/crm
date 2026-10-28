@@ -33,6 +33,8 @@ export interface ConcertGuest {
   backup: boolean;
   checkedInAt: Date | null;
   createdAt: Date;
+  /** The contact's photo (listGuests only). */
+  photoUrl?: string | null;
 }
 
 /** Staff and artists are listed apart from the guests (with role, phone and call time). */
@@ -82,7 +84,8 @@ export function pickerEvents(events: GuestListEvent[]) {
 
 export async function listGuests(eventId: string): Promise<ConcertGuest[]> {
   return sql<ConcertGuest[]>`
-    select ${guestColumns} from concert_guests g where g.event_id = ${eventId}
+    select ${guestColumns}, (select c.photo_url from contacts c where c.id = g.contact_id) as photo_url
+      from concert_guests g where g.event_id = ${eventId}
      order by g.call_time nulls last, lower(g.name), g.created_at`;
 }
 

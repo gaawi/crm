@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useId, useRef, useState, useTransition } from "react";
-import { CheckCircle2, Circle, Loader2, Minus, Phone, Plus, Trash2 } from "lucide-react";
+import { CheckCircle2, Circle, Loader2, Minus, Pencil, Phone, Plus, Trash2 } from "lucide-react";
+import { ContactAvatar } from "@/components/contact-avatar";
 import { Checkbox, Field, Input, Select, Textarea } from "@/components/ui/field";
 import { Sheet } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
@@ -18,6 +19,7 @@ export interface GuestRow {
   tickets: number;
   kindLabel: string;
   note: string | null;
+  photoUrl: string | null;
   checkedIn: boolean;
 }
 
@@ -66,21 +68,16 @@ export function GuestRows({ guests }: { guests: GuestRow[] }) {
                 <Circle className="size-6 text-subtle" />
               )}
             </button>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-[17px] leading-snug text-fg md:text-sm">
-                {g.contactId ? (
-                  <Link href={`/contacts/${g.contactId}`} className="hover:underline">
-                    {g.name}
-                  </Link>
-                ) : (
-                  g.name
-                )}
+            <PersonLink contactId={g.contactId}>
+              <ContactAvatar contact={{ displayName: g.name, photoUrl: g.photoUrl }} size="sm" className="shrink-0" />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[17px] leading-snug text-fg md:text-sm">{g.name}</span>
+                <span className="block truncate text-[13px] text-subtle md:text-xs">
+                  {g.kindLabel}
+                  {g.note ? ` · ${g.note}` : g.email ? ` · ${g.email}` : ""}
+                </span>
               </span>
-              <span className="block truncate text-[13px] text-subtle md:text-xs">
-                {g.kindLabel}
-                {g.note ? ` · ${g.note}` : g.email ? ` · ${g.email}` : ""}
-              </span>
-            </span>
+            </PersonLink>
             <span className="flex shrink-0 items-center gap-1">
               <button
                 type="button"
@@ -395,7 +392,33 @@ export interface StaffRow {
   callTime: string | null;
   note: string | null;
   backup: boolean;
+  photoUrl: string | null;
   checkedIn: boolean;
+}
+
+/**
+ * Who someone is on a list: tapping a person in the CRM opens their full
+ * contact card over the list (closing it comes back here).
+ */
+function PersonLink({ contactId, children }: { contactId: string | null; children: React.ReactNode }) {
+  if (!contactId) return <span className="flex min-w-0 flex-1 items-center gap-2.5">{children}</span>;
+  return (
+    <Link href={`/contacts/${contactId}`} scroll={false} className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg active:opacity-70">
+      {children}
+    </Link>
+  );
+}
+
+function StaffWho({ s }: { s: StaffRow }) {
+  return (
+    <>
+      <ContactAvatar contact={{ displayName: s.name, photoUrl: s.photoUrl }} size="sm" className="shrink-0" />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[17px] leading-snug text-fg md:text-sm">{s.name}</span>
+        <span className="block truncate text-[13px] text-subtle md:text-xs">{[s.role || s.kindLabel, s.note].filter(Boolean).join(" · ")}</span>
+      </span>
+    </>
+  );
 }
 
 /** "17:00" as "5:00 PM". */
@@ -448,14 +471,27 @@ export function StaffRows({ staff, kinds }: { staff: StaffRow[]; kinds: { value:
                 <Circle className="size-6 text-subtle" />
               )}
             </button>
-            <button type="button" onClick={() => setEditing(s)} className="min-w-0 flex-1 text-left">
-              <span className="block truncate text-[17px] leading-snug text-fg md:text-sm">{s.name}</span>
-              <span className="block truncate text-[13px] text-subtle md:text-xs">
-                {[s.role || s.kindLabel, s.note].filter(Boolean).join(" · ")}
-              </span>
-            </button>
+            {s.contactId ? (
+              <PersonLink contactId={s.contactId}>
+                <StaffWho s={s} />
+              </PersonLink>
+            ) : (
+              <button type="button" onClick={() => setEditing(s)} className="flex min-w-0 flex-1 items-center gap-2.5 text-left">
+                <StaffWho s={s} />
+              </button>
+            )}
             {s.callTime ? (
               <span className="shrink-0 rounded-full bg-surface-2 px-2.5 py-1 text-[13px] font-semibold tabular-nums text-fg md:text-xs">{clock(s.callTime)}</span>
+            ) : null}
+            {s.contactId ? (
+              <button
+                type="button"
+                aria-label={`Edit ${s.name}`}
+                onClick={() => setEditing(s)}
+                className="inline-flex size-9 shrink-0 items-center justify-center rounded-full text-subtle active:bg-surface-2 md:size-8"
+              >
+                <Pencil className="size-4" />
+              </button>
             ) : null}
             {s.phone ? (
               <a

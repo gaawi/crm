@@ -13,8 +13,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  * Everyone coming to a concert: the guests (who, how many tickets) and, below,
  * the staff and artists (role, phone, call time). Both checked in at the door.
  */
-export default async function GuestListPage({ params }: PageProps<"/promotion/c/[id]/guests">) {
-  const { id } = await params;
+export default async function GuestListPage({ params }: PageProps<"/promotion/c/[eventId]/guests">) {
+  const { eventId: id } = await params;
   if (!UUID.test(id)) notFound();
   const [event, everyone] = await Promise.all([getListingEvent(id), listGuests(id)]);
   if (!event) notFound();
@@ -39,6 +39,7 @@ export default async function GuestListPage({ params }: PageProps<"/promotion/c/
     callTime: g.callTime,
     note: g.note,
     backup: g.backup,
+    photoUrl: g.photoUrl ?? null,
     checkedIn: Boolean(g.checkedInAt),
   });
   const title = "mb-1.5 flex items-end justify-between gap-3 px-4 text-[13px] uppercase tracking-wide text-subtle md:px-0 md:text-xs md:font-medium";
@@ -69,6 +70,7 @@ export default async function GuestListPage({ params }: PageProps<"/promotion/c/
                 tickets: g.tickets,
                 kindLabel: label(g.kind),
                 note: g.note,
+                photoUrl: g.photoUrl ?? null,
                 checkedIn: Boolean(g.checkedInAt),
               }))}
             />

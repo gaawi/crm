@@ -12,8 +12,8 @@ import { concertGroups, CountsLine, InsetGroup, MethodIcon, methodName, Progress
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export async function generateMetadata({ params }: PageProps<"/promotion/c/[id]">): Promise<Metadata> {
-  const { id } = await params;
+export async function generateMetadata({ params }: PageProps<"/promotion/c/[eventId]">): Promise<Metadata> {
+  const { eventId: id } = await params;
   const event = UUID.test(id) ? await getListingEvent(id) : null;
   return { title: event ? `${event.title} · Promotion` : "Promotion" };
 }
@@ -23,8 +23,8 @@ function when(e: { startsAt: Date; timeZone: string }): string {
 }
 
 /** One concert's checklist: ticketing partners and listing sites, each with its status. */
-export default async function PromotionConcertPage({ params }: PageProps<"/promotion/c/[id]">) {
-  const { id } = await params;
+export default async function PromotionConcertPage({ params }: PageProps<"/promotion/c/[eventId]">) {
+  const { eventId: id } = await params;
   if (!UUID.test(id)) notFound();
   const [event, platforms] = await Promise.all([getListingEvent(id), platformsForEvent(id)]);
   if (!event) notFound();
