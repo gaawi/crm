@@ -57,7 +57,10 @@ function ContactDraft({ draft }: { draft: EmailDraft }) {
     <section aria-label="Draft to approve" className="rounded-xl border-2 border-brand bg-brand/[0.04] px-3 py-2.5 md:px-4">
       <p className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-brand">
         <CornerDownRight className="size-3.5" aria-hidden />
-        {draft.replyToMessageId ? "Draft reply" : "Draft"} · not sent yet · waiting in Today
+        {draft.replyToMessageId ? "Draft reply" : "Draft"} · not sent yet ·{" "}
+        {draft.status === "postponed" && draft.postponedUntil
+          ? `postponed, back in Today ${new Date(`${draft.postponedUntil}T12:00:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}`
+          : "waiting in Today"}
       </p>
       {reason ? (
         <p className="mt-1.5 rounded-md bg-surface-2 px-2.5 py-1.5 text-[12px] leading-snug text-muted">

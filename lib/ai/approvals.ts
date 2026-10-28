@@ -21,7 +21,8 @@ import { errorMessage, isValidEmail, normalizeEmail } from "@/lib/utils";
 export class DraftError extends Error {}
 
 /** Statuses whose content (and Gmail draft) the owner may still change. */
-const EDITABLE: DraftStatus[] = ["proposed", "queued", "failed"];
+// Postponed ones too: the owner can still open one on the contact page and send it.
+const EDITABLE: DraftStatus[] = ["proposed", "queued", "failed", "postponed"];
 
 /** approveAndSend could not take the draft: already sent, being sent, or no longer approved (campaign paused…). Nothing was sent. */
 export class DraftUnavailableError extends DraftError {}
@@ -373,7 +374,7 @@ export interface SendOptions {
  */
 export async function approveAndSend(id: string, options: SendOptions = {}): Promise<EmailDraft> {
   const now = options.now ?? (() => new Date());
-  const from = options.from ?? ["proposed", "failed", "queued"];
+  const from = options.from ?? ["proposed", "failed", "queued", "postponed"];
   if (!(await transitionDraft(id, from, "sending", { campaignId: options.campaignId }))) {
     throw new DraftUnavailableError(
       options.campaignId ? "This email is no longer queued in a running campaign." : "This email was already sent or is being sent.",
@@ -449,6 +450,6 @@ export async function approveAndSend(id: string, options: SendOptions = {}): Pro
 export async function discardDraft(id: string): Promise<void> {
   const draft = await getDraft(id);
   if (!draft) return;
-  if (!(await transitionDraft(id, ["proposed", "queued", "failed"], "discarded"))) throw new DraftError("This email can no longer be discarded.");
+  if (!(await transitionDraft(id, ["proposed", "queued", "failed", "postponed"], "discarded"))) throw new DraftError("This email can no longer be discarded.");
   if (draft.gmailDraftId) await deleteGmailDraft(draft.accountId, draft.gmailDraftId);
 }

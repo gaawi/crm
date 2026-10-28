@@ -159,7 +159,7 @@ export default async function ContactPage({ params, searchParams }: PageProps<"/
     listGigs(contact.id),
     upcomingGuestListEvents().then(pickerEvents),
     // Emails to them waiting in Today: shown under the history, to send from here too.
-    listDrafts({ contactId: contact.id, statuses: ["proposed", "failed"] }),
+    listDrafts({ contactId: contact.id, statuses: ["proposed", "failed", "postponed"] }),
   ]);
 
   const openDeals = deals.filter((d) => d.stage !== "won" && d.stage !== "lost");
