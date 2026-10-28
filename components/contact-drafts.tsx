@@ -16,7 +16,7 @@ import { EditableEmail } from "./approvals/thread-face";
 export function ContactDrafts({ drafts }: { drafts: EmailDraft[] }) {
   if (!drafts.length) return null;
   return (
-    <div className="mt-3 flex flex-col gap-3">
+    <div id="drafts" className="mt-3 flex scroll-mt-4 flex-col gap-3">
       {drafts.map((d) => (
         <ContactDraft key={d.id} draft={d} />
       ))}

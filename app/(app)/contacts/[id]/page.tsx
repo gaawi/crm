@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { cache, type ReactNode } from "react";
-import { Archive, CalendarClock, Check, Ellipsis, GitMerge, Music, Plus, Trash2, X } from "lucide-react";
+import { Archive, CalendarClock, Check, Ellipsis, GitMerge, Mail, Music, Plus, Trash2, X } from "lucide-react";
 import { ContactAvatar } from "@/components/contact-avatar";
 import { ContactOrgAvatar } from "@/components/contact-org-avatar";
 import { DraftFollowUp } from "@/components/draft-follow-up";
@@ -192,6 +192,18 @@ export default async function ContactPage({ params, searchParams }: PageProps<"/
         <div className="mb-5">
           <Notice tone="success">Contacts merged. Addresses, email history, projects and goals are all here now.</Notice>
         </div>
+      ) : null}
+
+      {waitingDrafts.length ? (
+        // The draft sits at the bottom of the history (newest last): a mark up here, and a jump to it.
+        <a
+          href={`${base}#drafts`}
+          className="mb-4 inline-flex items-center gap-1.5 self-start rounded-full border border-brand/40 bg-brand/[0.06] px-3 py-1.5 text-[13px] font-medium text-brand active:opacity-70 md:text-xs md:hover:bg-brand/10"
+        >
+          <Mail className="size-3.5" aria-hidden />
+          {waitingDrafts.length === 1 ? "A draft is waiting for this contact" : `${waitingDrafts.length} drafts are waiting for this contact`}
+          {waitingDrafts.every((d) => d.status === "postponed") ? " (postponed)" : ""} · see it ↓
+        </a>
       ) : null}
 
       {/* Wider than the other pages: the emails are what is read here. */}
