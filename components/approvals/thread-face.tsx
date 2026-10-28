@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { ArrowDownLeft, ChevronDown, CornerDownRight } from "lucide-react";
 import { formatRelative } from "@/lib/dates";
 import type { EmailDraft } from "@/lib/types";
@@ -17,10 +17,16 @@ export function DraftConversation({
   draft,
   thread,
   timezone,
+  onEdit,
+  onEditEnd,
 }: {
   draft: EmailDraft;
   thread: DraftThread | { error: string } | undefined;
   timezone: string;
+  /** With it, the subject and the message are edited right on the card (as typed). */
+  onEdit?: (fields: { subject: string; body: string }) => void;
+  /** Leaving a field: the time to save. */
+  onEditEnd?: () => void;
 }) {
   const name = draft.contact?.displayName ?? draft.to[0] ?? "this person";
   const loaded = thread && !("error" in thread) ? thread : null;
@@ -71,10 +77,67 @@ export function DraftConversation({
             To {draft.to.join(", ")}
             {draft.cc.length ? ` · Cc ${draft.cc.join(", ")}` : ""}
           </p>
-          <h2 className="mt-0.5 text-[15px] font-semibold leading-snug">{draft.subject || "(no subject)"}</h2>
-          <div className="mt-1 whitespace-pre-wrap text-[13px] leading-[1.45] text-fg md:text-[13.5px]">{draft.body}</div>
+          {onEdit ? (
+            <EditableEmail key={draft.id} draft={draft} onEdit={onEdit} onEditEnd={onEditEnd} />
+          ) : (
+            <>
+              <h2 className="mt-0.5 text-[15px] font-semibold leading-snug">{draft.subject || "(no subject)"}</h2>
+              <div className="mt-1 whitespace-pre-wrap text-[13px] leading-[1.45] text-fg md:text-[13.5px]">{draft.body}</div>
+            </>
+          )}
         </div>
       </section>
+    </>
+  );
+}
+
+/**
+ * The email as a draft: subject and message look like the email but are typed
+ * into in place (the message grows with its text, no box to scroll inside).
+ */
+function EditableEmail({
+  draft,
+  onEdit,
+  onEditEnd,
+}: {
+  draft: EmailDraft;
+  onEdit: (fields: { subject: string; body: string }) => void;
+  onEditEnd?: () => void;
+}) {
+  const subject = useRef<HTMLInputElement>(null);
+  const body = useRef<HTMLTextAreaElement>(null);
+  const grow = () => {
+    const el = body.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  };
+  useLayoutEffect(grow, []);
+  const changed = () => {
+    grow();
+    onEdit({ subject: subject.current?.value ?? draft.subject, body: body.current?.value ?? draft.body });
+  };
+  const field = "w-full resize-none border-0 bg-transparent p-0 text-fg outline-none focus:ring-0 rounded-sm focus-visible:bg-surface/70";
+  return (
+    <>
+      <input
+        ref={subject}
+        defaultValue={draft.subject}
+        placeholder="(no subject)"
+        aria-label="Subject"
+        onChange={changed}
+        onBlur={onEditEnd}
+        className={cn(field, "mt-0.5 text-[15px] font-semibold leading-snug")}
+      />
+      <textarea
+        ref={body}
+        defaultValue={draft.body}
+        aria-label="Message"
+        rows={3}
+        onChange={changed}
+        onBlur={onEditEnd}
+        className={cn(field, "mt-1 overflow-hidden text-[13px] leading-[1.45] md:text-[13.5px]")}
+      />
     </>
   );
 }

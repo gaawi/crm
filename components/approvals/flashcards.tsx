@@ -195,6 +195,21 @@ export function Flashcards({
     toTop();
   };
 
+  // Typed on the card and not saved yet, per email: saved when a field is left and before sending.
+  const edits = useRef<Record<string, { subject: string; body: string }>>({});
+  const saveEdits = async (d: EmailDraft): Promise<{ ok: boolean; error?: string }> => {
+    const e = edits.current[d.id];
+    if (!e) return { ok: true };
+    const form = new FormData();
+    form.set("to", d.to.join(", "));
+    form.set("cc", d.cc.join(", "));
+    form.set("subject", e.subject);
+    form.set("body", e.body);
+    const r = await saveDraftEditsAction(d.id, form);
+    if (r.ok && edits.current[d.id] === e) delete edits.current[d.id];
+    return r;
+  };
+
   const run = <R extends { ok: boolean }>(action: () => Promise<R>, onOk: (r: R) => void) =>
     startTransition(async () => {
       const r = await action();
@@ -500,7 +515,19 @@ export function Flashcards({
                     </p>
                   ) : null}
                   {draft.error ? <p className="rounded-md bg-warning/10 px-2.5 py-1.5 text-[12px] text-warning">{draft.error}</p> : null}
-                  <DraftConversation draft={draft} thread={threads[draft.id]} timezone={timezone} />
+                  <DraftConversation
+                    // A new version (Claude's rewrite, a save) shows its own text.
+                    key={`${draft.id}:${draft.subject}:${draft.body}`}
+                    draft={draft}
+                    thread={threads[draft.id]}
+                    timezone={timezone}
+                    onEdit={(fields) => (edits.current[draft.id] = fields)}
+                    onEditEnd={() =>
+                      void saveEdits(draft).then((r) => {
+                        if (!r.ok) setMessage({ tone: "error", text: r.error ?? "Not saved. Try again." });
+                      })
+                    }
+                  />
                   {draft.contact && concerts.length ? <GuestChips key={draft.contact.id} contactId={draft.contact.id} events={concerts} /> : null}
                 </div>
               )}
@@ -534,20 +561,23 @@ export function Flashcards({
             ) : !draft ? null : panel === "edit" ? (
               <form
                 className="flex flex-col gap-2 p-1"
-                action={(formData) =>
+                action={(formData) => {
+                  // The subject and the message are edited on the card itself: the latest typed version.
+                  const typed = edits.current[draft.id];
+                  formData.set("subject", typed?.subject ?? draft.subject);
+                  formData.set("body", typed?.body ?? draft.body);
+                  delete edits.current[draft.id];
                   run(
                     () => saveDraftEditsAction(draft.id, formData),
                     () => {
                       setPanel(null);
                       setMessage({ tone: "ok", text: "Saved." });
                     },
-                  )
-                }
+                  );
+                }}
               >
                 <Input name="to" defaultValue={draft.to.join(", ")} aria-label="To" placeholder="To" />
                 <Input name="cc" defaultValue={draft.cc.join(", ")} aria-label="Cc" placeholder="Cc" />
-                <Input name="subject" defaultValue={draft.subject} aria-label="Subject" placeholder="Subject" />
-                <Textarea name="body" defaultValue={draft.body} rows={9} aria-label="Message" className="text-[13px] leading-snug" />
                 <PanelButtons pending={pending} onCancel={() => setPanel(null)} submit="Save" />
               </form>
             ) : panel === "revise" || panel === "changes" ? (
@@ -619,7 +649,7 @@ export function Flashcards({
                     <Sparkles className="size-5" />
                   </IconAction>
                 ) : null}
-                <IconAction label="Edit" disabled={busy} onClick={() => setPanel("edit")}>
+                <IconAction label="To / Cc" disabled={busy} onClick={() => setPanel("edit")}>
                   <Pencil className="size-5" />
                 </IconAction>
                 <button
@@ -634,7 +664,11 @@ export function Flashcards({
                     const origin = flourishOrigin(event.currentTarget);
                     const id = draft.id;
                     run(
-                      () => approveDraftAction(id),
+                      async () => {
+                        // What was typed on the card goes out, not the earlier version.
+                        const saved = await saveEdits(draft);
+                        return saved.ok ? approveDraftAction(id) : { ok: false as const, error: saved.error ?? "Not saved. Try again." };
+                      },
                       () => {
                         celebrateSend(origin);
                         finish(id, "Sent.");
