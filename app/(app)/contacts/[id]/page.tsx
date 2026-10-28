@@ -9,6 +9,7 @@ import { DraftFollowUp } from "@/components/draft-follow-up";
 import { PhoneLink } from "@/components/booking/phone-actions";
 import { EmailTimeline } from "@/components/email-timeline";
 import { GuestChips } from "@/components/guests/guest-chips";
+import { ContactDrafts } from "@/components/contact-drafts";
 import { OrgProfileLine } from "@/components/organizations/profile-card";
 import { RowList } from "@/components/contact-row";
 import { Badge, ProjectDot, StatusBadge, TagBadge } from "@/components/ui/badge";
@@ -23,6 +24,7 @@ import { formatDate, formatDateTime, formatDue, formatRelative, todayIn } from "
 import { env } from "@/lib/env";
 import { findDuplicateCandidates, getContact, getContactHistory, listContacts } from "@/lib/queries/contacts";
 import { listActivities } from "@/lib/queries/activities";
+import { listDrafts } from "@/lib/queries/drafts";
 import { listOpportunities } from "@/lib/queries/opportunities";
 import { getMusicianProfile, listGigs, type MusicianProfile } from "@/lib/queries/musicians";
 import { getOrganizationWithProfile } from "@/lib/queries/org-profiles";
@@ -142,7 +144,7 @@ export default async function ContactPage({ params, searchParams }: PageProps<"/
     );
   }
 
-  const [history, activities, selfEmails, deals, duplicates, projects, accounts, organizations, orgProfile, musician, gigs, concerts] = await Promise.all([
+  const [history, activities, selfEmails, deals, duplicates, projects, accounts, organizations, orgProfile, musician, gigs, concerts, waitingDrafts] = await Promise.all([
     getContactHistory(contact.id, { limit: HISTORY_PAGE, before, q: q || undefined }),
     listActivities({ contactId: contact.id, before, limit: ACTIVITY_PAGE }),
     getOwnAddresses(),
@@ -156,6 +158,8 @@ export default async function ContactPage({ params, searchParams }: PageProps<"/
     getMusicianProfile(contact.id, { withRating: true }),
     listGigs(contact.id),
     upcomingGuestListEvents().then(pickerEvents),
+    // Emails to them waiting in Today: shown under the history, to send from here too.
+    listDrafts({ contactId: contact.id, statuses: ["proposed", "failed"] }),
   ]);
 
   const openDeals = deals.filter((d) => d.stage !== "won" && d.stage !== "lost");
@@ -251,6 +255,7 @@ export default async function ContactPage({ params, searchParams }: PageProps<"/
                   : "No calls or notes yet. Add an email address to see the email history too."
             }
           />
+          {q || before ? null : <ContactDrafts drafts={waitingDrafts} />}
         </section>
 
         <div className="flex flex-col gap-8 md:gap-7">

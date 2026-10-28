@@ -95,7 +95,7 @@ export function DraftConversation({
  * The email as a draft: subject and message look like the email but are typed
  * into in place (the message grows with its text, no box to scroll inside).
  */
-function EditableEmail({
+export function EditableEmail({
   draft,
   onEdit,
   onEditEnd,
