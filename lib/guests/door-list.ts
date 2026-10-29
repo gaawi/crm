@@ -45,33 +45,30 @@ const WHO: Record<string, string> = { guest: "Guest", press: "Press", partner: "
 
 function row(g: ConcertGuest, crew: boolean): string {
   const [last, first] = splitName(g.name);
-  const who = crew ? `${esc(g.role || WHO[g.kind] || "")}${g.backup ? ' <b class="backup">BACKUP</b>' : ""}` : esc(WHO[g.kind] ?? g.kind);
-  const from = crew
-    ? `${g.callTime ? `Call ${clock(g.callTime)}` : ""}${g.phone ? `<br><span class="small">${esc(g.phone)}</span>` : ""}`
-    : esc(g.kind === "buyer" ? g.source || "Ticket" : "Guest list");
-  const note = g.note ? `<div class="note">${esc(g.note)}</div>` : "";
-  return `<tr><td class="box"><span></span></td><td class="name"><span class="last">${esc(last)}</span>${first ? `, <span class="first">${esc(first)}</span>` : ""}${note}</td>${
-    crew ? "" : `<td class="tix">${g.tickets}</td>`
-  }<td class="who">${who}</td><td class="from">${from}</td></tr>`;
+  const who = crew
+    ? `${esc(g.role || WHO[g.kind] || "")}${g.callTime ? ` · ${clock(g.callTime)}` : ""}${g.backup ? " · backup" : ""}`
+    : esc(g.kind === "buyer" ? g.source || "Ticket" : g.kind === "guest" ? "Guest list" : `Guest list · ${WHO[g.kind] ?? g.kind}`);
+  return `<div class="row"><span class="box"></span><span class="name"><b>${esc(last)}</b>${first ? `, ${esc(first)}` : ""}</span>${
+    crew ? "" : `<span class="tix">${g.tickets}</span>`
+  }<span class="who">${who}</span></div>`;
 }
 
+/** Two narrow columns, a small letter heading where the last names change letter. */
 function list(title: string, rows: ConcertGuest[], crew: boolean): string {
   if (!rows.length) return "";
-  const sorted = [...rows].sort(byLastName);
-  const head = `<tr><th class="box"></th><th>Last name, first name</th>${crew ? "" : '<th class="tix">Tickets</th>'}<th>${crew ? "Role" : "Who"}</th><th>${crew ? "Call time / phone" : "From"}</th></tr>`;
   let body = "";
   let letter = "";
-  for (const g of sorted) {
+  for (const g of [...rows].sort(byLastName)) {
     const l = letterOf(g);
     if (l !== letter) {
       letter = l;
-      body += `<tr class="letter"><td colspan="${crew ? 4 : 5}">${l}</td></tr>`;
+      body += `<div class="letter">${l}</div>`;
     }
     body += row(g, crew);
   }
   const tickets = rows.reduce((n, g) => n + g.tickets, 0);
-  const count = crew ? `${rows.length} ${rows.length === 1 ? "person" : "people"}` : `${rows.length} ${rows.length === 1 ? "name" : "names"} · ${tickets} tickets`;
-  return `<section><h2>${esc(title)}<span>${count}</span></h2><table><thead>${head}</thead><tbody>${body}</tbody></table></section>`;
+  const count = crew ? `${rows.length}` : `${rows.length} names · ${tickets} tickets`;
+  return `<section><h2>${esc(title)}<span>${count}</span></h2><div class="cols">${body}</div></section>`;
 }
 
 export function doorListHtml(
@@ -87,37 +84,24 @@ export function doorListHtml(
 
   return `<!doctype html><html><head><meta charset="utf-8"><title>Door list · ${esc(event.title)}</title><style>
   * { box-sizing: border-box; }
-  body { font-family: Helvetica, Arial, sans-serif; color: #000; font-size: 13px; margin: 0; }
-  header { border-bottom: 3px solid #000; padding-bottom: 8px; margin-bottom: 10px; }
-  h1 { font-size: 24px; margin: 0 0 2px; }
-  header p { margin: 0; font-size: 13px; color: #333; }
-  header .total { margin-top: 6px; font-size: 15px; font-weight: bold; color: #000; }
-  section { margin-bottom: 18px; }
-  section + section { page-break-before: always; }
-  h2 { font-size: 18px; margin: 0 0 4px; display: flex; justify-content: space-between; align-items: baseline; border-bottom: 2px solid #000; padding-bottom: 3px; text-transform: uppercase; letter-spacing: .03em; }
-  h2 span { font-size: 13px; font-weight: normal; text-transform: none; letter-spacing: 0; }
-  table { width: 100%; border-collapse: collapse; }
-  thead { display: table-header-group; }
-  th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: #444; font-weight: normal; padding: 3px 6px; }
-  td { padding: 7px 6px; border-bottom: 1px solid #ccc; vertical-align: middle; }
-  tr { page-break-inside: avoid; }
-  tr.letter td { font-size: 22px; font-weight: bold; padding: 10px 6px 2px; border-bottom: 2px solid #000; page-break-after: avoid; }
-  .box { width: 30px; }
-  .box span { display: inline-block; width: 18px; height: 18px; border: 2px solid #000; border-radius: 3px; vertical-align: middle; }
-  .name { font-size: 16px; }
-  .last { font-weight: bold; font-size: 17px; text-transform: uppercase; }
-  .first { font-weight: normal; }
-  .note { font-size: 11px; color: #444; margin-top: 1px; }
-  .tix { width: 64px; text-align: center; font-size: 20px; font-weight: bold; }
-  th.tix { font-size: 10px; font-weight: normal; }
-  .who { width: 110px; font-size: 13px; }
-  .from { width: 170px; font-size: 13px; color: #222; }
-  .small { font-size: 11px; color: #444; }
-  .backup { font-size: 10px; border: 1px solid #000; padding: 0 3px; border-radius: 2px; }
-  footer { margin-top: 10px; color: #777; font-size: 9px; }
+  body { font-family: Helvetica, Arial, sans-serif; color: #000; font-size: 11px; margin: 0; }
+  header { border-bottom: 2px solid #000; padding-bottom: 4px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  h1 { font-size: 16px; margin: 0; }
+  header p { margin: 0; font-size: 10px; color: #333; text-align: right; }
+  section { margin-bottom: 10px; }
+  h2 { font-size: 12px; margin: 0 0 3px; display: flex; justify-content: space-between; border-bottom: 1.5px solid #000; padding-bottom: 1px; text-transform: uppercase; letter-spacing: .04em; }
+  h2 span { font-weight: normal; text-transform: none; letter-spacing: 0; }
+  .cols { column-count: 2; column-gap: 18px; column-rule: 1px solid #ddd; }
+  .letter { font-size: 12px; font-weight: bold; background: #000; color: #fff; padding: 0 4px; margin: 4px 0 1px; break-after: avoid; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .row { display: flex; align-items: center; gap: 5px; padding: 2px 0; border-bottom: 1px solid #e2e2e2; break-inside: avoid; }
+  .box { flex: none; width: 11px; height: 11px; border: 1.5px solid #000; border-radius: 2px; }
+  .name { flex: 1; min-width: 0; font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .name b { text-transform: uppercase; }
+  .tix { flex: none; width: 18px; text-align: center; font-weight: bold; font-size: 12px; }
+  .who { flex: none; width: 34%; font-size: 9px; color: #444; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  footer { margin-top: 6px; color: #888; font-size: 8px; }
   </style></head><body>
-  <header><h1>Door list · ${esc(event.title)}</h1><p>${esc(when)}${event.venue ? ` · ${esc(event.venue)}` : ""}</p>
-  <p class="total">Audience: ${audience.length} ${audience.length === 1 ? "name" : "names"} · ${admits} tickets${crew.length ? ` &nbsp;·&nbsp; Staff &amp; artists: ${crew.length}` : ""}</p></header>
+  <header><h1>Door list · ${esc(event.title)}</h1><p>${esc(when)}${event.venue ? ` · ${esc(event.venue)}` : ""}<br><b>Audience: ${audience.length} names · ${admits} tickets${crew.length ? ` · Staff &amp; artists: ${crew.length}` : ""}</b></p></header>
   ${list("Audience", audience, false) || "<p>No one on the audience list yet.</p>"}
   ${list("Staff & artists", crew, true)}
   <footer>Printed ${esc(fmt({ month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }, generatedAt))} from Vela.</footer>
