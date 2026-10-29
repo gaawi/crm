@@ -68,7 +68,7 @@ function list(title: string, rows: ConcertGuest[], crew: boolean): string {
   }
   const tickets = rows.reduce((n, g) => n + g.tickets, 0);
   const count = crew ? `${rows.length}` : `${rows.length} names · ${tickets} tickets`;
-  return `<section><h2>${esc(title)}<span>${count}</span></h2><div class="cols">${body}</div></section>`;
+  return `<section${crew ? ' class="crew"' : ""}><h2>${esc(title)}<span>${count}</span></h2><div class="cols">${body}</div></section>`;
 }
 
 export function doorListHtml(
@@ -89,6 +89,11 @@ export function doorListHtml(
   h1 { font-size: 16px; margin: 0; }
   header p { margin: 0; font-size: 10px; color: #333; text-align: right; }
   section { margin-bottom: 10px; }
+  /* Staff and artists on a page of their own, apart from the audience. */
+  section.crew { page-break-before: always; }
+  .seats { display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 2px solid #000; padding: 6px 10px; margin-bottom: 8px; }
+  .seats b { font-size: 26px; }
+  .seats span { font-size: 11px; color: #333; }
   h2 { font-size: 12px; margin: 0 0 3px; display: flex; justify-content: space-between; border-bottom: 1.5px solid #000; padding-bottom: 1px; text-transform: uppercase; letter-spacing: .04em; }
   h2 span { font-weight: normal; text-transform: none; letter-spacing: 0; }
   .cols { column-count: 2; column-gap: 18px; column-rule: 1px solid #ddd; }
@@ -102,8 +107,9 @@ export function doorListHtml(
   footer { margin-top: 6px; color: #888; font-size: 8px; }
   </style></head><body>
   <header><h1>Door list · ${esc(event.title)}</h1><p>${esc(when)}${event.venue ? ` · ${esc(event.venue)}` : ""}<br><b>Audience: ${audience.length} names · ${admits} tickets${crew.length ? ` · Staff &amp; artists: ${crew.length}` : ""}</b></p></header>
+  <div class="seats"><span>AUDIENCE SEATS NEEDED<br>${audience.length} names on the list · every ticket is a seat (staff and artists not counted)</span><b>${admits} seats</b></div>
   ${list("Audience", audience, false) || "<p>No one on the audience list yet.</p>"}
-  ${list("Staff & artists", crew, true)}
+  ${list(`Staff & artists · ${event.title}`, crew, true)}
   <footer>Printed ${esc(fmt({ month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }, generatedAt))} from Vela.</footer>
   </body></html>`;
 }
