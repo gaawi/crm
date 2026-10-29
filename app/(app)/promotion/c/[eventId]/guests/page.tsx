@@ -1,9 +1,11 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
+import { FileDown } from "lucide-react";
 import { PageHeader } from "@/components/ui/layout";
 import { CREW_KINDS, GUEST_KINDS, listGuests } from "@/lib/queries/guests";
 import { getListingEvent } from "@/lib/queries/listings";
-import { AddGuestRow, GuestRows, StaffRows } from "../../../guest-rows";
+import { ticketSales } from "@/lib/queries/ticket-sales";
+import { AddGuestRow, GuestRows, PasteListButton, StaffRows } from "../../../guest-rows";
 
 export const metadata: Metadata = { title: "Guest list" };
 
@@ -16,7 +18,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export default async function GuestListPage({ params }: PageProps<"/promotion/c/[eventId]/guests">) {
   const { eventId: id } = await params;
   if (!UUID.test(id)) notFound();
-  const [event, everyone] = await Promise.all([getListingEvent(id), listGuests(id)]);
+  const [event, everyone, sales] = await Promise.all([getListingEvent(id), listGuests(id), ticketSales(id)]);
   if (!event) notFound();
   const when = new Intl.DateTimeFormat("en-US", { timeZone: event.timeZone, weekday: "long", month: "long", day: "numeric" }).format(event.startsAt);
   const label = (kind: string) => GUEST_KINDS.find((k) => k.value === kind)?.label ?? kind;
@@ -24,7 +26,13 @@ export default async function GuestListPage({ params }: PageProps<"/promotion/c/
   // Backups are on call only: listed apart and left out of the count.
   const crew = crewAll.filter((g) => !g.backup);
   const backups = crewAll.filter((g) => g.backup);
-  const guests = everyone.filter((g) => !CREW_KINDS.includes(g.kind)).sort((a, b) => a.name.localeCompare(b.name));
+  const guests = everyone.filter((g) => !CREW_KINDS.includes(g.kind) && g.kind !== "buyer").sort((a, b) => a.name.localeCompare(b.name));
+  // Ticket buyers pasted from each channel's list (Eventbrite, PipTix…), by channel.
+  const buyers = everyone.filter((g) => g.kind === "buyer");
+  const byChannel = [...new Set(buyers.map((b) => b.source || "Tickets"))]
+    .sort()
+    .map((c) => ({ channel: c, rows: buyers.filter((b) => (b.source || "Tickets") === c).sort((a, b) => a.name.localeCompare(b.name)) }));
+  const channels = [...new Set([...sales.map((s) => s.channel), "PipTix", ...byChannel.map((c) => c.channel)])];
   const tickets = guests.reduce((n, g) => n + g.tickets, 0);
   const guestKinds = GUEST_KINDS.filter((k) => !CREW_KINDS.includes(k.value)).map((k) => ({ value: k.value, label: k.label }));
   const crewKinds = GUEST_KINDS.filter((k) => CREW_KINDS.includes(k.value)).map((k) => ({ value: k.value, label: k.label }));
@@ -52,6 +60,14 @@ export default async function GuestListPage({ params }: PageProps<"/promotion/c/
         back={{ href: `/concerts/${event.id}`, label: event.title }}
       />
       <div className="flex flex-col gap-8 md:max-w-2xl">
+        <a
+          href={`/api/door-list/${event.id}`}
+          download
+          className="-mt-2 flex min-h-[52px] items-center justify-center gap-2 rounded-xl bg-brand px-4 text-[17px] font-semibold text-white active:opacity-90 md:min-h-11 md:rounded-lg md:text-sm"
+        >
+          <FileDown className="size-5" aria-hidden />
+          Door list (PDF): everyone, A to Z
+        </a>
         <section aria-label="Guests" className="flex flex-col gap-3">
           <h2 className={title}>
             <span>Guests</span>
@@ -80,6 +96,36 @@ export default async function GuestListPage({ params }: PageProps<"/promotion/c/
             </p>
           )}
           <AddGuestRow eventId={event.id} kinds={guestKinds} />
+        </section>
+
+        <section aria-label="Ticket buyers" className="flex flex-col gap-3">
+          <h2 className={title}>
+            <span>Ticket buyers</span>
+            <span className="normal-case tracking-normal">
+              {buyers.length ? `${buyers.length} · ${buyers.reduce((n, b) => n + b.tickets, 0)} tickets` : "From each channel's list"}
+            </span>
+          </h2>
+          {byChannel.map(({ channel, rows }) => (
+            <div key={channel} className="flex flex-col gap-1.5">
+              <p className="px-4 text-[13px] font-medium text-muted md:px-0 md:text-xs">
+                {channel} · {rows.length} · {rows.reduce((n, b) => n + b.tickets, 0)} tickets
+              </p>
+              <GuestRows
+                guests={rows.map((g) => ({
+                  id: g.id,
+                  contactId: g.contactId,
+                  name: g.name,
+                  email: g.email,
+                  tickets: g.tickets,
+                  kindLabel: channel,
+                  note: g.note,
+                  photoUrl: g.photoUrl ?? null,
+                  checkedIn: Boolean(g.checkedInAt),
+                }))}
+              />
+            </div>
+          ))}
+          <PasteListButton eventId={event.id} channels={channels} />
         </section>
 
         <section id="staff" aria-label="Staff and artists" className="flex scroll-mt-4 flex-col gap-3">

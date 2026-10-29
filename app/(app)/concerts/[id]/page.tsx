@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { Ticket, Users } from "lucide-react";
+import { FileDown, Ticket, Users } from "lucide-react";
 import { PageHeader } from "@/components/ui/layout";
 import { formatRelative } from "@/lib/dates";
 import { env } from "@/lib/env";
@@ -25,7 +25,8 @@ export default async function ConcertPage({ params }: PageProps<"/concerts/[id]"
   const when = new Intl.DateTimeFormat("en-US", { timeZone: event.timeZone, weekday: "long", month: "long", day: "numeric", hour: "numeric", minute: "2-digit" }).format(event.startsAt);
   const crew = everyone.filter((g) => CREW_KINDS.includes(g.kind) && !g.backup);
   const backups = everyone.filter((g) => CREW_KINDS.includes(g.kind) && g.backup).length;
-  const guests = everyone.filter((g) => !CREW_KINDS.includes(g.kind));
+  const guests = everyone.filter((g) => !CREW_KINDS.includes(g.kind) && g.kind !== "buyer");
+  const buyers = everyone.filter((g) => g.kind === "buyer");
   const reported = sales.filter((s) => s.sold !== null);
   const totalSold = reported.reduce((n, s) => n + (s.sold ?? 0), 0);
   const lastUpdate = reported.reduce<Date | null>((d, s) => (!d || s.updatedAt > d ? s.updatedAt : d), null);
@@ -35,6 +36,14 @@ export default async function ConcertPage({ params }: PageProps<"/concerts/[id]"
     <>
       <PageHeader title={event.title} description={[when, event.venue].filter(Boolean).join(" · ")} back={{ href: "/concerts", label: "Concert list" }} />
       <div className="flex flex-col gap-8 md:max-w-2xl">
+        <a
+          href={`/api/door-list/${event.id}`}
+          download
+          className="-mt-2 flex min-h-[52px] items-center justify-center gap-2 rounded-xl bg-brand px-4 text-[17px] font-semibold text-white active:opacity-90 md:min-h-11 md:rounded-lg md:text-sm"
+        >
+          <FileDown className="size-5" aria-hidden />
+          Door list (PDF): everyone, A to Z
+        </a>
         <InsetGroup
           title="Tickets sold"
           aside={reported.length ? `${totalSold} total` : undefined}
@@ -49,6 +58,13 @@ export default async function ConcertPage({ params }: PageProps<"/concerts/[id]"
             <span className={rowText}>Guest list</span>
             <span className={value}>{guests.length ? `${guests.length} · ${guests.reduce((n, g) => n + g.tickets, 0)} tix` : "Empty"}</span>
           </LinkRow>
+          {buyers.length ? (
+            <LinkRow href={guestsHref}>
+              <Ticket className="size-5 shrink-0 text-sky-600 dark:text-sky-400" aria-hidden />
+              <span className={rowText}>Ticket buyers</span>
+              <span className={value}>{`${buyers.length} · ${buyers.reduce((n, b) => n + b.tickets, 0)} tix`}</span>
+            </LinkRow>
+          ) : null}
           <LinkRow href={`${guestsHref}#staff`}>
             <Users className="size-5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
             <span className={rowText}>Staff &amp; artists</span>

@@ -127,3 +127,29 @@ async function shoot(url: string): Promise<Uint8Array<ArrayBuffer> | null> {
     await page.close().catch(() => {});
   }
 }
+
+/**
+ * A PDF of a page the app built itself (the door list…): the HTML is set
+ * directly, nothing is fetched from the network.
+ */
+export async function renderPdf(html: string): Promise<Uint8Array> {
+  return withSlot(async () => {
+    const page = await (await browser()).newPage();
+    try {
+      await page.setRequestInterception(true);
+      page.on("request", (req) => void (req.url().startsWith("data:") ? req.continue() : req.abort()));
+      await page.setContent(html, { waitUntil: "load", timeout: NAV_TIMEOUT_MS });
+      return await page.pdf({
+        format: "Letter",
+        printBackground: true,
+        margin: { top: "0.5in", bottom: "0.6in", left: "0.5in", right: "0.5in" },
+        displayHeaderFooter: true,
+        headerTemplate: "<span></span>",
+        footerTemplate:
+          '<div style="width:100%;font-size:8px;color:#888;text-align:center;font-family:Helvetica,Arial,sans-serif"><span class="pageNumber"></span> / <span class="totalPages"></span></div>',
+      });
+    } finally {
+      await page.close().catch(() => undefined);
+    }
+  });
+}

@@ -14,7 +14,8 @@ export const GUEST_KINDS = [
   { value: "press", label: "Press" },
   { value: "partner", label: "Partner" },
 ] as const;
-export type GuestKind = (typeof GUEST_KINDS)[number]["value"];
+/** People who bought a ticket (pasted from the lists Eventbrite, PipTix... send), kept apart from the guests. */
+export type GuestKind = (typeof GUEST_KINDS)[number]["value"] | "buyer";
 
 export interface ConcertGuest {
   id: string;
@@ -31,6 +32,8 @@ export interface ConcertGuest {
   callTime: string | null;
   /** A stand-by (staff or artist): listed apart and not counted. */
   backup: boolean;
+  /** Buyers: the channel their list came from (Eventbrite, PipTix…). */
+  source: string | null;
   checkedInAt: Date | null;
   createdAt: Date;
   /** The contact's photo (listGuests only). */
@@ -55,13 +58,13 @@ export interface GuestListEvent {
 }
 
 const guestColumns = sql`g.id, g.event_id, g.contact_id, g.name, g.email, g.tickets, g.kind, g.note, g.role, g.phone,
-  to_char(g.call_time, 'HH24:MI') as call_time, g.backup, g.checked_in_at, g.created_at`;
+  to_char(g.call_time, 'HH24:MI') as call_time, g.backup, g.source, g.checked_in_at, g.created_at`;
 
 /** Concerts still to come (one stays "to come" until its evening is over), soonest first, with their list totals. */
 export async function upcomingGuestListEvents(now: Date = new Date()): Promise<GuestListEvent[]> {
   return sql<GuestListEvent[]>`
     select e.id, e.title, e.starts_at, e.time_zone, e.venue,
-           (count(g.id) filter (where g.kind not in ('staff', 'artist')))::int as guests, coalesce(sum(g.tickets) filter (where g.kind not in ('staff', 'artist')), 0)::int as tickets,
+           (count(g.id) filter (where g.kind not in ('staff', 'artist', 'buyer')))::int as guests, coalesce(sum(g.tickets) filter (where g.kind not in ('staff', 'artist', 'buyer')), 0)::int as tickets,
            (count(g.id) filter (where g.kind in ('staff', 'artist') and not g.backup))::int as crew
       from listing_events e
       left join concert_guests g on g.event_id = e.id
@@ -193,4 +196,49 @@ export async function updateGuest(
 export async function removeGuest(id: string): Promise<string | null> {
   const [row] = await sql<{ eventId: string }[]>`delete from concert_guests where id = ${id} returning event_id`;
   return row?.eventId ?? null;
+}
+
+/**
+ * A channel's ticket list pasted in (Eventbrite, PipTix…): its buyers join the
+ * door list under that channel. With `replace`, that channel's earlier list is
+ * swapped for this one (buyers already checked in at the door stay).
+ */
+export async function importBuyers(
+  eventId: string,
+  source: string,
+  buyers: { name: string; email: string | null; tickets: number }[],
+  replace: boolean,
+): Promise<{ added: number; removed: number }> {
+  const channel = source.trim().slice(0, 80);
+  if (!channel) throw new Error("Pick where the list comes from.");
+  if (!buyers.length) throw new Error("No names found in the list.");
+  if (buyers.length > 2000) throw new Error("That list is too long (2000 names at most).");
+  return sql.begin(async (tx) => {
+    const removed = replace
+      ? await tx`delete from concert_guests where event_id = ${eventId} and kind = 'buyer'
+                 and lower(source) = lower(${channel}) and checked_in_at is null`
+      : { count: 0 };
+    const kept = await tx<{ name: string }[]>`
+      select lower(name) as name from concert_guests where event_id = ${eventId} and kind = 'buyer' and lower(source) = lower(${channel})`;
+    const seen = new Set(kept.map((k) => k.name));
+    const fresh = buyers.filter((b) => {
+      const key = b.name.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    if (fresh.length) {
+      await tx`
+        insert into concert_guests ${tx(
+          fresh.map((b) => ({ eventId, name: b.name, email: b.email, tickets: b.tickets, kind: "buyer", source: channel })),
+          "eventId",
+          "name",
+          "email",
+          "tickets",
+          "kind",
+          "source",
+        )}`;
+    }
+    return { added: fresh.length, removed: removed.count };
+  });
 }

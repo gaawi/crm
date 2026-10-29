@@ -2,14 +2,23 @@
 
 import Link from "next/link";
 import { useId, useRef, useState, useTransition } from "react";
-import { CheckCircle2, Circle, Loader2, Minus, Pencil, Phone, Plus, Trash2 } from "lucide-react";
+import { CheckCircle2, Circle, ClipboardPaste, Loader2, Minus, Pencil, Phone, Plus, Trash2 } from "lucide-react";
+import { parseBuyerList } from "@/lib/guests/parse-list";
 import { ContactAvatar } from "@/components/contact-avatar";
 import { Checkbox, Field, Input, Select, Textarea } from "@/components/ui/field";
 import { Sheet } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { ActionForm } from "../_components/action-form";
 import { suggestRecipients, type RecipientSuggestion } from "../mail/actions";
-import { addContactGuestAction, addGuestAction, checkInGuestAction, removeGuestAction, setGuestTicketsAction, updateGuestAction } from "./guest-actions";
+import {
+  addContactGuestAction,
+  addGuestAction,
+  checkInGuestAction,
+  importBuyersAction,
+  removeGuestAction,
+  setGuestTicketsAction,
+  updateGuestAction,
+} from "./guest-actions";
 
 export interface GuestRow {
   id: string;
@@ -547,6 +556,78 @@ export function StaffRows({ staff, kinds }: { staff: StaffRow[]; kinds: { value:
               <Trash2 className="size-4" aria-hidden />
               {confirm ? "Tap again to remove" : "Remove from this concert"}
             </button>
+          </ActionForm>
+        </Sheet>
+      ) : null}
+    </>
+  );
+}
+
+/**
+ * "Paste a ticket list": the list Eventbrite, PipTix, TDF… send on the day
+ * (copied from their email or spreadsheet), one buyer per line. Shows how many
+ * names it found before adding them.
+ */
+export function PasteListButton({ eventId, channels }: { eventId: string; channels: string[] }) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState("");
+  const [source, setSource] = useState(channels[0] ?? "__other");
+  const id = useId();
+  const formId = `${id}-paste`;
+  const found = parseBuyerList(text);
+  const tickets = found.reduce((n, b) => n + b.tickets, 0);
+  const close = () => {
+    setOpen(false);
+    setText("");
+  };
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="flex min-h-[52px] w-full items-center gap-3 rounded-xl border border-border bg-surface px-4 text-left text-[17px] text-blue-600 active:bg-surface-2 md:min-h-11 md:rounded-lg md:text-sm dark:text-blue-400"
+      >
+        <ClipboardPaste className="size-5" aria-hidden />
+        Paste a ticket list (Eventbrite, PipTix…)
+      </button>
+      {open ? (
+        <Sheet open onClose={close} title="Paste a ticket list" primary={{ label: "Add", form: formId }}>
+          <ActionForm id={formId} action={importBuyersAction.bind(null, eventId)} onDone={close} className="flex flex-col gap-3">
+            <Field label="From" htmlFor={`${id}-source`}>
+              <Select id={`${id}-source`} name="source" value={source} onChange={(e) => setSource(e.target.value)}>
+                {channels.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+                <option value="__other">Other…</option>
+              </Select>
+            </Field>
+            {source === "__other" ? (
+              <Field label="Channel name" htmlFor={`${id}-other`}>
+                <Input id={`${id}-other`} name="otherSource" required maxLength={80} placeholder="Goldstar, at the door…" />
+              </Field>
+            ) : null}
+            <Field label="The list" htmlFor={`${id}-list`}>
+              <Textarea
+                id={`${id}-list`}
+                name="list"
+                rows={10}
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                placeholder={"One person per line, with their tickets:\nAna López, 2\nJohn Smith  john@x.com  3"}
+                className="font-mono text-[13px]"
+              />
+            </Field>
+            <p className="text-[13px] text-muted md:text-xs">
+              {found.length
+                ? `${found.length} ${found.length === 1 ? "name" : "names"} · ${tickets} ${tickets === 1 ? "ticket" : "tickets"} found.`
+                : "Copy the list from their email or spreadsheet and paste it here."}
+            </p>
+            <label className="flex items-center gap-3 text-[15px] md:text-sm">
+              <Checkbox name="replace" defaultChecked />
+              Replace the earlier list from this channel
+            </label>
           </ActionForm>
         </Sheet>
       ) : null}

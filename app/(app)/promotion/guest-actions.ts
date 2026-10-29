@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireSession } from "@/lib/auth";
-import { addGuest, GUEST_KINDS, guestEntriesForContact, removeGuest, updateGuest, type GuestKind } from "@/lib/queries/guests";
+import { parseBuyerList } from "@/lib/guests/parse-list";
+import { addGuest, GUEST_KINDS, guestEntriesForContact, importBuyers, removeGuest, updateGuest, type GuestKind } from "@/lib/queries/guests";
 import { errorMessage, isValidEmail } from "@/lib/utils";
 import type { ActionResult } from "../_components/action-form";
 import { field, parseId } from "../_lib/validation";
@@ -116,4 +117,26 @@ export async function guestEntriesAction(contactId: string): Promise<{ id: strin
   await requireSession();
   const entries = await guestEntriesForContact(parseId(contactId));
   return entries.map((g) => ({ id: g.id, eventId: g.eventId, tickets: g.tickets }));
+}
+
+/**
+ * A ticket list pasted on the guest list page (from Eventbrite, PipTix…): its
+ * buyers join the door list under that channel, replacing that channel's
+ * earlier list unless "Replace" is unticked.
+ */
+export async function importBuyersAction(eventId: string, _prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  await requireSession();
+  const picked = field(formData, "source").trim();
+  const source = (picked === "__other" ? field(formData, "otherSource") : picked).trim().slice(0, 80);
+  if (!source) return { error: "Pick where the list comes from." };
+  const buyers = parseBuyerList(field(formData, "list"));
+  if (!buyers.length) return { error: "No names found. Paste one person per line." };
+  try {
+    const { added, removed } = await importBuyers(parseId(eventId), source, buyers, formData.get("replace") === "on");
+    refresh();
+    revalidatePath("/concerts", "layout");
+    return { message: `${added} added from ${source}${removed ? ` (the earlier ${removed} replaced)` : ""}.` };
+  } catch (error) {
+    return { error: errorMessage(error) };
+  }
 }
