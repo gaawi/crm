@@ -7,6 +7,7 @@ import { loadPendingApprovals } from "@/lib/approvals/pending";
 import { PhoneActions } from "@/components/booking/phone-actions";
 import { ContactRow, RowList } from "@/components/contact-row";
 import { CampaignFilter } from "@/components/today/campaign-filter";
+import { ConcertTodayBlock } from "@/components/today/concert-today";
 import { ScheduledBlock } from "@/components/today/scheduled";
 import { NextActionIcon } from "@/components/goals";
 import { StageBadge } from "@/components/ui/badge";
@@ -19,7 +20,9 @@ import { env } from "@/lib/env";
 import { getFollowUps, getScheduled } from "@/lib/queries/followups";
 import { recentActivity } from "@/lib/queries/messages";
 import { getOverviewCounts } from "@/lib/queries/stats";
+import { upcomingGuestListEvents } from "@/lib/queries/guests";
 import { contactCampaigns, listCampaignRefs } from "@/lib/queries/today";
+import { concertsToday } from "@/lib/today/concert-day";
 import { campaignOptions, countByCampaign, inCampaign, TODAY_CAMPAIGN_PARAM } from "@/lib/today/campaign-filter";
 import type { ContactSummary } from "@/lib/types";
 import { cn, truncate } from "@/lib/utils";
@@ -59,7 +62,7 @@ function ContactPhoneActions({ contact, timezone }: { contact: ContactSummary; t
 export default async function TodayPage({ searchParams }: PageProps<"/">) {
   const timezone = env.timezone;
   const today = todayIn(timezone);
-  const [allFollowUps, allScheduled, allActivity, counts, allReview, campaigns, pending] = await Promise.all([
+  const [allFollowUps, allScheduled, allActivity, counts, allReview, campaigns, pending, upcomingConcerts] = await Promise.all([
     getFollowUps({ today, limit: 30 }),
     getScheduled({ today, limit: 80 }),
     recentActivity(12),
@@ -67,7 +70,9 @@ export default async function TodayPage({ searchParams }: PageProps<"/">) {
     loadReviewInbox(today),
     listCampaignRefs(),
     loadPendingApprovals(),
+    upcomingGuestListEvents(),
   ]);
+  const concerts = concertsToday(upcomingConcerts);
 
   // Filter by campaign (?campaign=<id>): each item knows its campaigns; items outside every campaign show under All only.
   const requested = param(await searchParams, TODAY_CAMPAIGN_PARAM, 40);
@@ -131,6 +136,13 @@ export default async function TodayPage({ searchParams }: PageProps<"/">) {
               Progress
             </Link>
           </Notice>
+        </div>
+      ) : null}
+
+      {/* Concert day: the door list right at the top, gone again tomorrow. */}
+      {concerts.length ? (
+        <div className="mb-6 md:max-w-2xl">
+          <ConcertTodayBlock events={concerts} />
         </div>
       ) : null}
 
