@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { ArrowDownLeft, ArrowUpRight, Check, Clock, Sparkles } from "lucide-react";
 import { loadReviewInbox, ReviewInbox } from "@/components/assistant/review-inbox";
 import { ApprovalsBlock } from "@/components/today/approvals-block";
+import { ConcertTodayBlock } from "@/components/today/concert-today";
 import { loadPendingApprovals } from "@/lib/approvals/pending";
 import { PhoneActions } from "@/components/booking/phone-actions";
 import { ContactRow, RowList } from "@/components/contact-row";
@@ -17,6 +18,7 @@ import { goalLabel, nextStepParts, stageLabel } from "@/lib/constants";
 import { formatDue, formatRelative, todayIn } from "@/lib/dates";
 import { env } from "@/lib/env";
 import { getFollowUps, getScheduled } from "@/lib/queries/followups";
+import { concertsToday } from "@/lib/queries/listings";
 import { recentActivity } from "@/lib/queries/messages";
 import { getOverviewCounts } from "@/lib/queries/stats";
 import { contactCampaigns, listCampaignRefs } from "@/lib/queries/today";
@@ -59,7 +61,7 @@ function ContactPhoneActions({ contact, timezone }: { contact: ContactSummary; t
 export default async function TodayPage({ searchParams }: PageProps<"/">) {
   const timezone = env.timezone;
   const today = todayIn(timezone);
-  const [allFollowUps, allScheduled, allActivity, counts, allReview, campaigns, pending] = await Promise.all([
+  const [allFollowUps, allScheduled, allActivity, counts, allReview, campaigns, pending, concerts] = await Promise.all([
     getFollowUps({ today, limit: 30 }),
     getScheduled({ today, limit: 80 }),
     recentActivity(12),
@@ -67,6 +69,7 @@ export default async function TodayPage({ searchParams }: PageProps<"/">) {
     loadReviewInbox(today),
     listCampaignRefs(),
     loadPendingApprovals(),
+    concertsToday(),
   ]);
 
   // Filter by campaign (?campaign=<id>): each item knows its campaigns; items outside every campaign show under All only.
@@ -136,6 +139,8 @@ export default async function TodayPage({ searchParams }: PageProps<"/">) {
 
       <div className="grid gap-8 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] [&>*]:min-w-0">
         <div className="flex flex-col gap-8">
+          <ConcertTodayBlock concerts={concerts} />
+
           <ApprovalsBlock pending={pending} />
 
           <ReviewInbox today={today} data={review} campaignName={campaign?.name} emails={false} />

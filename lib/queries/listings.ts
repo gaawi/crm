@@ -356,3 +356,26 @@ export async function partnerHistory(emailMatch: string[], limit = 30): Promise<
   `;
   return rows.map((row) => toEmailMessage(row as never));
 }
+
+/** A concert happening today (in its own time zone), with how many are on its door list and how many are in. */
+export interface ConcertToday {
+  id: string;
+  title: string;
+  startsAt: Date;
+  timeZone: string;
+  venue: string | null;
+  /** Everyone on the door list (guests, buyers, staff and artists; backups left out). */
+  people: number;
+  checkedIn: number;
+}
+
+/** The concerts whose day is today where they happen: Today links straight to their door list. */
+export async function concertsToday(): Promise<ConcertToday[]> {
+  return sql<ConcertToday[]>`
+    select e.id, e.title, e.starts_at, e.time_zone, e.venue,
+      (select count(*) from concert_guests g where g.event_id = e.id and not g.backup)::int as people,
+      (select count(*) from concert_guests g where g.event_id = e.id and not g.backup and g.checked_in_at is not null)::int as checked_in
+    from listing_events e
+    where (e.starts_at at time zone e.time_zone)::date = (now() at time zone e.time_zone)::date
+    order by e.starts_at`;
+}
