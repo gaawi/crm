@@ -1,14 +1,14 @@
 "use client";
 
 import { Check, ListChecks, Rows3 } from "lucide-react";
-import { EMPTY_FILTERS, NO_SECTION, SHEET_FLAG_LABELS, type SheetFilters, type SheetFlag } from "@/lib/booking/filters";
+import { EMPTY_FILTERS, FIT_FILTERS, NO_SECTION, SHEET_FLAG_LABELS, type FitFilter, type SheetFilters, type SheetFlag } from "@/lib/booking/filters";
 import type { OpportunityKind, OpportunityStage } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { SearchInput } from "../../_components/ui";
 import { scrollerClass } from "./stats";
 
 /** Toggles shown as chips ("hot" still works from a link: ?flag=hot). */
-const TOGGLES: SheetFlag[] = ["due", "no_reply", "returning", "phone", "claude", "chatgpt", "unresearched"];
+const TOGGLES: SheetFlag[] = ["vip", "near_nyc", "chamber", "due", "no_reply", "returning", "phone", "claude", "chatgpt", "unresearched"];
 const STAT_FLAGS: SheetFlag[] = ["due", "no_reply"];
 
 const pillSelect =
@@ -46,7 +46,7 @@ export function FiltersBar({
   selectMode: boolean;
   onSelectMode: (on: boolean) => void;
 }) {
-  const filtered = Boolean(filters.q.trim() || filters.status || filters.kind || filters.section || filters.flags.length);
+  const filtered = Boolean(filters.q.trim() || filters.status || filters.kind || filters.section || filters.flags.length || filters.fit);
   const toggles = filters.flags.includes("hot") ? [...TOGGLES, "hot" as const] : TOGGLES;
   const toggleFlag = (flag: SheetFlag) =>
     onChange({ ...filters, flags: filters.flags.includes(flag) ? filters.flags.filter((f) => f !== flag) : [...filters.flags, flag] });
@@ -108,6 +108,21 @@ export function FiltersBar({
             {hasUnsectioned ? <option value={NO_SECTION}>No section</option> : null}
           </select>
         ) : null}
+
+        <select
+          value={filters.fit ?? ""}
+          onChange={(e) => onChange({ ...filters, fit: e.currentTarget.value as FitFilter })}
+          aria-label="Fit"
+          title="Booking fit from the research"
+          className={cn(pillSelect, filters.fit && "border-fg/70 font-medium")}
+        >
+          <option value="">Any fit</option>
+          {FIT_FILTERS.map((f) => (
+            <option key={f.value} value={f.value}>
+              {f.label}
+            </option>
+          ))}
+        </select>
 
         {toggles.map((flag) => {
           const on = filters.flags.includes(flag);

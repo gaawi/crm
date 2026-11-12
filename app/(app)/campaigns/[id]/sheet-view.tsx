@@ -14,6 +14,7 @@ import {
   sheetSections,
   type SheetFilters,
 } from "@/lib/booking/filters";
+import { sectionSummary } from "@/lib/booking/section-summary";
 import { suggestTemplate } from "@/lib/booking/templates";
 import { isFollowUpDue, isNoReply } from "@/lib/booking/timing";
 import type { BookingSheet, EmailTemplate, SheetRow } from "@/lib/booking/types";
@@ -29,7 +30,7 @@ import { ImportButton } from "./import-dialog";
 import { RowCard } from "./row-card";
 import { rowSubject, STAGE_DOT, stageOptions, type EmailSuggestion, type RowActions, type RowContext } from "./row-meta";
 import { useIsPhone } from "@/components/ui/sheet";
-import { RowsTable, ShowMoreButton, shownRows, type RowGroup } from "./rows-table";
+import { RowsTable, SectionToggle, ShowMoreButton, shownRows, type RowGroup } from "./rows-table";
 import { useSheetToast } from "./sheet-toast";
 import { ConfirmedStrip, StatsStrip, type StatItem } from "./stats";
 
@@ -84,6 +85,74 @@ function useCompact(): [boolean, (on: boolean) => void] {
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
+
+const COLLAPSED_EVENT = "crm:sheet-collapsed";
+
+function subscribeCollapsed(onChange: () => void) {
+  window.addEventListener("storage", onChange);
+  window.addEventListener(COLLAPSED_EVENT, onChange);
+  return () => {
+    window.removeEventListener("storage", onChange);
+    window.removeEventListener(COLLAPSED_EVENT, onChange);
+  };
+}
+
+/** Folded sections of a sheet, remembered per sheet in this browser (a JSON list of section keys). */
+function useCollapsedSections(sheetId: string): [ReadonlySet<string>, (key: string) => void, (keys: string[], on: boolean) => void] {
+  const storageKey = `crm:sheet-collapsed:${sheetId}`;
+  const raw = useSyncExternalStore(
+    subscribeCollapsed,
+    () => {
+      try {
+        return window.localStorage.getItem(storageKey) ?? "[]";
+      } catch {
+        return "[]";
+      }
+    },
+    () => "[]",
+  );
+  const collapsed = useMemo<ReadonlySet<string>>(() => {
+    try {
+      const saved: unknown = JSON.parse(raw);
+      return new Set(Array.isArray(saved) ? saved.filter((k): k is string => typeof k === "string") : []);
+    } catch {
+      return new Set();
+    }
+  }, [raw]);
+  const write = useCallback(
+    (next: Set<string>) => {
+      try {
+        window.localStorage.setItem(storageKey, JSON.stringify([...next]));
+      } catch {
+        // Private mode / blocked storage: nothing remembered.
+      }
+      window.dispatchEvent(new Event(COLLAPSED_EVENT));
+    },
+    [storageKey],
+  );
+  const toggle = useCallback(
+    (key: string) => {
+      const next = new Set(collapsed);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      write(next);
+    },
+    [collapsed, write],
+  );
+  const setAll = useCallback(
+    (keys: string[], on: boolean) => {
+      const next = new Set(collapsed);
+      for (const key of keys) {
+        if (on) next.add(key);
+        else next.delete(key);
+      }
+      write(next);
+    },
+    [collapsed, write],
+  );
+  return [collapsed, toggle, setAll];
+}
+
 /** Rows a long section draws before "Show more". */
 const ROWS_PER_SECTION = 25;
 
@@ -130,15 +199,21 @@ export function SheetView({
   const sections = useMemo(() => sheetSections(rows), [rows]);
   const hasUnsectioned = useMemo(() => sections.length > 0 && rows.some((r) => !r.section), [rows, sections]);
   const visible = useMemo(() => filterRows(rows, deferredFilters, today, timezone), [rows, deferredFilters, today, timezone]);
+  const [collapsed, toggleCollapsed, setAllCollapsed] = useCollapsedSections(sheet.id);
   const groups = useMemo<RowGroup[]>(
     () =>
       groupBySection(visible).map((g) => {
         const key = g.section ?? "\u0000other";
+        const fold = {
+          collapsed: collapsed.has(key),
+          onToggle: () => toggleCollapsed(key),
+          summary: sectionSummary(g.rows, (stage) => stageLabel(stage, labelKindFor(g.rows.map((r) => r.kind)))),
+        };
         return expanded.has(key) || g.rows.length <= ROWS_PER_SECTION + 5
-          ? g
-          : { ...g, shown: ROWS_PER_SECTION, onShowAll: () => setExpanded((prev) => new Set(prev).add(key)) };
+          ? { ...g, ...fold }
+          : { ...g, ...fold, shown: ROWS_PER_SECTION, onShowAll: () => setExpanded((prev) => new Set(prev).add(key)) };
       }),
-    [visible, expanded],
+    [visible, expanded, collapsed, toggleCollapsed],
   );
   const confirmed = useMemo(() => rows.filter((r) => r.stage === "won"), [rows]);
   // Sheet-level status names: the booking ones while every row is a booking (or every row shares one goal), generic ones for a mix.
@@ -411,6 +486,16 @@ export function SheetView({
 
       {visible.length ? (
         <div className={cn("transition-opacity", stale && "opacity-70")}>
+          {showSectionHeaders && groups.length > 1 ? (
+            <div className="mb-2 flex justify-end gap-3 px-1 text-[13px] md:text-xs">
+              <button type="button" onClick={() => setAllCollapsed(groups.map((g) => g.section ?? "\u0000other"), true)} className="text-muted active:opacity-60 md:hover:text-fg">
+                Collapse all
+              </button>
+              <button type="button" onClick={() => setAllCollapsed(groups.map((g) => g.section ?? "\u0000other"), false)} className="text-muted active:opacity-60 md:hover:text-fg">
+                Expand all
+              </button>
+            </div>
+          ) : null}
           {phone ? null : (
             <RowsTable
               groups={groups}
@@ -430,9 +515,8 @@ export function SheetView({
               {groups.map((group) => (
                 <section key={group.section ?? "\u0000other"} aria-label={showSectionHeaders ? (group.section ?? "Other") : undefined}>
                   {showSectionHeaders ? (
-                    <h2 className="mb-2 flex items-baseline gap-2 px-1 text-[13px] font-semibold uppercase tracking-wide text-muted">
-                      <span className="min-w-0 truncate">{group.section ?? "Other"}</span>
-                      <span className="font-medium tabular-nums text-subtle">{group.rows.length}</span>
+                    <h2 className="mb-2 flex items-baseline gap-2 px-1 text-[13px] text-muted">
+                      <SectionToggle group={group} className="min-w-0 flex-1" />
                       {selectMode ? (
                         <button
                           type="button"
@@ -468,7 +552,7 @@ export function SheetView({
                       />
                     ))}
                   </ul>
-                  {shownRows(group).length < group.rows.length ? (
+                  {!group.collapsed && shownRows(group).length < group.rows.length ? (
                     <ShowMoreButton hidden={group.rows.length - shownRows(group).length} onClick={group.onShowAll} className="mt-2" />
                   ) : null}
                 </section>

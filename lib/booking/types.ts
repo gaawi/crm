@@ -108,7 +108,15 @@ export interface SheetRow {
   createdAt: string;
   updatedAt: string;
   /** profile: what Claude or the owner wrote about the organization (null = none yet). */
-  organization: { id: string; name: string; city: string | null; website: string | null; profile?: OrgProfile | null } | null;
+  organization: {
+    id: string;
+    name: string;
+    city: string | null;
+    website: string | null;
+    /** Organization tags: vip, nyc-under-5h, chamber-specialist... */
+    tags?: string[];
+    profile?: OrgProfile | null;
+  } | null;
   contact: SheetRowContact | null;
   /** Latest non-status activity of the row or its contact. */
   lastActivity: SheetRowActivity | null;

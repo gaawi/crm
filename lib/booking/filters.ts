@@ -8,11 +8,13 @@ import { phoneDigits } from "@/lib/booking/phone";
 import { isFollowUpDue, isNoReply, type TimingRow } from "@/lib/booking/timing";
 import type { OpportunityKind, OpportunityStage } from "@/lib/types";
 
-export const SHEET_FLAGS = ["due", "no_reply", "returning", "phone", "hot", "claude", "chatgpt", "unresearched"] as const;
+export const SHEET_FLAGS = ["due", "no_reply", "returning", "phone", "hot", "vip", "near_nyc", "chamber", "claude", "chatgpt", "unresearched"] as const;
 /**
  * due = follow-up due; no_reply = waiting > 10 days; hot = In conversation;
  * claude / chatgpt = the organization's profile was researched by that
- * assistant (profile.researchedBy); unresearched = no profile research yet.
+ * assistant (profile.researchedBy); unresearched = no profile research yet;
+ * vip / near_nyc / chamber = organization tags vip, nyc-under-5h,
+ * chamber-specialist.
  */
 export type SheetFlag = (typeof SHEET_FLAGS)[number];
 
@@ -22,6 +24,9 @@ export const SHEET_FLAG_LABELS: Record<SheetFlag, string> = {
   returning: "Returning",
   phone: "Has phone",
   hot: "Hot",
+  vip: "VIP",
+  near_nyc: "< 5 h from NYC",
+  chamber: "Chamber specialists",
   claude: "Researched by Claude",
   chatgpt: "Researched by ChatGPT",
   unresearched: "Not researched",
@@ -50,6 +55,31 @@ export interface SheetFilters {
   section: string;
   /** All must match. */
   flags: SheetFlag[];
+  /** Booking fit of the organization: "" = all; high_medium hides low and unknown. */
+  fit?: FitFilter;
+}
+
+export const FIT_FILTERS = [
+  { value: "high", label: "High fit" },
+  { value: "high_medium", label: "High + medium fit" },
+  { value: "medium", label: "Medium fit" },
+  { value: "low", label: "Low fit" },
+  { value: "unknown", label: "Fit not assessed" },
+] as const;
+export type FitFilter = (typeof FIT_FILTERS)[number]["value"] | "";
+
+/** The organization's booking fit (high / medium / low), or null when not assessed. */
+export function rowFit(row: { organization: FilterRow["organization"] }): "high" | "medium" | "low" | null {
+  const fit = row.organization?.profile?.booking?.fit;
+  return fit === "high" || fit === "medium" || fit === "low" ? fit : null;
+}
+
+function matchesFit(row: FilterRow, fit: FitFilter | undefined): boolean {
+  if (!fit) return true;
+  const f = rowFit(row);
+  if (fit === "high_medium") return f === "high" || f === "medium";
+  if (fit === "unknown") return f === null;
+  return f === fit;
 }
 
 export const EMPTY_FILTERS: SheetFilters = { q: "", status: "", section: "", flags: [] };
@@ -74,6 +104,7 @@ export function sheetFiltersFromParams(params: Params): SheetFilters {
     ...(GOAL_KINDS.some((k) => k.value === kind) ? { kind: kind as OpportunityKind } : {}),
     section: read(params, "section").slice(0, 120),
     flags: [...new Set(flags)],
+    ...(FIT_FILTERS.some((f) => f.value === read(params, "fit")) ? { fit: read(params, "fit") as FitFilter } : {}),
   };
 }
 
@@ -85,6 +116,7 @@ export function sheetFiltersToQuery(filters: SheetFilters): string {
   if (filters.kind) params.set("goal", filters.kind);
   if (filters.section) params.set("section", filters.section);
   if (filters.flags.length) params.set("flag", filters.flags.join(","));
+  if (filters.fit) params.set("fit", filters.fit);
   const query = params.toString();
   return query ? `?${query}` : "";
 }
@@ -106,7 +138,12 @@ export interface FilterRow extends TimingRow {
   section: string | null;
   spaces: string | null;
   returning: boolean;
-  organization: { name: string; city: string | null; profile?: { researchedBy?: string | null } | null } | null;
+  organization: {
+    name: string;
+    city: string | null;
+    tags?: string[];
+    profile?: { researchedBy?: string | null; booking?: { fit?: string | null } | null } | null;
+  } | null;
   contact:
     | (NonNullable<TimingRow["contact"]> & {
         displayName: string;
@@ -159,6 +196,12 @@ export function rowHasFlag(row: FilterRow, flag: SheetFlag, today: string, timez
       return researcherOf(row.organization?.profile) === flag;
     case "unresearched":
       return researcherOf(row.organization?.profile) === null;
+    case "vip":
+      return Boolean(row.organization?.tags?.includes("vip"));
+    case "near_nyc":
+      return Boolean(row.organization?.tags?.includes("nyc-under-5h"));
+    case "chamber":
+      return Boolean(row.organization?.tags?.includes("chamber-specialist"));
   }
 }
 
@@ -169,6 +212,7 @@ export function filterRows<T extends FilterRow>(rows: readonly T[], filters: She
       (!filters.kind || (row.kind ?? "booking") === filters.kind) &&
       (!filters.section || (filters.section === NO_SECTION ? !row.section : row.section === filters.section)) &&
       filters.flags.every((flag) => rowHasFlag(row, flag, today, timezone)) &&
+      matchesFit(row, filters.fit) &&
       rowMatchesSearch(row, filters.q),
   );
 }

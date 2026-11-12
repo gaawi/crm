@@ -115,7 +115,7 @@ export async function getSheetRows(projectId: string, options: { ids?: string[] 
   const rows = await sql<RawSheetRow[]>`
     select op.id, op.title, op.kind, op.stage, op.value, op.currency, op.follow_up_at, op.next_action, op.next_step, op.notes, op.event_dates,
            op.sheet_section as section, op.spaces, op.is_returning as "returning", op.created_at, op.updated_at,
-           case when o.id is null then null else json_build_object('id', o.id, 'name', o.name, 'city', o.city, 'website', o.website, 'profile', o.profile) end as organization,
+           case when o.id is null then null else json_build_object('id', o.id, 'name', o.name, 'city', o.city, 'website', o.website, 'tags', o.tags, 'profile', o.profile) end as organization,
            case when c.id is null then null else json_build_object(
              'id', c.id,
              'name', nullif(btrim(c.name), ''),

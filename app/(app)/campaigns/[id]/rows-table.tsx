@@ -2,7 +2,7 @@
 
 import { memo } from "react";
 import Link from "next/link";
-import { Phone } from "lucide-react";
+import { ChevronRight, Phone } from "lucide-react";
 import { WhatsAppButton } from "@/components/booking/phone-actions";
 import { ContactAvatar } from "@/components/contact-avatar";
 import { PersonFlagBadges } from "@/components/organizations/person-flags";
@@ -36,11 +36,39 @@ export interface RowGroup {
   /** How many rows to draw (the rest behind "Show more"); all when missing. Selection still covers every row. */
   shown?: number;
   onShowAll?: () => void;
+  /** Folded: only the header and its summary show. */
+  collapsed?: boolean;
+  onToggle?: () => void;
+  /** What the section holds, one line (statuses, VIP, fit). */
+  summary?: string;
 }
 
 /** The rows of a group to draw now. */
 export function shownRows(group: RowGroup): SheetRow[] {
+  if (group.collapsed) return [];
   return group.shown === undefined ? group.rows : group.rows.slice(0, group.shown);
+}
+
+/** Section title as a fold toggle: chevron, name, count and the summary line. */
+export function SectionToggle({ group, className }: { group: RowGroup; className?: string }) {
+  const name = group.section ?? "Other";
+  return (
+    <button
+      type="button"
+      onClick={group.onToggle}
+      aria-expanded={!group.collapsed}
+      className={cn("flex w-full min-w-0 items-baseline gap-2 text-left active:opacity-60 md:hover:text-fg", className)}
+    >
+      <ChevronRight
+        className={cn("size-3.5 shrink-0 self-center text-subtle transition-transform", !group.collapsed && "rotate-90")}
+        strokeWidth={2.25}
+        aria-hidden
+      />
+      <span className="shrink-0 truncate font-semibold uppercase tracking-wide">{name}</span>
+      <span className="shrink-0 font-medium tabular-nums text-subtle">{group.rows.length}</span>
+      {group.summary ? <span className="min-w-0 truncate font-normal normal-case tracking-normal text-subtle">{group.summary}</span> : null}
+    </button>
+  );
 }
 
 /**
@@ -123,8 +151,8 @@ export function RowsTable({
                       onChange={(on) => onSelectMany(ids, on)}
                     />
                   </th>
-                  <th colSpan={7} scope="colgroup" className="px-3 py-1.5 text-left text-xs font-semibold uppercase tracking-wide text-muted">
-                    {group.section ?? "Other"} <span className="ml-1 font-medium text-subtle tabular-nums">{group.rows.length}</span>
+                  <th colSpan={7} scope="colgroup" className="px-3 py-1.5 text-left text-xs text-muted">
+                    <SectionToggle group={group} />
                   </th>
                 </tr>
               ) : null}
@@ -139,7 +167,7 @@ export function RowsTable({
                   preparing={preparing.has(row.id)}
                 />
               ))}
-              {shownRows(group).length < group.rows.length ? (
+              {!group.collapsed && shownRows(group).length < group.rows.length ? (
                 <tr>
                   <td colSpan={8} className="px-3 py-2">
                     <ShowMoreButton hidden={group.rows.length - shownRows(group).length} onClick={group.onShowAll} />
