@@ -5,11 +5,13 @@ import Link from "next/link";
 import { Phone } from "lucide-react";
 import { WhatsAppButton } from "@/components/booking/phone-actions";
 import { ContactAvatar } from "@/components/contact-avatar";
+import { PersonFlagBadges } from "@/components/organizations/person-flags";
 import { OrgProfileIconButton } from "@/components/organizations/profile-card";
 import { Checkbox } from "@/components/ui/field";
 import { formatPhone, telHref } from "@/lib/booking/phone";
 import { isFollowUpDue, isOpenStage } from "@/lib/booking/timing";
 import type { SheetRow } from "@/lib/booking/types";
+import { deciderOf, flagBorderClass, personFlags } from "@/lib/organizations/people";
 import { cn } from "@/lib/utils";
 import { DateCell, DeleteRowButton, KindCell, NextActionCell, StageCell, TextCell } from "./cells";
 import {
@@ -217,6 +219,9 @@ const TableRow = memo(function TableRow({
   const name = venueName(row);
   const c = row.contact;
   const phone = c?.phone ?? c?.whatsapp ?? null;
+  const decider = deciderOf(row.organization?.profile);
+  const flags = c ? personFlags(c, row.organization?.profile) : null;
+  const flagged = Boolean(flags?.decides || flags?.talking);
   return (
     <tr className={cn("align-top", selected ? "bg-blue-50/60 dark:bg-blue-950/25" : !isOpenStage(row.stage) && "bg-surface-2/40")}>
       {/* The stripe shows the status at a glance, like the phone cards. */}
@@ -251,13 +256,14 @@ const TableRow = memo(function TableRow({
       </td>
       <td className="px-3 py-2.5">
         {c ? (
-          <>
+          <div className={cn(flagged && "-ml-1.5 rounded-md py-0.5 pl-1.5", flagBorderClass(flags))}>
             <span className="flex min-w-0 items-center gap-2">
               <ContactAvatar contact={c} size="xs" />
               <Link href={`/contacts/${c.id}`} className="block min-w-0 truncate text-fg hover:underline" title={c.displayName}>
                 {c.displayName}
               </Link>
             </span>
+            <PersonFlagBadges flags={flags} className="mt-0.5 flex items-center gap-1" />
             {c.role ? (
               <p className="truncate text-xs text-muted" title={c.role}>
                 {c.role}
@@ -278,10 +284,17 @@ const TableRow = memo(function TableRow({
                 <WhatsAppButton contact={c} onOpen={() => actions.onLog(row, "whatsapp")} />
               </div>
             ) : null}
-          </>
+          </div>
         ) : (
           <p className="text-xs text-subtle">No contact</p>
         )}
+        {decider && !flags?.decides ? (
+          <div className="mt-1.5 rounded-md border-l-4 border-l-amber-500 py-0.5 pl-1.5 text-xs" title="Books the artists or plans the season">
+            <PersonFlagBadges flags={{ decides: true, talking: false }} />
+            <p className="mt-0.5 truncate font-medium text-fg">{decider.name}</p>
+            {decider.role ? <p className="truncate text-muted">{decider.role}</p> : null}
+          </div>
+        ) : null}
         <LastTouchLine row={row} timezone={ctx.timezone} today={ctx.today} wrap className="mt-1" />
         <TimingBadge row={row} timezone={ctx.timezone} today={ctx.today} wrap className="mt-1" />
       </td>

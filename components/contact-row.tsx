@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { ContactOrgAvatar } from "@/components/contact-org-avatar";
 import type { ReactNode } from "react";
+import { PersonFlagBadges } from "@/components/organizations/person-flags";
 import { ProjectDot, StatusBadge } from "@/components/ui/badge";
 import { formatDue, formatRelative } from "@/lib/dates";
+import { flagBorderClass, type PersonFlags } from "@/lib/organizations/people";
 import type { ContactSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -19,6 +21,7 @@ export function ContactRow({
   showStatus = false,
   actions,
   note,
+  flags,
 }: {
   contact: ContactSummary;
   timezone: string;
@@ -27,6 +30,8 @@ export function ContactRow({
   showStatus?: boolean;
   actions?: ReactNode;
   note?: ReactNode;
+  /** Decides / Talking: a badge and a colored left border. */
+  flags?: PersonFlags | null;
 }) {
   const subtitle =
     [contact.role, contact.organization?.name].filter(Boolean).join(" · ") ||
@@ -45,7 +50,12 @@ export function ContactRow({
   }
 
   return (
-    <li className="group relative flex min-h-[60px] items-center gap-3 px-4 py-2.5 active:bg-surface-2 md:min-h-0 md:active:bg-transparent">
+    <li
+      className={cn(
+        "group relative flex min-h-[60px] items-center gap-3 px-4 py-2.5 active:bg-surface-2 md:min-h-0 md:active:bg-transparent",
+        flagBorderClass(flags),
+      )}
+    >
       <ContactOrgAvatar contact={contact} organization={contact.organization} layout="badge" size="sm" zoomable />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
@@ -55,6 +65,7 @@ export function ContactRow({
           >
             {contact.displayName}
           </Link>
+          <PersonFlagBadges flags={flags} />
           {showStatus ? <StatusBadge status={contact.status} /> : null}
           {contact.projects.length ? (
             <span className="flex items-center gap-1" title={contact.projects.map((p) => p.name).join(", ")}>

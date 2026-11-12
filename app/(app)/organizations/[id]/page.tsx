@@ -18,6 +18,8 @@ import { ORGANIZATION_KINDS } from "@/lib/constants";
 import { formatDate, formatRelative, todayIn } from "@/lib/dates";
 import { env } from "@/lib/env";
 import { listOpportunities } from "@/lib/queries/opportunities";
+import { PersonFlagBadges } from "@/components/organizations/person-flags";
+import { deciderOf, personFlags, type PersonFlags } from "@/lib/organizations/people";
 import { orgPlace } from "@/lib/organizations/profile";
 import { getOrganizationProfile } from "@/lib/queries/org-profiles";
 import { getOrganization, getOrganizationContacts, getOrganizationHistory } from "@/lib/queries/organizations";
@@ -109,6 +111,12 @@ export default async function OrganizationPage({ params, searchParams }: PagePro
     getOrganizationProfile(organization.id),
   ]);
   const profile = stored?.profile ?? null;
+  // Who decides and whom we talk with: flagged, and listed first.
+  const decider = deciderOf(profile);
+  const flagged = people.map((contact) => ({ contact, flags: personFlags(contact, profile) }));
+  const rank = (f: PersonFlags) => (f.decides ? 0 : f.talking ? 1 : 2);
+  const sortedPeople = flagged.map((p, i) => ({ ...p, i })).sort((a, b) => rank(a.flags) - rank(b.flags) || a.i - b.i);
+  const deciderMissing = Boolean(decider) && !flagged.some((p) => p.flags.decides);
   const profileEditHref = `${base}?profile=edit`;
   const headerPlace = orgPlace(organization, profile);
   const openDeals = deals.filter((d) => d.stage !== "won" && d.stage !== "lost");
@@ -254,12 +262,28 @@ export default async function OrganizationPage({ params, searchParams }: PagePro
             >
               People
             </GroupTitle>
-            {people.length ? (
+            {people.length || decider ? (
               <RowList>
-                {people.map((c) => (
+                {deciderMissing && decider ? (
+                  <li className="flex items-center gap-3 border-l-4 border-l-amber-500 px-4 py-2.5">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="truncate text-[15px] font-medium text-fg md:text-sm">{decider.name}</span>
+                        <PersonFlagBadges flags={{ decides: true, talking: false }} />
+                      </div>
+                      <p className="truncate text-xs text-muted">{[decider.role, "not in contacts yet"].filter(Boolean).join(" · ")}</p>
+                    </div>
+                    <GroupAction href={hrefWith("/contacts/new", { org: organization.name, name: decider.name, email: decider.email })}>
+                      <UserPlus className="size-4 md:size-3.5" strokeWidth={1.75} />
+                      Add
+                    </GroupAction>
+                  </li>
+                ) : null}
+                {sortedPeople.map(({ contact: c, flags }) => (
                   <ContactRow
                     key={c.id}
                     contact={c}
+                    flags={flags}
                     timezone={timezone}
                     today={today}
                     note={

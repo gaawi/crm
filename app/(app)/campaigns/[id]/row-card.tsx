@@ -6,7 +6,9 @@ import { ChevronRight } from "lucide-react";
 import { CallButton, WhatsAppButton } from "@/components/booking/phone-actions";
 import { ContactOrgAvatar } from "@/components/contact-org-avatar";
 import { GoalBadge, NextActionIcon } from "@/components/goals";
+import { PersonFlagBadges } from "@/components/organizations/person-flags";
 import { OrgProfileLine } from "@/components/organizations/profile-card";
+import { deciderOf, flagBorderClass, personFlags } from "@/lib/organizations/people";
 import { StageBadge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/field";
 import { formatPhone } from "@/lib/booking/phone";
@@ -61,6 +63,8 @@ export const RowCard = memo(function RowCard({
   const name = venueName(row);
   const c = row.contact;
   const who = c ? [c.displayName, c.role].filter(Boolean).join(" · ") : null;
+  const decider = deciderOf(row.organization?.profile);
+  const flags = c ? personFlags(c, row.organization?.profile) : null;
 
   const select = selectMode ? (
     <Checkbox
@@ -169,7 +173,13 @@ export const RowCard = memo(function RowCard({
 
           <div className="mt-2.5">
             {c ? (
-              <div className="flex min-w-0 items-center gap-2.5">
+              <div
+                className={cn(
+                  "flex min-w-0 items-center gap-2.5",
+                  (flags?.decides || flags?.talking) && "rounded-lg border border-border py-1.5 pr-2 pl-2",
+                  flagBorderClass(flags),
+                )}
+              >
                 <ContactOrgAvatar
                   contact={c}
                   organization={
@@ -178,9 +188,12 @@ export const RowCard = memo(function RowCard({
                   size="md"
                 />
                 <div className="min-w-0 flex-1">
-                  <Link href={`/contacts/${c.id}`} className="block truncate text-[15px] text-fg active:opacity-60">
-                    {who}
-                  </Link>
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <Link href={`/contacts/${c.id}`} className="block truncate text-[15px] text-fg active:opacity-60">
+                      {who}
+                    </Link>
+                    <PersonFlagBadges flags={flags} />
+                  </div>
                   {c.email || c.phone || c.whatsapp ? (
                     <p className="truncate text-[13px] text-subtle">
                       {[c.email, formatPhone(c.phone ?? c.whatsapp) || null].filter(Boolean).join(" · ")}
@@ -191,6 +204,13 @@ export const RowCard = memo(function RowCard({
             ) : (
               <p className="text-[15px] text-subtle">No contact yet</p>
             )}
+            {decider && !flags?.decides ? (
+              <p className="mt-1.5 flex min-w-0 items-center gap-1.5 rounded-lg border border-l-4 border-border border-l-amber-500 px-2 py-1 text-[13px]">
+                <PersonFlagBadges flags={{ decides: true, talking: false }} />
+                <span className="truncate font-medium text-fg">{decider.name}</span>
+                {decider.role ? <span className="truncate text-muted">· {decider.role}</span> : null}
+              </p>
+            ) : null}
             <LastTouchLine row={row} timezone={ctx.timezone} today={ctx.today} className="mt-1" />
             <TimingBadge row={row} timezone={ctx.timezone} today={ctx.today} className="mt-1.5 h-6 px-2 text-xs" />
           </div>

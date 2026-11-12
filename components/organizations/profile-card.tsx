@@ -662,6 +662,20 @@ export function OrgProfileCard({
 
         {p.booking ? <BookingBlock booking={p.booking} /> : null}
 
+        {!hideAtAGlance && p.artists?.length ? (
+          <Section title="Who has played">
+            <ul className="flex flex-col gap-1">
+              {p.artists.map((a, i) => (
+                <li key={i} className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 text-[15px] md:text-sm">
+                  <span className="font-semibold text-fg">{a.name}</span>
+                  {a.formation ? <span className="text-muted">· {a.formation}</span> : null}
+                  {a.date ? <span className="text-subtle">· {a.date}</span> : null}
+                </li>
+              ))}
+            </ul>
+          </Section>
+        ) : null}
+
         {p.programming ? (
           <Section title="Programs">
             <p className="prose-plain text-[15px] leading-relaxed text-fg md:text-sm">{p.programming}</p>
@@ -680,19 +694,6 @@ export function OrgProfileCard({
           </Section>
         ) : null}
 
-        {!hideAtAGlance && p.artists?.length ? (
-          <Section title="Who has played">
-            <ul className="flex flex-col gap-1">
-              {p.artists.map((a, i) => (
-                <li key={i} className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 text-[15px] md:text-sm">
-                  <span className="font-medium text-fg">{a.name}</span>
-                  {a.formation ? <span className="text-muted">· {a.formation}</span> : null}
-                  {a.date ? <span className="text-subtle">· {a.date}</span> : null}
-                </li>
-              ))}
-            </ul>
-          </Section>
-        ) : null}
 
         {!hideAtAGlance && p.venues?.length ? (
           <Section title={p.venues.length === 1 ? "Venue" : "Venues"}>
