@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowDownLeft, ArrowUpRight, Clock, Flame, History, Loader2, Mail, MailCheck, RotateCcw } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Clock, Flame, History, Loader2, Mail, MailCheck, RotateCcw, Sparkles } from "lucide-react";
 import { ActivityIcon, describeLastTouch, TOUCH_TONE_CLASS } from "@/components/booking/activity-meta";
 import { phoneActionClass, type PhoneActionSize } from "@/components/booking/phone-action-class";
 import { PlaceLink } from "@/components/organizations/place-link";
 import { Badge } from "@/components/ui/badge";
+import { researcherOf, type Researcher } from "@/lib/booking/filters";
 import { lastTouch, rowFollowUpTiming, type LastTouch } from "@/lib/booking/timing";
 import type { EmailTemplate, SheetRow } from "@/lib/booking/types";
 import { OPPORTUNITY_STAGES, stageLabel } from "@/lib/constants";
@@ -84,11 +85,12 @@ export function RowBadges({
   iconOnly = false,
   className,
 }: {
-  row: Pick<SheetRow, "returning" | "stage">;
+  row: Pick<SheetRow, "returning" | "stage" | "organization">;
   iconOnly?: boolean;
   className?: string;
 }) {
-  if (!row.returning && row.stage !== "negotiation") return null;
+  const researcher = researcherOf(row.organization?.profile);
+  if (!row.returning && row.stage !== "negotiation" && !researcher) return null;
   if (iconOnly) {
     return (
       <span className={cn("inline-flex shrink-0 items-center gap-1", className)}>
@@ -96,6 +98,9 @@ export function RowBadges({
           <RotateCcw className="size-3.5 text-violet-600 dark:text-violet-400" strokeWidth={2} aria-label="Returning" />
         ) : null}
         {row.stage === "negotiation" ? <Flame className="size-3.5 text-amber-600 dark:text-amber-400" strokeWidth={2} aria-label="Hot" /> : null}
+        {researcher ? (
+          <Sparkles className={cn("size-3.5", RESEARCHER_ICON[researcher])} strokeWidth={2} aria-label={RESEARCHER_LABEL[researcher]} />
+        ) : null}
       </span>
     );
   }
@@ -113,9 +118,28 @@ export function RowBadges({
           Hot
         </Badge>
       ) : null}
+      {researcher ? (
+        <Badge className={RESEARCHER_BADGE[researcher]} title={RESEARCHER_LABEL[researcher]}>
+          <Sparkles className="size-3" strokeWidth={2} aria-hidden />
+          {researcher === "claude" ? "Claude" : "ChatGPT"}
+        </Badge>
+      ) : null}
     </span>
   );
 }
+
+const RESEARCHER_LABEL: Record<Researcher, string> = {
+  claude: "Organization researched by Claude",
+  chatgpt: "Organization researched by ChatGPT",
+};
+const RESEARCHER_BADGE: Record<Researcher, string> = {
+  claude: "bg-orange-50 text-orange-800 dark:bg-orange-950 dark:text-orange-300",
+  chatgpt: "bg-teal-50 text-teal-800 dark:bg-teal-950 dark:text-teal-300",
+};
+const RESEARCHER_ICON: Record<Researcher, string> = {
+  claude: "text-orange-600 dark:text-orange-400",
+  chatgpt: "text-teal-600 dark:text-teal-400",
+};
 
 function TouchIcon({ touch }: { touch: LastTouch | null }) {
   const cls = "size-3.5 shrink-0 md:size-3";

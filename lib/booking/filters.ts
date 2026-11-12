@@ -8,8 +8,12 @@ import { phoneDigits } from "@/lib/booking/phone";
 import { isFollowUpDue, isNoReply, type TimingRow } from "@/lib/booking/timing";
 import type { OpportunityKind, OpportunityStage } from "@/lib/types";
 
-export const SHEET_FLAGS = ["due", "no_reply", "returning", "phone", "hot"] as const;
-/** due = follow-up due; no_reply = waiting > 10 days; hot = In conversation. */
+export const SHEET_FLAGS = ["due", "no_reply", "returning", "phone", "hot", "claude", "chatgpt", "unresearched"] as const;
+/**
+ * due = follow-up due; no_reply = waiting > 10 days; hot = In conversation;
+ * claude / chatgpt = the organization's profile was researched by that
+ * assistant (profile.researchedBy); unresearched = no profile research yet.
+ */
 export type SheetFlag = (typeof SHEET_FLAGS)[number];
 
 export const SHEET_FLAG_LABELS: Record<SheetFlag, string> = {
@@ -18,7 +22,20 @@ export const SHEET_FLAG_LABELS: Record<SheetFlag, string> = {
   returning: "Returning",
   phone: "Has phone",
   hot: "Hot",
+  claude: "Researched by Claude",
+  chatgpt: "Researched by ChatGPT",
+  unresearched: "Not researched",
 };
+
+export type Researcher = "claude" | "chatgpt";
+
+/** Who researched the organization, from profile.researchedBy ("claude", "Claude public research…", "ChatGPT…"). */
+export function researcherOf(profile: { researchedBy?: string | null } | null | undefined): Researcher | null {
+  const by = (profile?.researchedBy ?? "").toLowerCase();
+  if (by.includes("chatgpt")) return "chatgpt";
+  if (by.includes("claude")) return "claude";
+  return null;
+}
 
 /** Section value that selects the rows without a section. */
 export const NO_SECTION = "__none";
@@ -89,7 +106,7 @@ export interface FilterRow extends TimingRow {
   section: string | null;
   spaces: string | null;
   returning: boolean;
-  organization: { name: string; city: string | null } | null;
+  organization: { name: string; city: string | null; profile?: { researchedBy?: string | null } | null } | null;
   contact:
     | (NonNullable<TimingRow["contact"]> & {
         displayName: string;
@@ -137,6 +154,11 @@ export function rowHasFlag(row: FilterRow, flag: SheetFlag, today: string, timez
       return Boolean(row.contact?.phone || row.contact?.whatsapp);
     case "hot":
       return row.stage === "negotiation";
+    case "claude":
+    case "chatgpt":
+      return researcherOf(row.organization?.profile) === flag;
+    case "unresearched":
+      return researcherOf(row.organization?.profile) === null;
   }
 }
 
