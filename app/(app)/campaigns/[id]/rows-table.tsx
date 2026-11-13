@@ -111,7 +111,6 @@ export function RowsTable({
           <col className="w-[14rem]" />
           <col className="w-[9.25rem]" />
           <col />
-          <col className="w-[7.5rem]" />
         </colgroup>
         <thead>
           <tr className="border-b border-border text-left text-xs font-medium text-subtle">
@@ -127,9 +126,6 @@ export function RowsTable({
             <th className="px-3 py-2 font-medium">Contact · last touch</th>
             <th className="px-1 py-2 font-medium">Status · follow up</th>
             <th className="px-1 py-2 font-medium">Notes</th>
-            <th className="px-2 py-2 font-medium">
-              <span className="sr-only">Actions</span>
-            </th>
           </tr>
         </thead>
         {groups.map((group) => {
@@ -147,7 +143,7 @@ export function RowsTable({
                       onChange={(on) => onSelectMany(ids, on)}
                     />
                   </th>
-                  <th colSpan={5} scope="colgroup" className="px-3 py-1.5 text-left text-xs text-muted">
+                  <th colSpan={4} scope="colgroup" className="px-3 py-1.5 text-left text-xs text-muted">
                     <SectionToggle group={group} />
                   </th>
                 </tr>
@@ -165,7 +161,7 @@ export function RowsTable({
               ))}
               {!group.collapsed && shownRows(group).length < group.rows.length ? (
                 <tr>
-                  <td colSpan={6} className="px-3 py-2">
+                  <td colSpan={5} className="px-3 py-2">
                     <ShowMoreButton hidden={group.rows.length - shownRows(group).length} onClick={group.onShowAll} />
                   </td>
                 </tr>
@@ -277,6 +273,12 @@ const TableRow = memo(function TableRow({
           </p>
         ) : null}
         <RowPlace row={row} block className="mt-0.5 text-xs text-subtle" />
+        {/* Row actions (was the last column): email, history, delete. */}
+        <div className="mt-1.5 flex items-center gap-1.5">
+          <PrepareEmailButton suggestion={suggestion} pending={preparing} onPrepare={() => actions.onPrepare(row)} size="compact" />
+          <HistoryButton count={row.activityCount} onOpen={() => actions.onHistory(row.id)} size="compact" />
+          <DeleteRowButton rowId={row.id} name={name} />
+        </div>
       </td>
       <td className="px-3 py-2.5">
         {c ? (
@@ -326,13 +328,6 @@ const TableRow = memo(function TableRow({
         <TextCell rowId={row.id} name="notes" value={row.notes} placeholder="Notes" label="Notes" multiline rows={3} />
         <PlayedHere row={row} className="mt-0.5 px-2" />
         <EarlierNotes row={row} />
-      </td>
-      <td className="px-1.5 py-2.5">
-        <PrepareEmailButton suggestion={suggestion} pending={preparing} onPrepare={() => actions.onPrepare(row)} size="compact" />
-        <div className="mt-1.5 flex items-center justify-between">
-          <HistoryButton count={row.activityCount} onOpen={() => actions.onHistory(row.id)} size="compact" />
-          <DeleteRowButton rowId={row.id} name={name} />
-        </div>
       </td>
     </tr>
   );
