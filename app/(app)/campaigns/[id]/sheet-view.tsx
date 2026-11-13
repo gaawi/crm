@@ -9,10 +9,12 @@ import {
   filterRows,
   groupBySection,
   NO_SECTION,
+  rowHasFlag,
   sheetFiltersFromParams,
   sheetFiltersToQuery,
   sheetSections,
   type SheetFilters,
+  type SheetFlag,
 } from "@/lib/booking/filters";
 import { sectionSummary } from "@/lib/booking/section-summary";
 import { suggestTemplate } from "@/lib/booking/templates";
@@ -389,6 +391,14 @@ export function SheetView({
       ),
     [rows, deferredFilters, today, timezone],
   );
+  // Each colored tag: how many rows it leaves (on: the rows shown by the other filters).
+  const flagCounts = useMemo(() => {
+    const m = new Map<SheetFlag, number>();
+    for (const flag of ["vip", "near_nyc", "returning", "claude", "chatgpt"] as const) {
+      m.set(flag, counted.filter((r) => rowHasFlag(r, flag, today, timezone)).length);
+    }
+    return m;
+  }, [counted, today, timezone]);
   const stats = useMemo<StatItem[]>(() => {
     const count = (stage: OpportunityStage) => counted.filter((r) => r.stage === stage).length;
     const due = counted.filter((r) => isFollowUpDue(r, today)).length;
@@ -484,6 +494,7 @@ export function SheetView({
           goalOptions={goalOptions}
           sections={sections}
           sectionCounts={sectionCounts}
+          flagCounts={flagCounts}
           hasUnsectioned={hasUnsectioned}
           shown={visible.length}
           total={rows.length}
