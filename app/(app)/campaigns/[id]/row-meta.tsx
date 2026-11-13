@@ -210,7 +210,7 @@ export function TimingBadge({
       ? [`Wait ${days(timing.waitDays)}`, "font-normal", `Your email is ${days(timing.days)} old. Follow up from ${timing.suggestedDate}.`]
       : timing.state === "ready"
         ? [`Good time to follow up (${days(timing.days)})`, "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300", undefined]
-        : [`${days(timing.days)} — follow up now`, "bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300", "No reply for more than 10 days"];
+        : [`${days(timing.days)}: follow up now`, "bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300", "No reply for more than 10 days"];
   return (
     <Badge className={cn("max-w-full", wrap && "h-auto min-h-5 whitespace-normal py-0.5 leading-tight", tone, className)} title={title ?? text}>
       <span className={wrap ? undefined : "truncate"}>{text}</span>
@@ -247,7 +247,7 @@ export function PrepareEmailButton({
   className?: string;
 }) {
   const name = suggestion.template?.name;
-  const title = suggestion.reason ?? `Prepare “${name}” — it goes to Approvals, nothing is sent`;
+  const title = suggestion.reason ?? `Prepare “${name}”: it goes to Approvals, nothing is sent`;
   const icon = pending ? (
     <Loader2 className={cn("animate-spin", size === "tile" ? "size-5 md:size-[18px]" : "size-3.5")} aria-hidden />
   ) : (
