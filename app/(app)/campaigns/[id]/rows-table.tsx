@@ -107,8 +107,8 @@ export function RowsTable({
         {/* Fixed columns + notes: fits the 992px a 1280px window leaves (sidebar and padding). */}
         <colgroup>
           <col className="w-8" />
-          <col className="w-[9rem]" />
-          <col className="w-[11rem]" />
+          <col className="w-[12rem]" />
+          <col className="w-[14rem]" />
           <col className="w-[9.25rem]" />
           <col />
           <col className="w-[7.5rem]" />
