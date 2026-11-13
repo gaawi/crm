@@ -377,11 +377,22 @@ export function SheetView({
     [sheet.currency, today, timezone, sectionsListId],
   );
 
-  // Counts over the whole sheet; each one filters.
+  // Counts over the rows the other filters leave (section, origin, fit, search, toggles):
+  // everything but the strip's own status and follow-up / no-reply filters. Each one filters.
+  const counted = useMemo(
+    () =>
+      filterRows(
+        rows,
+        { ...deferredFilters, status: "", flags: deferredFilters.flags.filter((f) => f !== "due" && f !== "no_reply") },
+        today,
+        timezone,
+      ),
+    [rows, deferredFilters, today, timezone],
+  );
   const stats = useMemo<StatItem[]>(() => {
-    const count = (stage: OpportunityStage) => rows.filter((r) => r.stage === stage).length;
-    const due = rows.filter((r) => isFollowUpDue(r, today)).length;
-    const noReply = rows.filter((r) => isNoReply(r, today, timezone)).length;
+    const count = (stage: OpportunityStage) => counted.filter((r) => r.stage === stage).length;
+    const due = counted.filter((r) => isFollowUpDue(r, today)).length;
+    const noReply = counted.filter((r) => isNoReply(r, today, timezone)).length;
     const setStatus = (stage: OpportunityStage) => () => setFilters((f) => ({ ...f, status: f.status === stage ? "" : stage }));
     const toggleFlag = (flag: "due" | "no_reply") => () =>
       setFilters((f) => ({ ...f, flags: f.flags.includes(flag) ? f.flags.filter((x) => x !== flag) : [...f.flags, flag] }));
@@ -403,7 +414,7 @@ export function SheetView({
       {
         key: "total",
         label: "Total",
-        count: rows.length,
+        count: counted.length,
         active: !filters.status && !filters.flags.includes("due") && !filters.flags.includes("no_reply"),
         onClick: () => setFilters((f) => ({ ...f, status: "", flags: f.flags.filter((x) => x !== "due" && x !== "no_reply") })),
       },
@@ -430,9 +441,9 @@ export function SheetView({
           ]
         : []),
     ];
-  }, [rows, today, timezone, filters.status, filters.flags, labelKind]);
+  }, [counted, today, timezone, filters.status, filters.flags, labelKind]);
 
-  const statusOptions = useMemo(() => sheetStages.map((s) => ({ ...s, count: rows.filter((r) => r.stage === s.value).length })), [rows, sheetStages]);
+  const statusOptions = useMemo(() => sheetStages.map((s) => ({ ...s, count: counted.filter((r) => r.stage === s.value).length })), [counted, sheetStages]);
   // The sheet's goals in GOAL_KINDS order (a filter once there are two).
   const goalOptions = useMemo(
     () =>
