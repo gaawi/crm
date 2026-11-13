@@ -43,6 +43,35 @@ export function researcherOf(profile: { researchedBy?: string | null } | null | 
   return null;
 }
 
+/** Where a row came from (opportunities.origin), in the order the Origin select lists them. */
+export const ORIGINS = [
+  { value: "josefina-2025", label: "Josefina 2025" },
+  { value: "hubspot", label: "HubSpot" },
+  { value: "musical-america", label: "Musical America" },
+  { value: "email", label: "Our email" },
+  { value: "lists-2016-2019", label: "Lists 2016-2019" },
+  { value: "research", label: "Research" },
+  { value: "other", label: "Other" },
+] as const;
+
+export function originLabel(origin: string | null | undefined): string | null {
+  if (!origin) return null;
+  return ORIGINS.find((o) => o.value === origin)?.label ?? origin;
+}
+
+/**
+ * Sections that always list in this order (booking campaigns by type);
+ * other sections follow in the order they were first used.
+ */
+export const SECTION_ORDER = [
+  "Cámara · series y sociedades",
+  "Cámara · festivales",
+  "Presentadores generales",
+  "Grandes producciones",
+  "Fuera de perfil",
+  "Por clasificar",
+];
+
 /** Section value that selects the rows without a section. */
 export const NO_SECTION = "__none";
 
@@ -58,6 +87,8 @@ export interface SheetFilters {
   flags: SheetFlag[];
   /** Booking fit of the organization: "" = all; high_medium hides low and unknown. */
   fit?: FitFilter;
+  /** Where the row came from (opportunities.origin); absent / "" = all. */
+  origin?: string;
 }
 
 export const FIT_FILTERS = [
@@ -106,6 +137,7 @@ export function sheetFiltersFromParams(params: Params): SheetFilters {
     section: read(params, "section").slice(0, 120),
     flags: [...new Set(flags)],
     ...(FIT_FILTERS.some((f) => f.value === read(params, "fit")) ? { fit: read(params, "fit") as FitFilter } : {}),
+    ...(read(params, "origin") ? { origin: read(params, "origin").slice(0, 40) } : {}),
   };
 }
 
@@ -118,6 +150,7 @@ export function sheetFiltersToQuery(filters: SheetFilters): string {
   if (filters.section) params.set("section", filters.section);
   if (filters.flags.length) params.set("flag", filters.flags.join(","));
   if (filters.fit) params.set("fit", filters.fit);
+  if (filters.origin) params.set("origin", filters.origin);
   const query = params.toString();
   return query ? `?${query}` : "";
 }
@@ -139,6 +172,8 @@ export interface FilterRow extends TimingRow {
   section: string | null;
   spaces: string | null;
   returning: boolean;
+  /** Where the row came from (opportunities.origin). */
+  origin?: string | null;
   organization: {
     name: string;
     city: string | null;
@@ -216,13 +251,14 @@ export function filterRows<T extends FilterRow>(rows: readonly T[], filters: She
       (!filters.section || (filters.section === NO_SECTION ? !row.section : row.section === filters.section)) &&
       filters.flags.every((flag) => rowHasFlag(row, flag, today, timezone)) &&
       matchesFit(row, filters.fit) &&
+      (!filters.origin || row.origin === filters.origin) &&
       rowMatchesSearch(row, filters.q),
   );
 }
 
 /**
- * Rows grouped by section, sections in the order they were first used
- * (earliest createdAt), rows keeping their order. Rows without a section come
+ * Rows grouped by section: SECTION_ORDER first, then the others in the order
+ * they were first used (earliest createdAt), rows keeping their order. Rows without a section come
  * last (section null, shown as "Other"); a sheet without any section gives
  * one group with section null.
  */
@@ -235,7 +271,13 @@ export function groupBySection<T extends { section: string | null; createdAt: st
     const seen = first.get(row.section);
     if (!seen || row.createdAt < seen) first.set(row.section, row.createdAt);
   }
-  const order = [...first.entries()].sort((a, b) => a[1].localeCompare(b[1]) || a[0].localeCompare(b[0])).map(([s]) => s);
+  const rank = (s: string) => {
+    const i = SECTION_ORDER.indexOf(s);
+    return i < 0 ? SECTION_ORDER.length : i;
+  };
+  const order = [...first.entries()]
+    .sort((a, b) => rank(a[0]) - rank(b[0]) || a[1].localeCompare(b[1]) || a[0].localeCompare(b[0]))
+    .map(([s]) => s);
   const groups = order.map((section) => ({ section: section as string | null, rows: rows.filter((r) => r.section === section) }));
   const rest = rows.filter((r) => !r.section);
   if (rest.length || !groups.length) groups.push({ section: null, rows: [...rest] });

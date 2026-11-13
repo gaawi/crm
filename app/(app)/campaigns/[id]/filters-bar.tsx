@@ -1,15 +1,15 @@
 "use client";
 
 import { Check, ListChecks, Rows3 } from "lucide-react";
-import { EMPTY_FILTERS, FIT_FILTERS, NO_SECTION, SHEET_FLAG_LABELS, type FitFilter, type SheetFilters, type SheetFlag } from "@/lib/booking/filters";
+import { EMPTY_FILTERS, FIT_FILTERS, NO_SECTION, ORIGINS, SHEET_FLAG_LABELS, type FitFilter, type SheetFilters, type SheetFlag } from "@/lib/booking/filters";
 import type { OpportunityKind, OpportunityStage } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { SearchInput } from "../../_components/ui";
 import { scrollerClass } from "./stats";
 
-/** Toggles shown as chips ("hot" still works from a link: ?flag=hot). */
-const TOGGLES: SheetFlag[] = ["vip", "near_nyc", "chamber", "josefina", "due", "no_reply", "returning", "phone", "claude", "chatgpt", "unresearched"];
-const STAT_FLAGS: SheetFlag[] = ["due", "no_reply"];
+/** The two toggles always shown as chips; the rest sit in "More filters" (and show as chips while on). */
+const TOGGLES: SheetFlag[] = ["vip", "near_nyc"];
+const MORE: SheetFlag[] = ["phone", "returning", "due", "no_reply", "claude", "chatgpt", "unresearched", "chamber", "josefina"];
 
 const pillSelect =
   "h-9 shrink-0 cursor-pointer appearance-auto rounded-full border border-border bg-surface pl-3 pr-2 text-[15px] text-fg focus:border-border-strong focus:outline-none md:h-8 md:rounded-md md:pl-2.5 md:text-sm";
@@ -49,8 +49,10 @@ export function FiltersBar({
   selectMode: boolean;
   onSelectMode: (on: boolean) => void;
 }) {
-  const filtered = Boolean(filters.q.trim() || filters.status || filters.kind || filters.section || filters.flags.length || filters.fit);
-  const toggles = filters.flags.includes("hot") ? [...TOGGLES, "hot" as const] : TOGGLES;
+  const filtered = Boolean(filters.q.trim() || filters.status || filters.kind || filters.section || filters.flags.length || filters.fit || filters.origin);
+  // Chips: the two main toggles, plus any other flag that is on (tap to turn it off).
+  const toggles = [...TOGGLES, ...filters.flags.filter((f) => !TOGGLES.includes(f))];
+  const more = MORE.filter((f) => !filters.flags.includes(f));
   const toggleFlag = (flag: SheetFlag) =>
     onChange({ ...filters, flags: filters.flags.includes(flag) ? filters.flags.filter((f) => f !== flag) : [...filters.flags, flag] });
 
@@ -65,6 +67,7 @@ export function FiltersBar({
       />
 
       <div className={cn(scrollerClass, "-mx-4 gap-2 px-4 md:mx-0 md:contents md:px-0")}>
+
         <select
           value={filters.status}
           onChange={(e) => onChange({ ...filters, status: e.currentTarget.value as OpportunityStage | "" })}
@@ -130,6 +133,21 @@ export function FiltersBar({
           ))}
         </select>
 
+        <select
+          value={filters.origin ?? ""}
+          onChange={(e) => onChange({ ...filters, origin: e.currentTarget.value })}
+          aria-label="Origin"
+          title="Where the contact came from"
+          className={cn(pillSelect, filters.origin && "border-fg/70 font-medium")}
+        >
+          <option value="">Any origin</option>
+          {ORIGINS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+
         {toggles.map((flag) => {
           const on = filters.flags.includes(flag);
           return (
@@ -140,8 +158,6 @@ export function FiltersBar({
               onClick={() => toggleFlag(flag)}
               className={cn(
                 chip,
-                // Desktop: the counts right above toggle these two already (and show when they're on).
-                STAT_FLAGS.includes(flag) && "md:hidden",
                 on ? "border-accent bg-accent font-medium text-accent-fg" : "border-border bg-surface text-fg active:bg-surface-2 md:hover:bg-surface-2",
               )}
             >
@@ -150,6 +166,25 @@ export function FiltersBar({
             </button>
           );
         })}
+
+        {more.length ? (
+          <select
+            value=""
+            onChange={(e) => {
+              const flag = e.currentTarget.value as SheetFlag;
+              if (flag) toggleFlag(flag);
+            }}
+            aria-label="More filters"
+            className={cn(pillSelect, "text-muted")}
+          >
+            <option value="">More filters</option>
+            {more.map((flag) => (
+              <option key={flag} value={flag}>
+                {SHEET_FLAG_LABELS[flag]}
+              </option>
+            ))}
+          </select>
+        ) : null}
       </div>
 
       <div className="flex min-h-9 items-center gap-3 md:ml-auto md:min-h-0">

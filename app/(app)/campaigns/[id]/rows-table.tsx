@@ -27,6 +27,7 @@ import {
   type EmailSuggestion,
   type RowActions,
   type RowContext,
+  EarlierNotes,
 } from "./row-meta";
 
 export interface RowGroup {
@@ -348,6 +349,7 @@ const TableRow = memo(function TableRow({
       </td>
       <td className="px-1 py-1.5">
         <TextCell rowId={row.id} name="notes" value={row.notes} placeholder="Notes" label="Notes" multiline rows={3} />
+        <EarlierNotes row={row} />
       </td>
       <td className="px-1.5 py-2.5">
         <PrepareEmailButton suggestion={suggestion} pending={preparing} onPrepare={() => actions.onPrepare(row)} size="compact" />

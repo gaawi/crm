@@ -6,7 +6,7 @@ import { ActivityIcon, describeLastTouch, TOUCH_TONE_CLASS } from "@/components/
 import { phoneActionClass, type PhoneActionSize } from "@/components/booking/phone-action-class";
 import { PlaceLink } from "@/components/organizations/place-link";
 import { Badge } from "@/components/ui/badge";
-import { researcherOf, type Researcher } from "@/lib/booking/filters";
+import { originLabel, researcherOf, type Researcher } from "@/lib/booking/filters";
 import { lastTouch, rowFollowUpTiming, type LastTouch } from "@/lib/booking/timing";
 import type { EmailTemplate, SheetRow } from "@/lib/booking/types";
 import { OPPORTUNITY_STAGES, stageLabel } from "@/lib/constants";
@@ -359,5 +359,22 @@ export function HistoryButton({
         </span>
       ) : null}
     </button>
+  );
+}
+
+/**
+ * Where the row came from and its earlier notes (moved out of Notes so Notes
+ * shows only the research summary), folded under one small line.
+ */
+export function EarlierNotes({ row }: { row: SheetRow }) {
+  const origin = originLabel(row.origin);
+  const history = row.notesHistory?.trim();
+  if (!origin && !history) return null;
+  if (!history) return <p className="mt-1 px-2 text-xs text-subtle">From {origin}</p>;
+  return (
+    <details className="mt-1 px-2 text-xs text-subtle">
+      <summary className="cursor-pointer select-none hover:text-muted">{origin ? `From ${origin} · earlier notes` : "Earlier notes"}</summary>
+      <p className="mt-1 max-h-40 overflow-y-auto whitespace-pre-line text-muted">{history}</p>
+    </details>
   );
 }

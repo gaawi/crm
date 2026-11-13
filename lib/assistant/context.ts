@@ -35,6 +35,10 @@ interface SheetRowCtx {
   nextStep: string | null;
   followUpAt: string | null;
   notes: string | null;
+  /** Earlier notes (old replies, dates, contact changes), kept apart from notes. */
+  notesHistory: string | null;
+  /** Where the row came from (josefina-2025, hubspot, musical-america...). */
+  origin: string | null;
   eventDates: string | null;
   section: string | null;
   organization: { name: string; city: string | null } | null;
@@ -175,7 +179,7 @@ export async function buildAssistantContext(now: Date = new Date()): Promise<Ass
       })[]
     >`
       select op.id as opportunity_id, op.title, op.kind as goal, op.stage, op.next_action, op.next_step,
-             op.follow_up_at::text as follow_up_at, op.notes, op.event_dates, op.sheet_section as section,
+             op.follow_up_at::text as follow_up_at, op.notes, op.notes_history, op.origin, op.event_dates, op.sheet_section as section,
              case when o.id is null then null else json_build_object('name', o.name, 'city', o.city) end as organization,
              case when c.id is null then null else json_build_object(
                'id', c.id, 'name', nullif(btrim(c.name), ''), 'email', e.email, 'phone', c.phone, 'whatsapp', c.whatsapp,
@@ -334,6 +338,7 @@ export async function buildAssistantContext(now: Date = new Date()): Promise<Ass
           : null,
         nextStep: clip(r.nextStep, 300),
         notes: clip(r.notes, 500),
+        notesHistory: clip(r.notesHistory, 800),
         eventDates: clip(r.eventDates, 200),
         emails: (r.emails ?? []).map((m) => ({ ...m, date: iso(m.date)!, subject: clip(m.subject, 200), snippet: clip(m.snippet, 400) })),
         activities: (r.activities ?? []).map((a) => ({ ...a, date: iso(a.date)!, note: clip(a.note, 300) })),

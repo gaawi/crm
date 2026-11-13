@@ -572,7 +572,7 @@ describe("campaign assistant API", () => {
       const [row] = await sql<{ section: string; notes: string; stage: string }[]>`
         select sheet_section as section, notes, stage from opportunities where id = ${res.results[0].opportunityId}`;
       expect(row).toEqual({
-        section: "Nuevos · de nuestro email",
+        section: "Por clasificar",
         stage: "lead",
         notes: "Origen: de nuestro email. We wrote in 2025, no answer yet.",
       });

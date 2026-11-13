@@ -30,6 +30,7 @@ import {
   type EmailSuggestion,
   type RowActions,
   type RowContext,
+  EarlierNotes,
 } from "./row-meta";
 
 const label = "px-1 text-[13px] text-muted";
@@ -270,6 +271,7 @@ export const RowCard = memo(function RowCard({
           </div>
           <CardField label="Notes">
             <TextCell rowId={row.id} name="notes" value={row.notes} placeholder="Notes" label="Notes" multiline rows={3} look="field" />
+            <EarlierNotes row={row} />
           </CardField>
           <div className="grid grid-cols-2 gap-2">
             <CardField label="Phone">

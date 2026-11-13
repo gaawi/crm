@@ -23,6 +23,9 @@ export const ROW_SOURCES = {
   research: "Nuevos · investigación",
 } as const;
 
+/** opportunities.origin for each source (sections are by type; where a row came from is its origin). */
+const SOURCE_ORIGIN: Record<keyof typeof ROW_SOURCES, string> = { email_history: "email", owner_list: "other", research: "research" };
+
 const optText = (max: number) =>
   z
     .string()
@@ -160,12 +163,13 @@ export async function applyRows(body: unknown): Promise<{ ok: true; created: num
         role: row.role,
         phone: row.phone,
         kind: (project.kind as never) ?? undefined,
-        section: row.section ?? ROW_SOURCES[row.source],
+        section: row.section ?? "Por clasificar",
         followUpAt: row.followUpAt ?? null,
         returning: row.returning ?? false,
         notes: [`Origen: ${ROW_SOURCES[row.source].replace("Nuevos · ", "")}. ${noEmDash(row.reason)}`, row.notes].filter(Boolean).join("\n\n"),
       });
-      const [created] = await sql<{ contactId: string | null }[]>`select contact_id from opportunities where id = ${opportunityId}`;
+      const [created] = await sql<{ contactId: string | null }[]>`
+        update opportunities set origin = ${SOURCE_ORIGIN[row.source]} where id = ${opportunityId} returning contact_id`;
       results.push({ index, ok: true, opportunityId, contactId: created?.contactId ?? null });
     } catch (e) {
       results.push({ index, ok: false, error: e instanceof Error ? e.message : "Could not add the row." });

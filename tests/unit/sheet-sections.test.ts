@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filterRows, sheetFiltersFromParams, sheetFiltersToQuery, EMPTY_FILTERS } from "@/lib/booking/filters";
+import { filterRows, sheetFiltersFromParams, sheetFiltersToQuery, sheetSections, EMPTY_FILTERS } from "@/lib/booking/filters";
 import { sectionSummary } from "@/lib/booking/section-summary";
 
 type Row = Parameters<typeof filterRows>[0][number];
@@ -47,5 +47,19 @@ describe("Josefina 2025 filter", () => {
   it("matches the josefina-2025 organization tag", () => {
     const r = [row("lead", ["josefina-2025"]), row("lead", [])];
     expect(filterRows(r, { ...EMPTY_FILTERS, flags: ["josefina"] }, "2026-11-13", "America/New_York").length).toBe(1);
+  });
+});
+
+describe("sections by type and origin", () => {
+  const r = (section: string | null, createdAt: string, origin: string | null = null) =>
+    ({ section, createdAt, origin }) as { section: string | null; createdAt: string; origin: string | null };
+  it("lists the type sections in a fixed order, whatever was created first", () => {
+    const rows = [r("Fuera de perfil", "2026-01-01"), r("Otra", "2026-01-02"), r("Cámara · festivales", "2026-02-01"), r("Cámara · series y sociedades", "2026-03-01")];
+    expect(sheetSections(rows)).toEqual(["Cámara · series y sociedades", "Cámara · festivales", "Fuera de perfil", "Otra"]);
+  });
+  it("reads and writes origin in the URL", () => {
+    const f = sheetFiltersFromParams(new URLSearchParams("origin=hubspot"));
+    expect(f.origin).toBe("hubspot");
+    expect(sheetFiltersToQuery(f)).toBe("?origin=hubspot");
   });
 });

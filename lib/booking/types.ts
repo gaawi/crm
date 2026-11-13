@@ -105,6 +105,10 @@ export interface SheetRow {
   spaces: string | null;
   /** Worked together before. */
   returning: boolean;
+  /** Where the row came from: josefina-2025, hubspot, musical-america, email, lists-2016-2019, research, other. */
+  origin?: string | null;
+  /** Earlier notes, moved out of notes so notes only holds the research summary. */
+  notesHistory?: string | null;
   createdAt: string;
   updatedAt: string;
   /** profile: what Claude or the owner wrote about the organization (null = none yet). */

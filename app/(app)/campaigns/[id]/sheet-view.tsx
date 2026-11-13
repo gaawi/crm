@@ -407,22 +407,28 @@ export function SheetView({
         active: !filters.status && !filters.flags.includes("due") && !filters.flags.includes("no_reply"),
         onClick: () => setFilters((f) => ({ ...f, status: "", flags: f.flags.filter((x) => x !== "due" && x !== "no_reply") })),
       },
-      ...stage("lead"),
-      ...stage("contacted"),
-      // Not in the old tracker; shown once a row is in it, so the counts add up.
+      // Only the stages that have rows (or are the active filter): fewer, clearer numbers.
+      ...stage("lead", false),
+      ...stage("contacted", false),
       ...stage("proposal", false),
-      ...stage("negotiation"),
-      ...stage("won"),
-      ...stage("lost"),
-      { key: "due", label: "Follow-ups due", count: due, tone: "danger", active: filters.flags.includes("due"), onClick: toggleFlag("due") },
-      {
-        key: "no_reply",
-        label: "No reply",
-        count: noReply,
-        tone: "warning",
-        active: filters.flags.includes("no_reply"),
-        onClick: toggleFlag("no_reply"),
-      },
+      ...stage("negotiation", false),
+      ...stage("won", false),
+      ...stage("lost", false),
+      ...(due || filters.flags.includes("due")
+        ? [{ key: "due", label: "Follow-ups due", count: due, tone: "danger" as const, active: filters.flags.includes("due"), onClick: toggleFlag("due") }]
+        : []),
+      ...(noReply || filters.flags.includes("no_reply")
+        ? [
+            {
+              key: "no_reply",
+              label: "No reply",
+              count: noReply,
+              tone: "warning" as const,
+              active: filters.flags.includes("no_reply"),
+              onClick: toggleFlag("no_reply"),
+            },
+          ]
+        : []),
     ];
   }, [rows, today, timezone, filters.status, filters.flags, labelKind]);
 
