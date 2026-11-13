@@ -8,13 +8,13 @@ import { phoneDigits } from "@/lib/booking/phone";
 import { isFollowUpDue, isNoReply, type TimingRow } from "@/lib/booking/timing";
 import type { OpportunityKind, OpportunityStage } from "@/lib/types";
 
-export const SHEET_FLAGS = ["due", "no_reply", "returning", "phone", "hot", "vip", "near_nyc", "chamber", "claude", "chatgpt", "unresearched"] as const;
+export const SHEET_FLAGS = ["due", "no_reply", "returning", "phone", "hot", "vip", "near_nyc", "chamber", "josefina", "claude", "chatgpt", "unresearched"] as const;
 /**
  * due = follow-up due; no_reply = waiting > 10 days; hot = In conversation;
  * claude / chatgpt = the organization's profile was researched by that
  * assistant (profile.researchedBy); unresearched = no profile research yet;
- * vip / near_nyc / chamber = organization tags vip, nyc-under-5h,
- * chamber-specialist.
+ * vip / near_nyc / chamber / josefina = organization tags vip, nyc-under-5h,
+ * chamber-specialist, josefina-2025 (on Josefina's 2025 booking sheet).
  */
 export type SheetFlag = (typeof SHEET_FLAGS)[number];
 
@@ -27,6 +27,7 @@ export const SHEET_FLAG_LABELS: Record<SheetFlag, string> = {
   vip: "VIP",
   near_nyc: "< 5 h from NYC",
   chamber: "Chamber specialists",
+  josefina: "Josefina 2025",
   claude: "Researched by Claude",
   chatgpt: "Researched by ChatGPT",
   unresearched: "Not researched",
@@ -202,6 +203,8 @@ export function rowHasFlag(row: FilterRow, flag: SheetFlag, today: string, timez
       return Boolean(row.organization?.tags?.includes("nyc-under-5h"));
     case "chamber":
       return Boolean(row.organization?.tags?.includes("chamber-specialist"));
+    case "josefina":
+      return Boolean(row.organization?.tags?.includes("josefina-2025"));
   }
 }
 

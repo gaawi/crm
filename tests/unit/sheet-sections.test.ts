@@ -42,3 +42,10 @@ describe("sheet sections and organization filters", () => {
     expect(sheetFiltersToQuery(parsed)).toBe("?flag=vip%2Cnear_nyc&fit=high_medium");
   });
 });
+
+describe("Josefina 2025 filter", () => {
+  it("matches the josefina-2025 organization tag", () => {
+    const r = [row("lead", ["josefina-2025"]), row("lead", [])];
+    expect(filterRows(r, { ...EMPTY_FILTERS, flags: ["josefina"] }, "2026-11-13", "America/New_York").length).toBe(1);
+  });
+});

@@ -8,7 +8,7 @@ import { SearchInput } from "../../_components/ui";
 import { scrollerClass } from "./stats";
 
 /** Toggles shown as chips ("hot" still works from a link: ?flag=hot). */
-const TOGGLES: SheetFlag[] = ["vip", "near_nyc", "chamber", "due", "no_reply", "returning", "phone", "claude", "chatgpt", "unresearched"];
+const TOGGLES: SheetFlag[] = ["vip", "near_nyc", "chamber", "josefina", "due", "no_reply", "returning", "phone", "claude", "chatgpt", "unresearched"];
 const STAT_FLAGS: SheetFlag[] = ["due", "no_reply"];
 
 const pillSelect =
