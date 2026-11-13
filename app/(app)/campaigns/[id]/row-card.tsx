@@ -108,8 +108,8 @@ export const RowCard = memo(function RowCard({
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-1.5">
             <span className="truncate text-[15px] font-semibold">{name}</span>
-            <RowBadges row={row} iconOnly />
           </div>
+          <RowBadges row={row} className="mt-0.5" />
           <div className="mt-0.5 flex min-w-0 items-center gap-1.5">
             <StageBadge stage={row.stage} label={stageLabel(row.stage, row.kind)} />
             {row.nextAction ? (

@@ -120,7 +120,13 @@ export function RowBadges({
     );
   }
   return (
-    <span className={cn("inline-flex flex-wrap items-center gap-1", className)}>
+    // Small, on their own line under the name.
+    <span
+      className={cn(
+        "flex w-full flex-wrap items-center gap-0.5 [&>span]:h-4 [&>span]:gap-0.5 [&>span]:px-1 [&>span]:text-[10px] [&_svg]:size-2.5",
+        className,
+      )}
+    >
       {tags.map((t) => (
         <Badge key={t.tag} className={t.badge} title={t.title}>
           <t.icon className="size-3" strokeWidth={2} aria-hidden />
