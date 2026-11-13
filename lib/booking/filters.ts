@@ -65,12 +65,12 @@ export function originLabel(origin: string | null | undefined): string | null {
  * other sections follow in the order they were first used.
  */
 export const SECTION_ORDER = [
-  "Cámara · series y sociedades",
-  "Cámara · festivales",
-  "Presentadores generales",
-  "Grandes producciones",
-  "Fuera de perfil",
-  "Por clasificar",
+  "Chamber · series & societies",
+  "Chamber · festivals",
+  "General presenters",
+  "Large productions",
+  "Out of profile",
+  "To classify",
 ];
 
 /** Section value that selects the rows without a section. */

@@ -163,7 +163,7 @@ export async function applyRows(body: unknown): Promise<{ ok: true; created: num
         role: row.role,
         phone: row.phone,
         kind: (project.kind as never) ?? undefined,
-        section: row.section ?? "Por clasificar",
+        section: row.section ?? "To classify",
         followUpAt: row.followUpAt ?? null,
         returning: row.returning ?? false,
         notes: [`Origen: ${ROW_SOURCES[row.source].replace("Nuevos · ", "")}. ${noEmDash(row.reason)}`, row.notes].filter(Boolean).join("\n\n"),

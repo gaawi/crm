@@ -475,11 +475,8 @@ export function SheetView({
 
   return (
     <div className={cn(bulkVisible && "pb-48 md:pb-28")}>
-      {/* Phones: only the counts stick (the wrapper is display: contents). Desktop: counts and filters stick together. */}
+      {/* Phones: only the counts stick (the wrapper is display: contents). Desktop: filters and counts stick together. */}
       <div className="contents md:sticky md:top-0 md:z-20 md:-mx-8 md:mb-3 md:block md:border-b md:border-border md:bg-bg/90 md:px-8 md:py-2 md:backdrop-blur-xl">
-        <div className="sticky top-0 z-20 -mx-4 mb-3 border-b border-border bg-bg/90 px-4 pt-[env(safe-area-inset-top)] backdrop-blur-xl md:static md:mx-0 md:mb-0 md:border-0 md:bg-transparent md:px-0 md:pt-0 md:backdrop-blur-none">
-          <StatsStrip items={stats} />
-        </div>
         <FiltersBar
           filters={filters}
           onChange={setFilters}
@@ -498,6 +495,10 @@ export function SheetView({
             if (!on) setSelected(new Set());
           }}
         />
+        {/* The counts sit under the filters and count what they leave. */}
+        <div className="sticky top-0 z-20 -mx-4 mb-3 border-b border-border bg-bg/90 px-4 pt-[env(safe-area-inset-top)] backdrop-blur-xl md:static md:mx-0 md:mb-0 md:border-0 md:bg-transparent md:px-0 md:mt-2 md:pt-0 md:backdrop-blur-none">
+          <StatsStrip items={stats} />
+        </div>
       </div>
 
       <ConfirmedStrip rows={confirmed} label={stageLabel("won", labelKind)} />

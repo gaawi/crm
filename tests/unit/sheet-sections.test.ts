@@ -54,8 +54,8 @@ describe("sections by type and origin", () => {
   const r = (section: string | null, createdAt: string, origin: string | null = null) =>
     ({ section, createdAt, origin }) as { section: string | null; createdAt: string; origin: string | null };
   it("lists the type sections in a fixed order, whatever was created first", () => {
-    const rows = [r("Fuera de perfil", "2026-01-01"), r("Otra", "2026-01-02"), r("Cámara · festivales", "2026-02-01"), r("Cámara · series y sociedades", "2026-03-01")];
-    expect(sheetSections(rows)).toEqual(["Cámara · series y sociedades", "Cámara · festivales", "Fuera de perfil", "Otra"]);
+    const rows = [r("Out of profile", "2026-01-01"), r("Otra", "2026-01-02"), r("Chamber · festivals", "2026-02-01"), r("Chamber · series & societies", "2026-03-01")];
+    expect(sheetSections(rows)).toEqual(["Chamber · series & societies", "Chamber · festivals", "Out of profile", "Otra"]);
   });
   it("reads and writes origin in the URL", () => {
     const f = sheetFiltersFromParams(new URLSearchParams("origin=hubspot"));
