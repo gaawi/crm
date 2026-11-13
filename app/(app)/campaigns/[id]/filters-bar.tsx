@@ -23,6 +23,7 @@ export function FiltersBar({
   statusOptions,
   goalOptions,
   sections,
+  sectionCounts,
   hasUnsectioned,
   shown,
   total,
@@ -37,6 +38,8 @@ export function FiltersBar({
   /** The sheet's goals with their counts: a goal select when there are two or more. */
   goalOptions: { value: OpportunityKind; label: string; count: number }[];
   sections: string[];
+  /** Rows per section over the whole sheet ("" = rows without a section). */
+  sectionCounts?: ReadonlyMap<string, number>;
   /** Some rows have no section (offers "No section"). */
   hasUnsectioned: boolean;
   shown: number;
@@ -99,13 +102,16 @@ export function FiltersBar({
             aria-label="Section"
             className={cn(pillSelect, "max-w-[14rem]", filters.section && "border-fg/70 font-medium")}
           >
-            <option value="">All sections</option>
+            <option value="">All sections{sectionCounts ? ` (${[...sectionCounts.values()].reduce((a, b) => a + b, 0)})` : ""}</option>
             {sections.map((s) => (
               <option key={s} value={s}>
                 {s}
+                {sectionCounts?.has(s) ? ` (${sectionCounts.get(s)})` : ""}
               </option>
             ))}
-            {hasUnsectioned ? <option value={NO_SECTION}>No section</option> : null}
+            {hasUnsectioned ? (
+              <option value={NO_SECTION}>No section{sectionCounts?.has("") ? ` (${sectionCounts.get("")})` : ""}</option>
+            ) : null}
           </select>
         ) : null}
 

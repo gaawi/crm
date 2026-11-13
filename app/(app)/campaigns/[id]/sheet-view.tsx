@@ -198,6 +198,12 @@ export function SheetView({
 
   const sections = useMemo(() => sheetSections(rows), [rows]);
   const hasUnsectioned = useMemo(() => sections.length > 0 && rows.some((r) => !r.section), [rows, sections]);
+  // Rows per section over the whole sheet, for the section select ("Listas · 1 ya tocamos (11)").
+  const sectionCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const r of rows) counts.set(r.section ?? "", (counts.get(r.section ?? "") ?? 0) + 1);
+    return counts;
+  }, [rows]);
   const visible = useMemo(() => filterRows(rows, deferredFilters, today, timezone), [rows, deferredFilters, today, timezone]);
   const [collapsed, toggleCollapsed, setAllCollapsed] = useCollapsedSections(sheet.id);
   const groups = useMemo<RowGroup[]>(
@@ -463,6 +469,7 @@ export function SheetView({
           statusOptions={statusOptions}
           goalOptions={goalOptions}
           sections={sections}
+          sectionCounts={sectionCounts}
           hasUnsectioned={hasUnsectioned}
           shown={visible.length}
           total={rows.length}
