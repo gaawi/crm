@@ -60,6 +60,28 @@ export interface RowContext {
   timezone: string;
   /** id of the sections <datalist>. */
   sectionsListId: string;
+  /** The sheet mixes goals (show each row's goal). */
+  multiGoal?: boolean;
+}
+
+/** "Played here: Dover Quartet, Escher Quartet +3" from the research (profile.artists), names in bold. */
+export function PlayedHere({ row, max = 3, className }: { row: Pick<SheetRow, "organization">; max?: number; className?: string }) {
+  const artists = row.organization?.profile?.artists ?? [];
+  if (!artists.length) return null;
+  const shown = artists.slice(0, max);
+  const all = artists.map((a) => [a.name, a.formation, a.date].filter(Boolean).join(" · ")).join("\n");
+  return (
+    <p className={cn("truncate text-xs text-muted", className)} title={all}>
+      Played here:{" "}
+      {shown.map((a, i) => (
+        <span key={i}>
+          {i ? ", " : null}
+          <span className="font-semibold text-fg">{a.name}</span>
+        </span>
+      ))}
+      {artists.length > max ? <span className="text-subtle"> +{artists.length - max}</span> : null}
+    </p>
+  );
 }
 
 export function venueName(row: Pick<SheetRow, "organization" | "title">): string {
@@ -102,7 +124,7 @@ export function RowBadges({
 }) {
   const researcher = researcherOf(row.organization?.profile);
   const tags = ORG_TAG_BADGES.filter((t) => row.organization?.tags?.includes(t.tag));
-  if (!row.returning && row.stage !== "negotiation" && !researcher && !tags.length) return null;
+  if (!row.returning && !researcher && !tags.length && !(iconOnly && row.stage === "negotiation")) return null;
   if (iconOnly) {
     return (
       <span className={cn("inline-flex shrink-0 items-center gap-1", className)}>
@@ -139,17 +161,8 @@ export function RowBadges({
           Returning
         </Badge>
       ) : null}
-      {row.stage === "negotiation" ? (
-        <Badge className="bg-orange-50 text-orange-800 dark:bg-orange-950 dark:text-orange-300" title="In conversation">
-          <Flame className="size-3" strokeWidth={2} aria-hidden />
-          Hot
-        </Badge>
-      ) : null}
       {researcher ? (
-        <Badge className={RESEARCHER_BADGE[researcher]} title={RESEARCHER_LABEL[researcher]}>
-          <Sparkles className="size-3" strokeWidth={2} aria-hidden />
-          {researcher === "claude" ? "Claude" : "ChatGPT"}
-        </Badge>
+        <Sparkles className={cn("ml-0.5", RESEARCHER_ICON[researcher])} strokeWidth={2} aria-label={RESEARCHER_LABEL[researcher]} />
       ) : null}
     </span>
   );
@@ -158,10 +171,6 @@ export function RowBadges({
 const RESEARCHER_LABEL: Record<Researcher, string> = {
   claude: "Organization researched by Claude",
   chatgpt: "Organization researched by ChatGPT",
-};
-const RESEARCHER_BADGE: Record<Researcher, string> = {
-  claude: "bg-orange-50 text-orange-800 dark:bg-orange-950 dark:text-orange-300",
-  chatgpt: "bg-teal-50 text-teal-800 dark:bg-teal-950 dark:text-teal-300",
 };
 const RESEARCHER_ICON: Record<Researcher, string> = {
   claude: "text-orange-600 dark:text-orange-400",

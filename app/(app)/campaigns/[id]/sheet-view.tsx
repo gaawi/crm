@@ -373,8 +373,8 @@ export function SheetView({
   };
 
   const ctx = useMemo<RowContext>(
-    () => ({ currency: sheet.currency, today, timezone, sectionsListId }),
-    [sheet.currency, today, timezone, sectionsListId],
+    () => ({ currency: sheet.currency, today, timezone, sectionsListId, multiGoal: new Set(rows.map((r) => r.kind)).size > 1 }),
+    [sheet.currency, today, timezone, sectionsListId, rows],
   );
 
   // Counts over the rows the other filters leave (section, origin, fit, search, toggles):

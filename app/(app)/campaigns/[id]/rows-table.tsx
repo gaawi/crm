@@ -13,7 +13,7 @@ import { isFollowUpDue, isOpenStage } from "@/lib/booking/timing";
 import type { SheetRow } from "@/lib/booking/types";
 import { deciderOf, flagBorderClass, personFlags } from "@/lib/organizations/people";
 import { cn } from "@/lib/utils";
-import { DateCell, DeleteRowButton, KindCell, NextActionCell, StageCell, TextCell } from "./cells";
+import { DateCell, DeleteRowButton, KindCell, StageCell, TextCell } from "./cells";
 import {
   RowPlace,
   HistoryButton,
@@ -28,6 +28,7 @@ import {
   type RowActions,
   type RowContext,
   EarlierNotes,
+  PlayedHere,
 } from "./row-meta";
 
 export interface RowGroup {
@@ -103,14 +104,12 @@ export function RowsTable({
   return (
     <div className="hidden overflow-x-auto rounded-lg border border-border bg-surface md:block">
       <table className="w-full min-w-[60rem] table-fixed border-collapse text-sm">
-        {/* 876px fixed + notes: fits the 992px a 1280px window leaves (sidebar and padding). */}
+        {/* Fixed columns + notes: fits the 992px a 1280px window leaves (sidebar and padding). */}
         <colgroup>
           <col className="w-8" />
           <col className="w-[9rem]" />
           <col className="w-[11rem]" />
           <col className="w-[9.25rem]" />
-          <col className="w-[9.5rem]" />
-          <col className="w-[6.5rem]" />
           <col />
           <col className="w-[7.5rem]" />
         </colgroup>
@@ -126,11 +125,7 @@ export function RowsTable({
             </th>
             <th className="px-3 py-2 font-medium">Organization</th>
             <th className="px-3 py-2 font-medium">Contact · last touch</th>
-            <th className="px-1 py-2 font-medium">Status · goal</th>
-            <th className="px-1 py-2 font-medium">Next step · due</th>
-            <th className="whitespace-nowrap px-1 py-2 font-medium" title={`Fee in ${ctx.currency}`}>
-              Dates · fee <span className="font-normal">{ctx.currency}</span>
-            </th>
+            <th className="px-1 py-2 font-medium">Status · follow up</th>
             <th className="px-1 py-2 font-medium">Notes</th>
             <th className="px-2 py-2 font-medium">
               <span className="sr-only">Actions</span>
@@ -152,7 +147,7 @@ export function RowsTable({
                       onChange={(on) => onSelectMany(ids, on)}
                     />
                   </th>
-                  <th colSpan={7} scope="colgroup" className="px-3 py-1.5 text-left text-xs text-muted">
+                  <th colSpan={5} scope="colgroup" className="px-3 py-1.5 text-left text-xs text-muted">
                     <SectionToggle group={group} />
                   </th>
                 </tr>
@@ -170,7 +165,7 @@ export function RowsTable({
               ))}
               {!group.collapsed && shownRows(group).length < group.rows.length ? (
                 <tr>
-                  <td colSpan={8} className="px-3 py-2">
+                  <td colSpan={6} className="px-3 py-2">
                     <ShowMoreButton hidden={group.rows.length - shownRows(group).length} onClick={group.onShowAll} />
                   </td>
                 </tr>
@@ -292,16 +287,11 @@ const TableRow = memo(function TableRow({
                 {c.displayName}
               </Link>
             </span>
-            <PersonFlagBadges flags={flags} className="mt-0.5 flex items-center gap-1" />
+            <PersonFlagBadges flags={flags} className="mt-0.5 flex items-center gap-0.5 [&>span]:h-4 [&>span]:px-1 [&>span]:text-[10px]" />
             {c.role ? (
               <p className="truncate text-xs text-muted" title={c.role}>
                 {c.role}
               </p>
-            ) : null}
-            {c.email && c.email !== c.displayName ? (
-              <a href={`mailto:${c.email}`} className="block truncate text-xs text-subtle hover:text-fg" title={c.email}>
-                {c.email}
-              </a>
             ) : null}
             {phone ? (
               <div className="-ml-1 mt-0.5 flex min-w-0 items-center gap-0.5">
@@ -329,26 +319,12 @@ const TableRow = memo(function TableRow({
       </td>
       <td className="px-1 py-1.5">
         <StageCell rowId={row.id} value={row.stage} options={stageOptions(row.kind)} />
-        <KindCell rowId={row.id} value={row.kind} />
-      </td>
-      <td className="px-1 py-1.5">
-        <NextActionCell rowId={row.id} value={row.nextAction} />
-        <TextCell rowId={row.id} name="nextStep" value={row.nextStep} placeholder="Detail" label="Next step detail" />
-        <DateCell rowId={row.id} value={row.followUpAt} overdue={isFollowUpDue(row, ctx.today)} />
-      </td>
-      <td className="px-1 py-1.5">
-        <TextCell rowId={row.id} name="eventDates" value={row.eventDates} placeholder="Dates" label="Dates" />
-        <TextCell
-          rowId={row.id}
-          name="fee"
-          value={row.value ? String(Number(row.value)) : null}
-          placeholder="Fee"
-          label={`Fee (${ctx.currency})`}
-          inputMode="decimal"
-        />
+        {ctx.multiGoal ? <KindCell rowId={row.id} value={row.kind} /> : null}
+        <DateCell rowId={row.id} value={row.followUpAt} overdue={isFollowUpDue(row, ctx.today)} className="text-xs" />
       </td>
       <td className="px-1 py-1.5">
         <TextCell rowId={row.id} name="notes" value={row.notes} placeholder="Notes" label="Notes" multiline rows={3} />
+        <PlayedHere row={row} className="mt-0.5 px-2" />
         <EarlierNotes row={row} />
       </td>
       <td className="px-1.5 py-2.5">

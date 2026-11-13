@@ -16,7 +16,7 @@ import { isFollowUpDue } from "@/lib/booking/timing";
 import type { SheetRow } from "@/lib/booking/types";
 import { nextActionLabel, stageLabel } from "@/lib/constants";
 import { cn } from "@/lib/utils";
-import { DateCell, DeleteRowButton, KindCell, NextActionCell, ReturningCell, StageCell, TextCell } from "./cells";
+import { DateCell, DeleteRowButton, KindCell, ReturningCell, StageCell, TextCell } from "./cells";
 import {
   HistoryButton,
   LastTouchLine,
@@ -31,6 +31,7 @@ import {
   type RowActions,
   type RowContext,
   EarlierNotes,
+  PlayedHere,
 } from "./row-meta";
 
 const label = "px-1 text-[13px] text-muted";
@@ -230,33 +231,19 @@ export const RowCard = memo(function RowCard({
       <div className="grid grid-cols-2 gap-2 px-3 pb-3 pt-3">
         <StageCell rowId={row.id} value={row.stage} options={stageOptions(row.kind)} look="field" />
         <DateCell rowId={row.id} value={row.followUpAt} overdue={isFollowUpDue(row, ctx.today)} look="field" />
-        <NextActionCell rowId={row.id} value={row.nextAction} look="field" className="col-span-2" />
       </div>
 
       <details className="group border-t border-border">
         <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-4 text-[15px] text-fg active:bg-surface-2 [&::-webkit-details-marker]:hidden">
           <span className="shrink-0 font-medium">Details</span>
-          <span className="min-w-0 flex-1 truncate text-[13px] text-muted">{[row.nextStep, row.eventDates].filter(Boolean).join(" · ")}</span>
+          <span className="min-w-0 flex-1" />
           <ChevronRight className="size-4 shrink-0 text-subtle transition-transform group-open:rotate-90" strokeWidth={2} />
         </summary>
         <div className="flex flex-col gap-3 px-3 pb-4 pt-1">
-          <CardField label="Next step detail">
-            <TextCell
-              rowId={row.id}
-              name="nextStep"
-              value={row.nextStep}
-              placeholder="Ask for Ana, the season's dates…"
-              label="Next step detail"
-              look="field"
-            />
-          </CardField>
           <CardField label="Goal">
             <KindCell rowId={row.id} value={row.kind} look="field" />
           </CardField>
           <div className="grid grid-cols-2 gap-2">
-            <CardField label="Dates">
-              <TextCell rowId={row.id} name="eventDates" value={row.eventDates} placeholder="Spring 2027" label="Dates" look="field" />
-            </CardField>
             <CardField label={`Fee (${ctx.currency})`}>
               <TextCell
                 rowId={row.id}
@@ -271,6 +258,7 @@ export const RowCard = memo(function RowCard({
           </div>
           <CardField label="Notes">
             <TextCell rowId={row.id} name="notes" value={row.notes} placeholder="Notes" label="Notes" multiline rows={3} look="field" />
+            <PlayedHere row={row} className="mt-1 px-2" />
             <EarlierNotes row={row} />
           </CardField>
           <div className="grid grid-cols-2 gap-2">
