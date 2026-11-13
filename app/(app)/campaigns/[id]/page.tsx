@@ -51,9 +51,10 @@ export default async function CampaignPage({ params, searchParams }: PageProps<"
   return (
     <div
       data-fullbleed
-      className="mx-auto w-full max-w-[1500px] px-4 pb-[calc(env(safe-area-inset-bottom)+5.5rem)] pt-[calc(env(safe-area-inset-top)+1rem)] md:px-8 md:py-8"
+      className="mx-auto w-full max-w-[1500px] px-4 pb-[calc(env(safe-area-inset-bottom)+5.5rem)] pt-[calc(env(safe-area-inset-top)+0.5rem)] md:px-8 md:pb-8 md:pt-4"
     >
       <PageHeader
+        compact
         back={{ href: "/campaigns", label: "Campaigns" }}
         title={sheet.name}
         description={
@@ -96,7 +97,7 @@ export default async function CampaignPage({ params, searchParams }: PageProps<"
       <Segmented
         label="Campaign views"
         fill={false}
-        className="mb-4 md:mb-5"
+        className="mb-2 md:mb-3"
         segments={[
           { href: `/campaigns/${sheet.id}`, label: "Contacts", active: tab === "sheet", count: rows.length },
           { href: `/campaigns/${sheet.id}?tab=next`, label: "Next actions", active: tab === "next", count: nextCount || undefined },

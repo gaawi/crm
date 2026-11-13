@@ -13,6 +13,7 @@ export function PageHeader({
   actions,
   back,
   children,
+  compact = false,
 }: {
   title: ReactNode;
   description?: ReactNode;
@@ -20,7 +21,35 @@ export function PageHeader({
   /** Parent screen, e.g. { href: "/contacts", label: "Contacts" }. */
   back?: { href: string; label: string };
   children?: ReactNode;
+  /** One short row: back chevron and title on the same line, the description as a tooltip only. */
+  compact?: boolean;
 }) {
+  if (compact) {
+    return (
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-1">
+          {back ? (
+            <Link
+              href={back.href}
+              aria-label={back.label}
+              title={back.label}
+              className="-ml-1.5 flex size-9 shrink-0 items-center justify-center rounded-full text-fg/80 active:opacity-60 md:size-7 md:text-muted md:hover:text-fg"
+            >
+              <ChevronLeft className="size-6 md:size-5" strokeWidth={2} />
+            </Link>
+          ) : null}
+          <h1
+            className="truncate text-[22px] font-bold leading-tight tracking-tight text-fg md:text-lg md:font-semibold"
+            title={typeof description === "string" ? description : undefined}
+          >
+            {title}
+          </h1>
+        </div>
+        {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
+        {children}
+      </div>
+    );
+  }
   return (
     <div className="mb-6 flex flex-col gap-3">
       {back ? (

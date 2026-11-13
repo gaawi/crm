@@ -158,8 +158,8 @@ export const RowCard = memo(function RowCard({
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             {title}
             {row.kind !== "booking" ? <GoalBadge kind={row.kind} /> : null}
-            <RowBadges row={row} />
           </div>
+          <RowBadges row={row} className="mt-1 flex" />
           {row.organization?.profile && !selectMode ? (
             <OrgProfileLine
               profile={row.organization.profile}

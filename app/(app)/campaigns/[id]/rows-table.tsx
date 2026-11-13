@@ -40,7 +40,7 @@ export interface RowGroup {
   /** Folded: only the header and its summary show. */
   collapsed?: boolean;
   onToggle?: () => void;
-  /** What the section holds, one line (statuses, VIP, fit). */
+  /** What the section holds, one line (statuses, prestigious, fit). */
   summary?: string;
 }
 

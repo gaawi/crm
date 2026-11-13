@@ -16,15 +16,15 @@ const row = (stage: string, tags: string[], fit?: string) =>
     organization: { name: "Org", city: null, tags, profile: fit ? { booking: { fit } } : null },
   }) as unknown as Row;
 
-const rows = [row("lead", ["vip", "chamber-specialist"], "high"), row("lead", ["nyc-under-5h"], "medium"), row("contacted", [], "low"), row("lead", [])];
+const rows = [row("lead", ["prestigious", "chamber-specialist"], "high"), row("lead", ["nyc-under-5h"], "medium"), row("contacted", [], "low"), row("lead", [])];
 
 describe("sheet sections and organization filters", () => {
   it("summarizes a section", () => {
     const label = (s: string) => (s === "lead" ? "To contact" : s === "contacted" ? "Contacted" : s);
-    expect(sectionSummary(rows as never, label as never)).toBe("3 to contact · 1 contacted · 1 VIP · 1 high fit · 1 < 5 h NYC");
+    expect(sectionSummary(rows as never, label as never)).toBe("3 to contact · 1 contacted · 1 prestigious · 1 high fit · 1 < 5 h NYC");
   });
 
-  it("filters VIP, near NYC and chamber specialists", () => {
+  it("filters prestigious, near NYC and chamber specialists", () => {
     const f = (flags: string) => filterRows(rows, { ...EMPTY_FILTERS, flags: flags.split(",") as never }, "2026-11-12", "America/New_York").length;
     expect(f("vip")).toBe(1);
     expect(f("near_nyc")).toBe(1);

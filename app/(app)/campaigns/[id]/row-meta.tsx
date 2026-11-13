@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowDownLeft, ArrowUpRight, Clock, Flame, History, Loader2, Mail, MailCheck, RotateCcw, Sparkles } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Car, CircleSlash, Clock, Flame, History, Loader2, Mail, MailCheck, RotateCcw, Sparkles, Star } from "lucide-react";
 import { ActivityIcon, describeLastTouch, TOUCH_TONE_CLASS } from "@/components/booking/activity-meta";
 import { phoneActionClass, type PhoneActionSize } from "@/components/booking/phone-action-class";
 import { PlaceLink } from "@/components/organizations/place-link";
@@ -79,7 +79,18 @@ export function rowSubject(row: Pick<SheetRow, "organization" | "title" | "conta
   return [row.contact?.displayName, venueName(row)].filter(Boolean).join(" · ");
 }
 
-/** Returning (worked together before) and Hot (In conversation). `iconOnly`: just the icons (compact cards). */
+/** Organization tags shown on a row, each with its own color and icon. */
+const ORG_TAG_BADGES = [
+  { tag: "prestigious", label: "Prestigious", title: "A place we really want to play", icon: Star, badge: "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300", iconColor: "text-amber-500" },
+  { tag: "nyc-under-5h", label: "< 5 h NYC", title: "About 5 hours or less by car from New York", icon: Car, badge: "bg-sky-50 text-sky-800 dark:bg-sky-950 dark:text-sky-300", iconColor: "text-sky-600 dark:text-sky-400" },
+  { tag: "closed", label: "Closed", title: "No longer presents", icon: CircleSlash, badge: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300", iconColor: "text-zinc-500" },
+] as const;
+
+/**
+ * The row's tags, in color: Prestigious, < 5 h NYC, Closed, Returning (worked
+ * together before), Hot (In conversation) and who researched it. Shown under
+ * the name. `iconOnly`: just the icons (compact cards).
+ */
 export function RowBadges({
   row,
   iconOnly = false,
@@ -90,10 +101,14 @@ export function RowBadges({
   className?: string;
 }) {
   const researcher = researcherOf(row.organization?.profile);
-  if (!row.returning && row.stage !== "negotiation" && !researcher) return null;
+  const tags = ORG_TAG_BADGES.filter((t) => row.organization?.tags?.includes(t.tag));
+  if (!row.returning && row.stage !== "negotiation" && !researcher && !tags.length) return null;
   if (iconOnly) {
     return (
       <span className={cn("inline-flex shrink-0 items-center gap-1", className)}>
+        {tags.map((t) => (
+          <t.icon key={t.tag} className={cn("size-3.5", t.iconColor)} strokeWidth={2} aria-label={t.label} />
+        ))}
         {row.returning ? (
           <RotateCcw className="size-3.5 text-violet-600 dark:text-violet-400" strokeWidth={2} aria-label="Returning" />
         ) : null}
@@ -106,6 +121,12 @@ export function RowBadges({
   }
   return (
     <span className={cn("inline-flex flex-wrap items-center gap-1", className)}>
+      {tags.map((t) => (
+        <Badge key={t.tag} className={t.badge} title={t.title}>
+          <t.icon className="size-3" strokeWidth={2} aria-hidden />
+          {t.label}
+        </Badge>
+      ))}
       {row.returning ? (
         <Badge className="bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-300" title="Worked with us before">
           <RotateCcw className="size-3" strokeWidth={2} aria-hidden />
@@ -113,7 +134,7 @@ export function RowBadges({
         </Badge>
       ) : null}
       {row.stage === "negotiation" ? (
-        <Badge className="bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-300" title="In conversation">
+        <Badge className="bg-orange-50 text-orange-800 dark:bg-orange-950 dark:text-orange-300" title="In conversation">
           <Flame className="size-3" strokeWidth={2} aria-hidden />
           Hot
         </Badge>
