@@ -25,6 +25,28 @@ export interface LastReply {
   ours: LastReplyMessage | null;
 }
 
+/**
+ * Undo the hard line breaks of plain-text email (lines cut at about 72-78
+ * characters): a long line that runs into a next line of the same paragraph
+ * is joined with a space. Short lines (greetings, signatures) and list items
+ * keep their breaks.
+ */
+export function unwrap(text: string): string {
+  const lines = text.split("\n");
+  const out: string[] = [];
+  for (const line of lines) {
+    const prev = out.at(-1);
+    const joins =
+      prev !== undefined &&
+      prev.trimEnd().length >= 55 &&
+      line.trim() !== "" &&
+      !/^\s*([-*•>]|\d+[.)]\s)/.test(line);
+    if (joins) out[out.length - 1] = `${prev.trimEnd()} ${line.trim()}`;
+    else out.push(line);
+  }
+  return out.join("\n");
+}
+
 /** Cut the quoted history ("On … wrote:", "> …", "-----Original Message-----"…) and signatures-ish noise. */
 export function newPart(body: string | null | undefined, max = 900): string {
   const text = (body ?? "").replace(/\r/g, "");
@@ -43,7 +65,7 @@ export function newPart(body: string | null | undefined, max = 900): string {
     const m = re.exec(text);
     if (m && m.index < end) end = m.index;
   }
-  const clean = text.slice(0, end).replace(/\n{3,}/g, "\n\n").trim();
+  const clean = unwrap(text.slice(0, end)).replace(/\n{3,}/g, "\n\n").trim();
   return clean.length > max ? `${clean.slice(0, max).replace(/\s+\S*$/, "")}…` : clean;
 }
 

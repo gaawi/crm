@@ -20,7 +20,9 @@ export function LastReplyCard({ reply, timezone, showSender = false }: { reply: 
         <MessageSquareQuote className="size-4 text-emerald-700 dark:text-emerald-400" aria-hidden />
         <span className="font-semibold uppercase tracking-wide text-emerald-800 dark:text-emerald-300">Their last reply</span>
         <span className="text-muted">
-          {formatRelative(new Date(theirs.sentAt), timezone)} · {formatDate(new Date(theirs.sentAt), timezone)}
+          {[formatRelative(new Date(theirs.sentAt), timezone), formatDate(new Date(theirs.sentAt), timezone)]
+            .filter((v, i, a) => a.indexOf(v) === i)
+            .join(" · ")}
         </span>
       </header>
       <div className="px-4 py-3">
