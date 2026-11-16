@@ -8,6 +8,8 @@ import { loadPendingApprovals } from "@/lib/approvals/pending";
 import { PhoneActions } from "@/components/booking/phone-actions";
 import { ContactRow, RowList } from "@/components/contact-row";
 import { CampaignFilter } from "@/components/today/campaign-filter";
+import { PersonaSwitch } from "@/components/today/persona-switch";
+import { personaScope } from "@/lib/persona";
 import { ScheduledBlock } from "@/components/today/scheduled";
 import { NextActionIcon } from "@/components/goals";
 import { StageBadge } from "@/components/ui/badge";
@@ -61,7 +63,7 @@ function ContactPhoneActions({ contact, timezone }: { contact: ContactSummary; t
 export default async function TodayPage({ searchParams }: PageProps<"/">) {
   const timezone = env.timezone;
   const today = todayIn(timezone);
-  const [allFollowUps, allScheduled, allActivity, counts, allReview, campaigns, pending, concerts] = await Promise.all([
+  const [everyFollowUp, everyScheduled, everyActivity, counts, everyReview, campaigns, everyPending, concerts, scope] = await Promise.all([
     getFollowUps({ today, limit: 30 }),
     getScheduled({ today, limit: 80 }),
     recentActivity(12),
@@ -70,7 +72,36 @@ export default async function TodayPage({ searchParams }: PageProps<"/">) {
     listCampaignRefs(),
     loadPendingApprovals(),
     concertsToday(),
+    personaScope(),
   ]);
+
+  // Only what belongs to the person using this browser ("I am Guillermo / Josefina"):
+  // their accounts' emails and mailings, and the booking sheets that send from them.
+  const everyMember = await contactCampaigns([
+    ...[...everyFollowUp.due, ...everyFollowUp.needsReply, ...everyFollowUp.awaitingReply].map((c) => c.id),
+  ]);
+  const mineProject = (id: string | null | undefined) => (id ? scope.projectIds.has(id) : scope.ownsUnassigned);
+  const mineContact = (id: string) => {
+    const sheets = everyMember.get(id);
+    return sheets?.size ? [...sheets].some((sid) => scope.projectIds.has(sid)) : scope.ownsUnassigned;
+  };
+  const pendingDrafts = everyPending.drafts.filter((d) => scope.accountIds.has(d.accountId));
+  const pendingMailings = everyPending.mailings.filter((m) => scope.accountEmails.has(m.accountEmail.toLowerCase()));
+  const pending = { ...everyPending, drafts: pendingDrafts, mailings: pendingMailings, total: pendingDrafts.length + pendingMailings.length };
+  const allReview = {
+    ...everyReview,
+    drafts: everyReview.drafts.filter((d) => mineProject(d.projectId)),
+    actions: everyReview.actions.filter((a) => mineProject(a.projectId)),
+  };
+  const allFollowUps = {
+    ...everyFollowUp,
+    due: everyFollowUp.due.filter((c) => mineContact(c.id)),
+    opportunities: everyFollowUp.opportunities.filter((o) => mineProject(o.project?.id)),
+    needsReply: everyFollowUp.needsReply.filter((c) => mineContact(c.id)),
+    awaitingReply: everyFollowUp.awaitingReply.filter((c) => mineContact(c.id)),
+  };
+  const allScheduled = everyScheduled.filter((item) => mineProject(item.campaign?.id));
+  const allActivity = everyActivity.filter((m) => scope.accountIds.has(m.accountId));
 
   // Filter by campaign (?campaign=<id>): each item knows its campaigns; items outside every campaign show under All only.
   const requested = param(await searchParams, TODAY_CAMPAIGN_PARAM, 40);
@@ -114,7 +145,12 @@ export default async function TodayPage({ searchParams }: PageProps<"/">) {
       <PageHeader
         title="Today"
         description={dateLabel}
-        actions={options.length ? <CampaignFilter options={options} selected={selected} total={todayItems.length} /> : null}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <PersonaSwitch current={scope.persona} />
+            {options.length ? <CampaignFilter options={options} selected={selected} total={todayItems.length} /> : null}
+          </div>
+        }
       />
 
       {counts.accounts === 0 ? (

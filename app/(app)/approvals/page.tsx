@@ -11,6 +11,8 @@ import { listDrafts, recoverStaleDrafts } from "@/lib/queries/drafts";
 import { getSettings } from "@/lib/queries/settings";
 import { CampaignCard } from "./campaign-card";
 import { PrepareDraftsButton } from "./prepare-button";
+import { PersonaSwitch } from "@/components/today/persona-switch";
+import { personaScope } from "@/lib/persona";
 
 export const metadata: Metadata = { title: "Approvals" };
 
@@ -23,14 +25,22 @@ export default async function ApprovalsPage() {
   await releasePostponed();
   const now = new Date();
   // Campaign emails are listed inside their campaign, standalone emails below.
-  const [campaigns, open, recent, autopilot, finished, waitingVersion] = await Promise.all([
+  const [everyCampaign, everyOpen, everyRecent, autopilot, everyFinished, everyWaiting, scope] = await Promise.all([
     listCampaignSummaries({}, now),
     listDrafts(),
     listDrafts({ statuses: ["sent"], limit: 10, campaign: "include" }),
     getSettings("autopilot"),
     listCampaigns({ statuses: ["done", "cancelled"], limit: 10 }),
     listDrafts({ statuses: ["changes_requested"], campaign: "include", limit: 50 }),
+    personaScope(),
   ]);
+  // Only the person using this browser ("I am Guillermo / Josefina"): their accounts' mailings and emails.
+  const mineAccount = (email: string) => scope.accountEmails.has(email.toLowerCase());
+  const campaigns = everyCampaign.filter((c) => mineAccount(c.accountEmail));
+  const finished = everyFinished.filter((c) => mineAccount(c.accountEmail));
+  const open = everyOpen.filter((d) => scope.accountIds.has(d.accountId));
+  const recent = everyRecent.filter((d) => scope.accountIds.has(d.accountId));
+  const waitingVersion = everyWaiting.filter((d) => scope.accountIds.has(d.accountId));
   // Finished campaigns with nothing left for the owner: a way back to them (what was sent, when).
   const past = finished.filter((c) => !campaigns.some((x) => x.id === c.id)).slice(0, 5);
   const held = await heldBackCounts(campaigns.map((c) => c.id));
@@ -46,7 +56,16 @@ export default async function ApprovalsPage() {
 
   return (
     <>
-      <PageHeader title="Approvals" description={description} actions={env.claudeEnabled ? <PrepareDraftsButton /> : null} />
+      <PageHeader
+        title="Approvals"
+        description={description}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <PersonaSwitch current={scope.persona} />
+            {env.claudeEnabled ? <PrepareDraftsButton /> : null}
+          </div>
+        }
+      />
 
       {campaigns.length ? (
         <section className="mb-8" aria-label="Mailings">
