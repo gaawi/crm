@@ -1,3 +1,5 @@
+import { LastReplyCard } from "@/components/last-reply-card";
+import { getLastReply } from "@/lib/queries/last-reply";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
@@ -144,7 +146,7 @@ export default async function ContactPage({ params, searchParams }: PageProps<"/
     );
   }
 
-  const [history, activities, selfEmails, deals, duplicates, projects, accounts, organizations, orgProfile, musician, gigs, concerts, waitingDrafts] = await Promise.all([
+  const [history, activities, selfEmails, deals, duplicates, projects, accounts, organizations, orgProfile, musician, gigs, concerts, waitingDrafts, lastReply] = await Promise.all([
     getContactHistory(contact.id, { limit: HISTORY_PAGE, before, q: q || undefined }),
     listActivities({ contactId: contact.id, before, limit: ACTIVITY_PAGE }),
     getOwnAddresses(),
@@ -160,6 +162,8 @@ export default async function ContactPage({ params, searchParams }: PageProps<"/
     upcomingGuestListEvents().then(pickerEvents),
     // Emails to them waiting in Today: shown under the history, to send from here too.
     listDrafts({ contactId: contact.id, statuses: ["proposed", "failed", "postponed"] }),
+    // Their last real email to us, shown at the top.
+    getLastReply({ contactId: contact.id }),
   ]);
 
   const openDeals = deals.filter((d) => d.stage !== "won" && d.stage !== "lost");
@@ -178,6 +182,7 @@ export default async function ContactPage({ params, searchParams }: PageProps<"/
   return (
     <>
       <ContactHeader contact={contact} accounts={accounts} timezone={timezone} editingPhoto={param(sp, "edit") === "photo"} musician={musician} />
+      <LastReplyCard reply={lastReply} timezone={timezone} />
 
       {orgProfile ? (
         <OrgProfileLine

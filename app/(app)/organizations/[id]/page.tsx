@@ -1,3 +1,5 @@
+import { LastReplyCard } from "@/components/last-reply-card";
+import { getLastReply } from "@/lib/queries/last-reply";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
@@ -103,12 +105,14 @@ export default async function OrganizationPage({ params, searchParams }: PagePro
     );
   }
 
-  const [people, deals, history, selfEmails, stored] = await Promise.all([
+  const [people, deals, history, selfEmails, stored, lastReply] = await Promise.all([
     getOrganizationContacts(organization.id),
     listOpportunities({ organizationId: organization.id, includeClosed: true }),
     getOrganizationHistory(organization.id, { limit: HISTORY_PAGE, before, q: q || undefined }),
     getOwnAddresses(),
     getOrganizationProfile(organization.id),
+    // Their last real email to us (anyone at the organization), shown at the top.
+    getLastReply({ organizationId: organization.id }),
   ]);
   const profile = stored?.profile ?? null;
   // Who decides and whom we talk with: flagged, and listed first.
@@ -188,6 +192,8 @@ export default async function OrganizationPage({ params, searchParams }: PagePro
           </div>
         </div>
       </header>
+
+      <LastReplyCard reply={lastReply} timezone={timezone} showSender />
 
       {editingProfile ? (
         <ProfileForm organizationId={organization.id} profile={profile} cancelHref={base} />
