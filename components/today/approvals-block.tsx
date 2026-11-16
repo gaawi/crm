@@ -1,3 +1,4 @@
+import { accountPerson } from "@/lib/accounts/people";
 import Link from "next/link";
 import {
   ChevronRight,
@@ -40,9 +41,11 @@ export function ApprovalsBlock({ pending }: { pending: PendingApprovals }) {
             <span className="block truncate text-[17px] font-semibold leading-tight md:text-[15px]">
               {m.name}
             </span>
+            <span className="my-1 flex items-center gap-1.5 text-[13px] text-white/85">
+              Sent from <SenderOnDark email={m.accountEmail} />
+            </span>
             <span className="block truncate text-[13px] text-white/85">
-              {plural(m.count, "email")} from {m.accountEmail} · read them all
-              before approving
+              {plural(m.count, "email")} · read them all before approving
             </span>
           </span>
           <ChevronRight className="size-5 shrink-0" aria-hidden />
@@ -107,5 +110,24 @@ export function ApprovalsBlock({ pending }: { pending: PendingApprovals }) {
         </Link>
       </p>
     </section>
+  );
+}
+
+/** "Sent from" on the blue mailing card: photo, name and address in white. */
+function SenderOnDark({ email }: { email: string }) {
+  const person = accountPerson(email);
+  return (
+    <span className="inline-flex min-w-0 items-center gap-1.5 rounded-full bg-white/15 py-0.5 pl-0.5 pr-3 text-[14px]">
+      {person.photoUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={person.photoUrl} alt="" className="size-7 shrink-0 rounded-full object-cover" />
+      ) : (
+        <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-white/25 text-xs font-semibold">{person.name.slice(0, 1)}</span>
+      )}
+      <span className="min-w-0 truncate">
+        <span className="font-semibold text-white">{person.name}</span>
+        <span className="text-white/75"> · {email}</span>
+      </span>
+    </span>
   );
 }

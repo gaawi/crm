@@ -1,3 +1,4 @@
+import { accountPerson } from "@/lib/accounts/people";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { CONTACT_STATUSES, OPPORTUNITY_STAGES, PROJECT_COLORS } from "@/lib/constants";
@@ -87,12 +88,33 @@ export function TagBadge({ tag, href }: { tag: string; href?: string }) {
 }
 
 /** Small monochrome badge naming the Gmail account a message came from. */
-export function AccountBadge({ email }: { email: string }) {
-  const [local, domain] = email.split("@");
+/**
+ * The account an email goes out from, said plainly: the person's photo and
+ * name ("Guillermo", "Josefina") and the address. `size="lg"` for headers.
+ */
+export function AccountBadge({ email, size = "md" }: { email: string; size?: "md" | "lg" }) {
+  const person = accountPerson(email);
+  const lg = size === "lg";
   return (
-    <Badge className="font-normal" title={email}>
-      {local}
-      <span className="text-subtle">@{domain}</span>
-    </Badge>
+    <span
+      className={cn(
+        "inline-flex max-w-full items-center gap-1.5 rounded-full border border-border bg-surface align-middle",
+        lg ? "py-0.5 pl-0.5 pr-3 text-[14px]" : "py-px pl-px pr-2 text-[12px]",
+      )}
+      title={`Sent from ${email}`}
+    >
+      {person.photoUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={person.photoUrl} alt="" className={cn("shrink-0 rounded-full object-cover", lg ? "size-7" : "size-5")} />
+      ) : (
+        <span className={cn("inline-flex shrink-0 items-center justify-center rounded-full bg-surface-2 font-semibold text-muted", lg ? "size-7 text-xs" : "size-5 text-[10px]")}>
+          {person.name.slice(0, 1).toUpperCase()}
+        </span>
+      )}
+      <span className="min-w-0 truncate">
+        <span className="font-semibold text-fg">{person.name}</span>
+        <span className="text-subtle"> · {email}</span>
+      </span>
+    </span>
   );
 }

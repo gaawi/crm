@@ -1,3 +1,4 @@
+import { AccountBadge } from "@/components/ui/badge";
 import Link from "next/link";
 import { CalendarClock, Info, Send, TriangleAlert, Users } from "lucide-react";
 import { ContactAvatar } from "@/components/contact-avatar";
@@ -41,9 +42,9 @@ export function MailingFace({ mailing: m, flipped }: { mailing: MailingCardData;
           <p className="mt-0.5 text-[12px] font-medium uppercase tracking-wide text-brand">
             Mailing · {m.count} {m.count === 1 ? "email" : "emails"}
           </p>
-          <p className="truncate text-[12px] text-muted">
-            {m.projectName ? `${m.projectName} · ` : ""}
-            {m.accountEmail}
+          {m.projectName ? <p className="truncate text-[12px] text-muted">{m.projectName}</p> : null}
+          <p className="mt-1 flex items-center gap-1.5 text-[13px] text-muted">
+            Sent from <AccountBadge email={m.accountEmail} size="lg" />
           </p>
         </div>
       </header>
