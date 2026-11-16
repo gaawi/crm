@@ -8,13 +8,14 @@ import { phoneDigits } from "@/lib/booking/phone";
 import { isFollowUpDue, isNoReply, type TimingRow } from "@/lib/booking/timing";
 import type { OpportunityKind, OpportunityStage } from "@/lib/types";
 
-export const SHEET_FLAGS = ["due", "no_reply", "returning", "phone", "hot", "vip", "near_nyc", "chamber", "josefina", "claude", "chatgpt", "unresearched", "bounced", "auto_reply"] as const;
+export const SHEET_FLAGS = ["due", "no_reply", "returning", "phone", "hot", "vip", "nyc", "near_nyc", "chamber", "josefina", "claude", "chatgpt", "unresearched", "bounced", "auto_reply"] as const;
 /**
  * due = follow-up due; no_reply = waiting > 10 days; hot = In conversation;
  * claude / chatgpt = the organization's profile was researched by that
  * assistant (profile.researchedBy); unresearched = no profile research yet;
  * vip / near_nyc / chamber / josefina = organization tags prestigious (the
  * places we really want to play; the flag keeps its old URL name), nyc-under-5h,
+ * nyc = the organization is in New York City (tag nyc, kept from its city),
  * chamber-specialist, josefina-2025 (on Josefina's 2025 booking sheet).
  */
 export type SheetFlag = (typeof SHEET_FLAGS)[number];
@@ -26,6 +27,7 @@ export const SHEET_FLAG_LABELS: Record<SheetFlag, string> = {
   phone: "Has phone",
   hot: "Hot",
   vip: "Prestigious",
+  nyc: "In NYC",
   near_nyc: "< 5 h from NYC",
   chamber: "Chamber specialists",
   josefina: "Josefina 2025",
@@ -241,6 +243,8 @@ export function rowHasFlag(row: FilterRow, flag: SheetFlag, today: string, timez
       return researcherOf(row.organization?.profile) === null;
     case "vip":
       return Boolean(row.organization?.tags?.includes("prestigious"));
+    case "nyc":
+      return Boolean(row.organization?.tags?.includes("nyc"));
     case "near_nyc":
       return Boolean(row.organization?.tags?.includes("nyc-under-5h"));
     case "chamber":

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { AlertTriangle, ArrowDownLeft, ArrowUpRight, Bot, Car, CircleSlash, Clock, Flame, History, Loader2, Mail, MailCheck, RotateCcw, Sparkles, Star } from "lucide-react";
+import { AlertTriangle, ArrowDownLeft, ArrowUpRight, Bot, Building2, Car, CircleSlash, Clock, Flame, History, Loader2, Mail, MailCheck, RotateCcw, Sparkles, Star } from "lucide-react";
 import { ActivityIcon, describeLastTouch, TOUCH_TONE_CLASS } from "@/components/booking/activity-meta";
 import { phoneActionClass, type PhoneActionSize } from "@/components/booking/phone-action-class";
 import { PlaceLink } from "@/components/organizations/place-link";
@@ -116,6 +116,7 @@ export function rowSubject(row: Pick<SheetRow, "organization" | "title" | "conta
 /** Organization tags shown on a row, each with its own color and icon. */
 const ORG_TAG_BADGES = [
   { tag: "prestigious", label: "Prestigious", title: "A place we really want to play", icon: Star, badge: "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300", iconColor: "text-amber-500" },
+  { tag: "nyc", label: "NYC", title: "In New York City: co-productions or venue use, no fee pitch", icon: Building2, badge: "bg-rose-50 text-rose-800 dark:bg-rose-950 dark:text-rose-300", iconColor: "text-rose-600 dark:text-rose-400" },
   { tag: "nyc-under-5h", label: "< 5 h NYC", title: "About 5 hours or less by car from New York", icon: Car, badge: "bg-sky-50 text-sky-800 dark:bg-sky-950 dark:text-sky-300", iconColor: "text-sky-600 dark:text-sky-400" },
   { tag: "closed", label: "Closed", title: "No longer presents", icon: CircleSlash, badge: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300", iconColor: "text-zinc-500" },
 ] as const;

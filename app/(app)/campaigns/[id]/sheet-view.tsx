@@ -535,6 +535,7 @@ export function SheetView({
     const m = new Map<SheetFlag, number>();
     for (const flag of [
       "vip",
+      "nyc",
       "near_nyc",
       "chamber",
       "returning",

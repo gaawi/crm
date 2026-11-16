@@ -36,7 +36,12 @@ export const STAGE_RULE =
 
 export const TAGS_EXPLAINED: Explained[] = [
   { label: "Prestigious", how: "manual", text: "A place we really want to play. A curated organization tag; add or remove it on the organization." },
-  { label: "< 5 h from NYC", how: "auto", text: "The city is about 5 hours or less by car from Midtown Manhattan (driving time without traffic), from the organization's city." },
+  {
+    label: "In NYC",
+    how: "auto",
+    text: "The organization is in New York City (Manhattan, Brooklyn, the Bronx, Queens, Staten Island), from its city. Not a touring date: no fee pitch and no mass booking email; we look for co-productions or the use of the hall.",
+  },
+  { label: "< 5 h from NYC", how: "auto", text: "The city is about 5 hours or less by car from Midtown Manhattan (driving time without traffic), from the organization's city. Venues in New York City itself get In NYC instead." },
   { label: "Chamber specialists", how: "auto", text: "Presents mainly chamber music or recitals, from the research (name, programming and profile)." },
   { label: "Returning", how: "manual", text: "We have played there before. Set by hand on the row." },
   { label: "Claude / ChatGPT", how: "auto", text: "Who researched the organization's profile (from the profile's researchedBy)." },
@@ -83,6 +88,7 @@ export function explainStage(stage: string): Explained | undefined {
 
 const FLAG_LABEL: Record<string, string> = {
   vip: "Prestigious",
+  nyc: "In NYC",
   near_nyc: "< 5 h from NYC",
   chamber: "Chamber specialists",
   returning: "Returning",
