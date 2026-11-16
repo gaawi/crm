@@ -1,6 +1,6 @@
 "use client";
 
-import { Car, Check, ListChecks, RotateCcw, Rows3, Sparkles, Star, type LucideIcon } from "lucide-react";
+import { Car, Check, ListChecks, Music, RotateCcw, Rows3, Sparkles, Star, type LucideIcon } from "lucide-react";
 import { EMPTY_FILTERS, FIT_FILTERS, NO_SECTION, ORIGINS, SHEET_FLAG_LABELS, type FitFilter, type SheetFilters, type SheetFlag } from "@/lib/booking/filters";
 import type { OpportunityKind, OpportunityStage } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -25,6 +25,12 @@ const TAGS: { flag: SheetFlag; icon: LucideIcon; off: string; on: string }[] = [
     on: "border-sky-600 bg-sky-600 text-white",
   },
   {
+    flag: "chamber",
+    icon: Music,
+    off: "border-indigo-200 bg-indigo-50 text-indigo-800 dark:border-indigo-900 dark:bg-indigo-950/50 dark:text-indigo-300",
+    on: "border-indigo-600 bg-indigo-600 text-white",
+  },
+  {
     flag: "returning",
     icon: RotateCcw,
     off: "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-900 dark:bg-violet-950/50 dark:text-violet-300",
@@ -44,8 +50,8 @@ const TAGS: { flag: SheetFlag; icon: LucideIcon; off: string; on: string }[] = [
   },
 ];
 const TAG_FLAGS = TAGS.map((t) => t.flag);
-/** The rest sit in "More filters" (and show as plain chips while on). */
-const MORE: SheetFlag[] = ["phone", "due", "no_reply", "unresearched", "chamber", "josefina"];
+/** The rest show as plain pills after the colored tags. */
+const MORE: SheetFlag[] = ["phone", "due", "no_reply", "unresearched"];
 
 const pillSelect =
   "h-9 shrink-0 cursor-pointer appearance-auto rounded-full border border-border bg-surface pl-3 pr-2 text-[15px] text-fg focus:border-border-strong focus:outline-none md:h-8 md:rounded-md md:pl-2.5 md:text-sm";
@@ -89,9 +95,8 @@ export function FiltersBar({
   onSelectMode: (on: boolean) => void;
 }) {
   const filtered = Boolean(filters.q.trim() || filters.status || filters.kind || filters.section || filters.flags.length || filters.fit || filters.origin);
-  // Chips: the two main toggles, plus any other flag that is on (tap to turn it off).
-  const toggles = filters.flags.filter((f) => !TAG_FLAGS.includes(f));
-  const more = MORE.filter((f) => !filters.flags.includes(f));
+  // Plain pills after the colored tags: the other filters, plus any other flag that is on (e.g. ?flag=hot from a link).
+  const plain = [...MORE, ...filters.flags.filter((f) => !TAG_FLAGS.includes(f) && !MORE.includes(f))];
   const toggleFlag = (flag: SheetFlag) =>
     onChange({ ...filters, flags: filters.flags.includes(flag) ? filters.flags.filter((f) => f !== flag) : [...filters.flags, flag] });
 
@@ -141,10 +146,10 @@ export function FiltersBar({
           <select
             value={filters.section}
             onChange={(e) => onChange({ ...filters, section: e.currentTarget.value })}
-            aria-label="Section"
+            aria-label="Category"
             className={cn(pillSelect, "max-w-[14rem]", filters.section && "border-fg/70 font-medium")}
           >
-            <option value="">All sections{sectionCounts ? ` (${[...sectionCounts.values()].reduce((a, b) => a + b, 0)})` : ""}</option>
+            <option value="">All categories{sectionCounts ? ` (${[...sectionCounts.values()].reduce((a, b) => a + b, 0)})` : ""}</option>
             {sections.map((s) => (
               <option key={s} value={s}>
                 {s}
@@ -186,47 +191,10 @@ export function FiltersBar({
             </option>
           ))}
         </select>
-
-        {toggles.map((flag) => {
-          const on = filters.flags.includes(flag);
-          return (
-            <button
-              key={flag}
-              type="button"
-              aria-pressed={on}
-              onClick={() => toggleFlag(flag)}
-              className={cn(
-                chip,
-                on ? "border-accent bg-accent font-medium text-accent-fg" : "border-border bg-surface text-fg active:bg-surface-2 md:hover:bg-surface-2",
-              )}
-            >
-              {on ? <Check className="size-3.5" strokeWidth={2.25} aria-hidden /> : null}
-              {SHEET_FLAG_LABELS[flag]}
-            </button>
-          );
-        })}
-
-        {more.length ? (
-          <select
-            value=""
-            onChange={(e) => {
-              const flag = e.currentTarget.value as SheetFlag;
-              if (flag) toggleFlag(flag);
-            }}
-            aria-label="More filters"
-            className={cn(pillSelect, "text-muted")}
-          >
-            <option value="">More filters</option>
-            {more.map((flag) => (
-              <option key={flag} value={flag}>
-                {SHEET_FLAG_LABELS[flag]}
-              </option>
-            ))}
-          </select>
-        ) : null}
       </div>
 
       <div className={cn(scrollerClass, "-mx-4 gap-1.5 px-4 md:mx-0 md:w-full md:flex-wrap md:px-0")} role="group" aria-label="Tags">
+        <span className="shrink-0 self-center pr-0.5 text-[11px] font-semibold uppercase tracking-wide text-subtle">Tags</span>
         {TAGS.map(({ flag, icon: Icon, off, on: onClass }) => {
           const on = filters.flags.includes(flag);
           const n = flagCounts?.get(flag);
@@ -244,6 +212,25 @@ export function FiltersBar({
               <Icon className="size-3.5 md:size-3" strokeWidth={2} aria-hidden />
               {SHEET_FLAG_LABELS[flag]}
               {n !== undefined ? <span className="tabular-nums opacity-70">{n}</span> : null}
+            </button>
+          );
+        })}
+        <span className="ml-2 shrink-0 self-center pr-0.5 text-[11px] font-semibold uppercase tracking-wide text-subtle">Status</span>
+        {plain.map((flag) => {
+          const on = filters.flags.includes(flag);
+          return (
+            <button
+              key={flag}
+              type="button"
+              aria-pressed={on}
+              onClick={() => toggleFlag(flag)}
+              className={cn(
+                "inline-flex h-8 shrink-0 items-center gap-1 rounded-full border px-2.5 text-[13px] font-medium transition-colors md:h-7 md:text-xs",
+                on ? "border-accent bg-accent text-accent-fg" : "border-border bg-surface text-muted hover:text-fg active:bg-surface-2 md:hover:bg-surface-2",
+              )}
+            >
+              {on ? <Check className="size-3.5 md:size-3" strokeWidth={2.25} aria-hidden /> : null}
+              {SHEET_FLAG_LABELS[flag]}
             </button>
           );
         })}

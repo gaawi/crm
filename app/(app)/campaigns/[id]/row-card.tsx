@@ -287,13 +287,13 @@ export const RowCard = memo(function RowCard({
               />
             </CardField>
           </div>
-          <CardField label="Section">
+          <CardField label="Category">
             <TextCell
               rowId={row.id}
               name="section"
               value={row.section}
               placeholder="No section"
-              label="Section"
+              label="Category"
               list={ctx.sectionsListId}
               look="field"
             />

@@ -394,7 +394,7 @@ export function SheetView({
   // Each colored tag: how many rows it leaves (on: the rows shown by the other filters).
   const flagCounts = useMemo(() => {
     const m = new Map<SheetFlag, number>();
-    for (const flag of ["vip", "near_nyc", "returning", "claude", "chatgpt"] as const) {
+    for (const flag of ["vip", "near_nyc", "chamber", "returning", "claude", "chatgpt"] as const) {
       m.set(flag, counted.filter((r) => rowHasFlag(r, flag, today, timezone)).length);
     }
     return m;
