@@ -9,6 +9,7 @@ import { VelaLogo } from "@/components/brand/vela-logo";
 import { SendFlourishHost } from "@/components/brand/send-flourish";
 import { FeaturesProvider } from "@/components/features";
 import { SideNav, TabBar } from "@/components/nav";
+import { NavProgress } from "@/components/nav-progress";
 import { env } from "@/lib/env";
 import { logout } from "@/app/(auth)/login/actions";
 
@@ -66,6 +67,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <CountedTabBar />
         </Suspense>
         <SendFlourishHost />
+        <Suspense fallback={null}>
+          <NavProgress />
+        </Suspense>
       </div>
     </FeaturesProvider>
   );

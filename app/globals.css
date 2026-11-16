@@ -309,3 +309,22 @@ body {
 .vela-late {
   animation: vela-late 0.4s ease 1.6s both;
 }
+
+/* NavProgress: the bar slides while a tapped link opens; the pill shows only if it takes a moment. */
+@keyframes nav-progress {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(300%); }
+}
+.nav-progress-bar {
+  animation: nav-progress 1.1s ease-in-out infinite;
+}
+@keyframes nav-progress-pill {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+.nav-progress-pill {
+  animation: nav-progress-pill 0.2s ease 0.35s both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .nav-progress-bar { animation: none; width: 100%; }
+}
