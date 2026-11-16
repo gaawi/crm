@@ -11,6 +11,7 @@ import {
   Pencil,
   RotateCcw,
   Rows3,
+  SlidersHorizontal,
   Sparkles,
   Star,
   type LucideIcon,
@@ -26,11 +27,12 @@ import {
   type SheetFlag,
 } from "@/lib/booking/filters";
 import type { OpportunityKind } from "@/lib/types";
+import { useId, useState } from "react";
 import { cn } from "@/lib/utils";
 import { InfoTip } from "@/components/booking/info-tip";
 import { AUTO_LOCK_NOTE, explainFlag } from "@/lib/booking/explain";
 import { SearchInput } from "../../_components/ui";
-import { scrollerClass, StatsStrip, type StatItem } from "./stats";
+import { scrollerClass, type StatItem } from "./stats";
 
 /**
  * The colored tags under the search bar, in the same colors as on the rows;
@@ -169,6 +171,8 @@ export function FiltersBar({
   selectMode: boolean;
   onSelectMode: (on: boolean) => void;
 }) {
+  const [panelOpen, setPanelOpen] = useState(false);
+  const panelId = useId();
   const filtered = Boolean(
     filters.q.trim() ||
     filters.status ||
@@ -235,210 +239,215 @@ export function FiltersBar({
     );
   };
 
+  // How many filters are on besides the search (shown on the Filters button).
+  const activeCount =
+    (filters.status ? 1 : 0) +
+    (filters.kind ? 1 : 0) +
+    (filters.section ? 1 : 0) +
+    (filters.fit ? 1 : 0) +
+    (filters.origin ? 1 : 0) +
+    filters.flags.length;
+
   return (
-    <div className="flex flex-col gap-2 pb-3 md:flex-row md:flex-wrap md:items-center md:gap-2 md:pb-0 md:pt-2">
-      <SearchInput
-        value={filters.q}
-        onChange={(e) => onChange({ ...filters, q: e.currentTarget.value })}
-        placeholder="Search organization, city, contact, phone…"
-        aria-label="Search this campaign"
-        className="md:w-64"
-      />
-
-      <div
-        className={cn(
-          scrollerClass,
-          "-mx-4 gap-2 px-4 md:mx-0 md:contents md:px-0",
-        )}
-      >
-        {goalOptions.length > 1 || filters.kind ? (
-          <select
-            value={filters.kind ?? ""}
-            onChange={(e) =>
-              onChange({
-                ...filters,
-                kind: e.currentTarget.value as OpportunityKind | "",
-              })
-            }
-            aria-label="Goal"
-            className={cn(
-              pillSelect,
-              "max-w-[14rem]",
-              filters.kind && "border-fg/70 font-medium",
-            )}
-          >
-            <option value="">All goals</option>
-            {goalOptions.map((g) => (
-              <option key={g.value} value={g.value}>
-                {g.label} ({g.count})
-              </option>
-            ))}
-          </select>
-        ) : null}
-
-        {sections.length ? (
-          <select
-            value={filters.section}
-            onChange={(e) =>
-              onChange({ ...filters, section: e.currentTarget.value })
-            }
-            aria-label="Category"
-            className={cn(
-              pillSelect,
-              "max-w-[14rem]",
-              filters.section && "border-fg/70 font-medium",
-            )}
-          >
-            <option value="">
-              All categories
-              {sectionCounts
-                ? ` (${[...sectionCounts.values()].reduce((a, b) => a + b, 0)})`
-                : ""}
-            </option>
-            {sections.map((s) => (
-              <option key={s} value={s}>
-                {s}
-                {sectionCounts?.has(s) ? ` (${sectionCounts.get(s)})` : ""}
-              </option>
-            ))}
-            {hasUnsectioned ? (
-              <option value={NO_SECTION}>
-                No section
-                {sectionCounts?.has("") ? ` (${sectionCounts.get("")})` : ""}
-              </option>
-            ) : null}
-          </select>
-        ) : null}
-
-        <select
-          value={filters.fit ?? ""}
-          onChange={(e) =>
-            onChange({ ...filters, fit: e.currentTarget.value as FitFilter })
-          }
-          aria-label="Fit"
-          title="Booking fit from the research"
-          className={cn(pillSelect, filters.fit && "border-fg/70 font-medium")}
-        >
-          <option value="">Any fit</option>
-          {FIT_FILTERS.map((f) => (
-            <option key={f.value} value={f.value}>
-              {f.label}
-            </option>
-          ))}
-        </select>
-
-        <select
-          value={filters.origin ?? ""}
-          onChange={(e) =>
-            onChange({ ...filters, origin: e.currentTarget.value })
-          }
-          aria-label="Origin"
-          title="Where the contact came from"
-          className={cn(
-            pillSelect,
-            filters.origin && "border-fg/70 font-medium",
-          )}
-        >
-          <option value="">Any origin</option>
-          {ORIGINS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Two clearly separate groups: what updates by itself, and what a person sets. */}
-      <div className="flex w-full flex-col gap-2">
-        {GROUPS.map((g) => {
-          const groupStats = stats.filter((st) => g.stats.includes(st.key));
-          return (
-            <section
-              key={g.key}
-              aria-label={g.title}
-              className={cn(
-                "rounded-xl border px-3 py-2 md:rounded-lg",
-                g.key === "auto"
-                  ? "border-sky-200 bg-sky-50/40 dark:border-sky-900 dark:bg-sky-950/20"
-                  : "border-amber-200 bg-amber-50/40 dark:border-amber-900 dark:bg-amber-950/20",
-              )}
-            >
-              <p className="mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
-                <span className="inline-flex items-center gap-1 font-semibold uppercase tracking-wide text-fg">
-                  <g.icon className="size-3.5" strokeWidth={2} aria-hidden />
-                  {g.title}
-                </span>
-                <span className="text-muted">{g.hint}</span>
-              </p>
-              <div className={cn(scrollerClass, "gap-1.5 md:flex-wrap")}>
-                {groupStats.length ? (
-                  <StatsStrip items={groupStats} bare />
-                ) : null}
-                {g.flags.map((flag) => renderFlag(flag))}
-              </div>
-            </section>
-          );
-        })}
-      </div>
-
-      <div className="flex min-h-9 items-center gap-3 md:ml-auto md:min-h-0">
-        <p
-          className={cn(
-            "min-w-0 flex-1 truncate text-[13px] text-muted md:flex-none md:text-xs",
-            !filtered && "md:hidden",
-          )}
-          aria-live="polite"
-        >
-          {filtered
-            ? `${shown} of ${total}`
-            : `${total} ${total === 1 ? "contact" : "contacts"}`}
-          {filtered ? (
-            <>
-              {" · "}
-              <button
-                type="button"
-                onClick={() => onChange(EMPTY_FILTERS)}
-                className="font-medium text-fg/80 underline-offset-2 active:opacity-60 md:hover:underline"
-              >
-                {/* Phones: room for Compact / Select on the same line. */}
-                <span className="md:hidden">Clear</span>
-                <span className="hidden md:inline">Clear filters</span>
-              </button>
-            </>
-          ) : null}
-        </p>
-        {/* Phones: compact cards and select mode (the desktop table always has checkboxes). */}
+    <div className="flex flex-col gap-2 pb-3 md:pb-0 md:pt-2">
+      <div className="flex items-center gap-2">
+        <SearchInput
+          value={filters.q}
+          onChange={(e) => onChange({ ...filters, q: e.currentTarget.value })}
+          placeholder="Search organization, city, contact…"
+          aria-label="Search this campaign"
+          className="min-w-0 flex-1 md:max-w-sm"
+        />
         <button
           type="button"
-          aria-pressed={compact}
-          onClick={() => onCompact(!compact)}
+          aria-expanded={panelOpen}
+          aria-controls={panelId}
+          onClick={() => setPanelOpen((o) => !o)}
           className={cn(
             chip,
-            "h-9 md:hidden",
-            compact
+            "h-10 md:h-8",
+            panelOpen || activeCount
               ? "border-fg/70 font-medium text-fg"
               : "border-border bg-surface text-muted",
           )}
         >
-          <Rows3 className="size-4" strokeWidth={1.75} aria-hidden />
-          Compact
-        </button>
-        <button
-          type="button"
-          aria-pressed={selectMode}
-          onClick={() => onSelectMode(!selectMode)}
-          className={cn(
-            chip,
-            "h-9 md:hidden",
-            selectMode
-              ? "border-accent bg-accent font-medium text-accent-fg"
-              : "border-border bg-surface text-muted",
-          )}
-        >
-          <ListChecks className="size-4" strokeWidth={1.75} aria-hidden />
-          {selectMode ? "Done" : "Select"}
+          <SlidersHorizontal className="size-4" strokeWidth={1.75} aria-hidden />
+          Filters
+          {activeCount ? (
+            <span className="inline-flex size-5 items-center justify-center rounded-full bg-fg text-[11px] font-semibold text-bg">
+              {activeCount}
+            </span>
+          ) : null}
         </button>
       </div>
+
+      {/* The results, in one quiet line: each number filters the list. */}
+      <div className="flex items-start gap-2">
+        <p className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 text-[15px] md:text-sm" aria-label="Results (tap to filter)">
+          {stats.map((st) => {
+            const tone =
+              st.count > 0 && st.tone === "danger"
+                ? "text-danger"
+                : st.count > 0 && st.tone === "warning"
+                  ? "text-warning"
+                  : "text-fg";
+            return (
+              <button
+                key={st.key}
+                type="button"
+                aria-pressed={st.active && st.key !== "total"}
+                onClick={st.onClick}
+                className={cn(
+                  "inline-flex items-baseline gap-1 rounded text-muted active:opacity-60",
+                  st.active && st.key !== "total" && "underline decoration-2 underline-offset-4",
+                )}
+              >
+                <span className={cn("font-semibold tabular-nums", tone)}>{st.count}</span>
+                <span>{st.key === "total" ? (st.count === 1 ? "contact" : "contacts") : st.label.toLowerCase()}</span>
+              </button>
+            );
+          })}
+        </p>
+        {/* Phones: compact cards and select mode, as small icons. */}
+        <div className="flex shrink-0 items-center gap-1 md:hidden">
+          <button
+            type="button"
+            aria-pressed={compact}
+            aria-label="Compact cards"
+            title="Compact cards"
+            onClick={() => onCompact(!compact)}
+            className={cn(
+              "inline-flex size-9 items-center justify-center rounded-full",
+              compact ? "bg-fg text-bg" : "text-muted active:bg-surface-2",
+            )}
+          >
+            <Rows3 className="size-[18px]" strokeWidth={1.75} aria-hidden />
+          </button>
+          <button
+            type="button"
+            aria-pressed={selectMode}
+            aria-label={selectMode ? "Done selecting" : "Select rows"}
+            title={selectMode ? "Done" : "Select"}
+            onClick={() => onSelectMode(!selectMode)}
+            className={cn(
+              "inline-flex size-9 items-center justify-center rounded-full",
+              selectMode ? "bg-accent text-accent-fg" : "text-muted active:bg-surface-2",
+            )}
+          >
+            <ListChecks className="size-[18px]" strokeWidth={1.75} aria-hidden />
+          </button>
+        </div>
+      </div>
+
+      {filtered ? (
+        <p className="text-[13px] text-muted md:text-xs" aria-live="polite">
+          Showing {shown} of {total}
+          {" · "}
+          <button
+            type="button"
+            onClick={() => onChange(EMPTY_FILTERS)}
+            className="font-medium text-fg/80 underline underline-offset-2 active:opacity-60"
+          >
+            Clear filters
+          </button>
+        </p>
+      ) : null}
+
+      {panelOpen ? (
+        <div id={panelId} className="flex flex-col gap-2 rounded-xl border border-border bg-surface p-3 md:rounded-lg">
+          <div className={cn(scrollerClass, "-mx-3 gap-2 px-3 md:mx-0 md:flex-wrap md:px-0")}>
+            {goalOptions.length > 1 || filters.kind ? (
+              <select
+                value={filters.kind ?? ""}
+                onChange={(e) =>
+                  onChange({
+                    ...filters,
+                    kind: e.currentTarget.value as OpportunityKind | "",
+                  })
+                }
+                aria-label="Goal"
+                className={cn(pillSelect, "max-w-[14rem]", filters.kind && "border-fg/70 font-medium")}
+              >
+                <option value="">All goals</option>
+                {goalOptions.map((g) => (
+                  <option key={g.value} value={g.value}>
+                    {g.label} ({g.count})
+                  </option>
+                ))}
+              </select>
+            ) : null}
+
+            {sections.length ? (
+              <select
+                value={filters.section}
+                onChange={(e) => onChange({ ...filters, section: e.currentTarget.value })}
+                aria-label="Category"
+                className={cn(pillSelect, "max-w-[14rem]", filters.section && "border-fg/70 font-medium")}
+              >
+                <option value="">All categories</option>
+                {sections.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                    {sectionCounts?.has(s) ? ` (${sectionCounts.get(s)})` : ""}
+                  </option>
+                ))}
+                {hasUnsectioned ? (
+                  <option value={NO_SECTION}>
+                    No section
+                    {sectionCounts?.has("") ? ` (${sectionCounts.get("")})` : ""}
+                  </option>
+                ) : null}
+              </select>
+            ) : null}
+
+            <select
+              value={filters.fit ?? ""}
+              onChange={(e) => onChange({ ...filters, fit: e.currentTarget.value as FitFilter })}
+              aria-label="Fit"
+              title="Booking fit from the research"
+              className={cn(pillSelect, filters.fit && "border-fg/70 font-medium")}
+            >
+              <option value="">Any fit</option>
+              {FIT_FILTERS.map((f) => (
+                <option key={f.value} value={f.value}>
+                  {f.label}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={filters.origin ?? ""}
+              onChange={(e) => onChange({ ...filters, origin: e.currentTarget.value })}
+              aria-label="Origin"
+              title="Where the contact came from"
+              className={cn(pillSelect, filters.origin && "border-fg/70 font-medium")}
+            >
+              <option value="">Any origin</option>
+              {ORIGINS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* What updates by itself, and what a person sets, each with its (i). */}
+          {GROUPS.map((g) => (
+            <section key={g.key} aria-label={g.title}>
+              <p className="mb-1 flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-muted">
+                <g.icon className="size-3.5" strokeWidth={2} aria-hidden />
+                {g.title}
+                <InfoTip
+                  title={g.title}
+                  items={stats.filter((st) => g.stats.includes(st.key) && st.info).map((st) => st.info!)}
+                  note={g.key === "auto" ? `${g.hint} ${AUTO_LOCK_NOTE}` : g.hint}
+                />
+              </p>
+              <div className="flex flex-wrap gap-1.5">{g.flags.map((flag) => renderFlag(flag))}</div>
+            </section>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
