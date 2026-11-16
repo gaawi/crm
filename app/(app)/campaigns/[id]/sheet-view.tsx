@@ -17,6 +17,7 @@ import {
   type SheetFlag,
 } from "@/lib/booking/filters";
 import { sectionSummary } from "@/lib/booking/section-summary";
+import { explainFlag, explainStage } from "@/lib/booking/explain";
 import { suggestTemplate } from "@/lib/booking/templates";
 import { isFollowUpDue, isNoReply } from "@/lib/booking/timing";
 import type { BookingSheet, EmailTemplate, SheetRow } from "@/lib/booking/types";
@@ -415,6 +416,7 @@ export function SheetView({
           label: stageLabel(value, labelKind),
           count: n,
           dot: STAGE_DOT[value],
+          info: explainStage(value),
           active: filters.status === value,
           onClick: setStatus(value),
         },
@@ -429,19 +431,21 @@ export function SheetView({
         onClick: () => setFilters((f) => ({ ...f, status: "", flags: f.flags.filter((x) => x !== "due" && x !== "no_reply") })),
       },
       // Only the stages that have rows (or are the active filter): fewer, clearer numbers.
-      ...stage("lead", false),
+      // To contact is left out (it is what remains); each count has its own (i).
       ...stage("contacted", false),
+      ...stage("replied", false),
       ...stage("proposal", false),
       ...stage("negotiation", false),
       ...stage("won", false),
       ...stage("lost", false),
       ...(due || filters.flags.includes("due")
-        ? [{ key: "due", label: "Follow-ups due", count: due, tone: "danger" as const, active: filters.flags.includes("due"), onClick: toggleFlag("due") }]
+        ? [{ key: "due", label: "Follow-ups due", info: explainFlag("due"), count: due, tone: "danger" as const, active: filters.flags.includes("due"), onClick: toggleFlag("due") }]
         : []),
       ...(noReply || filters.flags.includes("no_reply")
         ? [
             {
               key: "no_reply",
+              info: explainFlag("no_reply"),
               label: "No reply (2+ months)",
               count: noReply,
               tone: "warning" as const,
@@ -453,7 +457,6 @@ export function SheetView({
     ];
   }, [counted, today, timezone, filters.status, filters.flags, labelKind]);
 
-  const statusOptions = useMemo(() => sheetStages.map((s) => ({ ...s, count: counted.filter((r) => r.stage === s.value).length })), [counted, sheetStages]);
   // The sheet's goals in GOAL_KINDS order (a filter once there are two).
   const goalOptions = useMemo(
     () =>
@@ -490,7 +493,6 @@ export function SheetView({
         <FiltersBar
           filters={filters}
           onChange={setFilters}
-          statusOptions={statusOptions}
           goalOptions={goalOptions}
           sections={sections}
           sectionCounts={sectionCounts}
@@ -627,7 +629,7 @@ export function SheetView({
           templates={templates}
           preparing={selectedVisible.some((id) => preparing.has(id))}
           onPrepare={(templateId) => void prepare(selectedVisible.slice(0, 100), templateId)}
-          stageOptions={sheetStages.filter((s) => !EMAIL_STAGES.includes(s.value))}
+          stageOptions={sheetStages.filter((s) => !EMAIL_STAGES.includes(s.value) && s.value !== "negotiation")}
           onSetStage={(stage) => bulkUpdate({ stage })}
           sections={sections}
           onSetSection={(section) => bulkUpdate({ section })}

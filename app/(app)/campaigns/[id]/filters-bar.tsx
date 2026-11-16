@@ -1,11 +1,30 @@
 "use client";
 
-import { Car, Check, ListChecks, Music, RotateCcw, Rows3, Sparkles, Star, type LucideIcon } from "lucide-react";
-import { EMPTY_FILTERS, FIT_FILTERS, NO_SECTION, ORIGINS, SHEET_FLAG_LABELS, type FitFilter, type SheetFilters, type SheetFlag } from "@/lib/booking/filters";
-import type { OpportunityKind, OpportunityStage } from "@/lib/types";
+import {
+  Car,
+  Check,
+  ListChecks,
+  Music,
+  RotateCcw,
+  Rows3,
+  Sparkles,
+  Star,
+  type LucideIcon,
+} from "lucide-react";
+import {
+  EMPTY_FILTERS,
+  FIT_FILTERS,
+  NO_SECTION,
+  ORIGINS,
+  SHEET_FLAG_LABELS,
+  type FitFilter,
+  type SheetFilters,
+  type SheetFlag,
+} from "@/lib/booking/filters";
+import type { OpportunityKind } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { InfoTip } from "@/components/booking/info-tip";
-import { AUTO_LOCK_NOTE, STAGE_EXPLAINED, STAGE_RULE, STATUS_EXPLAINED, TAGS_EXPLAINED } from "@/lib/booking/explain";
+import { AUTO_LOCK_NOTE, explainFlag } from "@/lib/booking/explain";
 import { SearchInput } from "../../_components/ui";
 import { scrollerClass } from "./stats";
 
@@ -53,7 +72,14 @@ const TAGS: { flag: SheetFlag; icon: LucideIcon; off: string; on: string }[] = [
 ];
 const TAG_FLAGS = TAGS.map((t) => t.flag);
 /** The rest show as plain pills after the colored tags. */
-const MORE: SheetFlag[] = ["phone", "due", "no_reply", "bounced", "auto_reply", "unresearched"];
+const MORE: SheetFlag[] = [
+  "phone",
+  "due",
+  "no_reply",
+  "bounced",
+  "auto_reply",
+  "unresearched",
+];
 
 const pillSelect =
   "h-9 shrink-0 cursor-pointer appearance-auto rounded-full border border-border bg-surface pl-3 pr-2 text-[15px] text-fg focus:border-border-strong focus:outline-none md:h-8 md:rounded-md md:pl-2.5 md:text-sm";
@@ -64,7 +90,6 @@ const chip =
 export function FiltersBar({
   filters,
   onChange,
-  statusOptions,
   goalOptions,
   sections,
   sectionCounts,
@@ -79,7 +104,6 @@ export function FiltersBar({
 }: {
   filters: SheetFilters;
   onChange: (next: SheetFilters) => void;
-  statusOptions: { value: OpportunityStage; label: string; count: number }[];
   /** The sheet's goals with their counts: a goal select when there are two or more. */
   goalOptions: { value: OpportunityKind; label: string; count: number }[];
   sections: string[];
@@ -96,11 +120,27 @@ export function FiltersBar({
   selectMode: boolean;
   onSelectMode: (on: boolean) => void;
 }) {
-  const filtered = Boolean(filters.q.trim() || filters.status || filters.kind || filters.section || filters.flags.length || filters.fit || filters.origin);
+  const filtered = Boolean(
+    filters.q.trim() ||
+    filters.status ||
+    filters.kind ||
+    filters.section ||
+    filters.flags.length ||
+    filters.fit ||
+    filters.origin,
+  );
   // Plain pills after the colored tags: the other filters, plus any other flag that is on (e.g. ?flag=hot from a link).
-  const plain = [...MORE, ...filters.flags.filter((f) => !TAG_FLAGS.includes(f) && !MORE.includes(f))];
+  const plain = [
+    ...MORE,
+    ...filters.flags.filter((f) => !TAG_FLAGS.includes(f) && !MORE.includes(f)),
+  ];
   const toggleFlag = (flag: SheetFlag) =>
-    onChange({ ...filters, flags: filters.flags.includes(flag) ? filters.flags.filter((f) => f !== flag) : [...filters.flags, flag] });
+    onChange({
+      ...filters,
+      flags: filters.flags.includes(flag)
+        ? filters.flags.filter((f) => f !== flag)
+        : [...filters.flags, flag],
+    });
 
   return (
     <div className="flex flex-col gap-2 pb-3 md:flex-row md:flex-wrap md:items-center md:gap-2 md:pb-0 md:pt-2">
@@ -112,29 +152,27 @@ export function FiltersBar({
         className="md:w-64"
       />
 
-      <div className={cn(scrollerClass, "-mx-4 gap-2 px-4 md:mx-0 md:contents md:px-0")}>
-
-        <select
-          value={filters.status}
-          onChange={(e) => onChange({ ...filters, status: e.currentTarget.value as OpportunityStage | "" })}
-          aria-label="Status"
-          className={cn(pillSelect, filters.status && "border-fg/70 font-medium")}
-        >
-          <option value="">All statuses</option>
-          {statusOptions.map((s) => (
-            <option key={s.value} value={s.value}>
-              {s.label} ({s.count})
-            </option>
-          ))}
-        </select>
-        <InfoTip title="Statuses" items={STAGE_EXPLAINED} note={`${STAGE_RULE} ${AUTO_LOCK_NOTE}`} className="-ml-1 self-center" />
-
+      <div
+        className={cn(
+          scrollerClass,
+          "-mx-4 gap-2 px-4 md:mx-0 md:contents md:px-0",
+        )}
+      >
         {goalOptions.length > 1 || filters.kind ? (
           <select
             value={filters.kind ?? ""}
-            onChange={(e) => onChange({ ...filters, kind: e.currentTarget.value as OpportunityKind | "" })}
+            onChange={(e) =>
+              onChange({
+                ...filters,
+                kind: e.currentTarget.value as OpportunityKind | "",
+              })
+            }
             aria-label="Goal"
-            className={cn(pillSelect, "max-w-[14rem]", filters.kind && "border-fg/70 font-medium")}
+            className={cn(
+              pillSelect,
+              "max-w-[14rem]",
+              filters.kind && "border-fg/70 font-medium",
+            )}
           >
             <option value="">All goals</option>
             {goalOptions.map((g) => (
@@ -148,11 +186,22 @@ export function FiltersBar({
         {sections.length ? (
           <select
             value={filters.section}
-            onChange={(e) => onChange({ ...filters, section: e.currentTarget.value })}
+            onChange={(e) =>
+              onChange({ ...filters, section: e.currentTarget.value })
+            }
             aria-label="Category"
-            className={cn(pillSelect, "max-w-[14rem]", filters.section && "border-fg/70 font-medium")}
+            className={cn(
+              pillSelect,
+              "max-w-[14rem]",
+              filters.section && "border-fg/70 font-medium",
+            )}
           >
-            <option value="">All categories{sectionCounts ? ` (${[...sectionCounts.values()].reduce((a, b) => a + b, 0)})` : ""}</option>
+            <option value="">
+              All categories
+              {sectionCounts
+                ? ` (${[...sectionCounts.values()].reduce((a, b) => a + b, 0)})`
+                : ""}
+            </option>
             {sections.map((s) => (
               <option key={s} value={s}>
                 {s}
@@ -160,14 +209,19 @@ export function FiltersBar({
               </option>
             ))}
             {hasUnsectioned ? (
-              <option value={NO_SECTION}>No section{sectionCounts?.has("") ? ` (${sectionCounts.get("")})` : ""}</option>
+              <option value={NO_SECTION}>
+                No section
+                {sectionCounts?.has("") ? ` (${sectionCounts.get("")})` : ""}
+              </option>
             ) : null}
           </select>
         ) : null}
 
         <select
           value={filters.fit ?? ""}
-          onChange={(e) => onChange({ ...filters, fit: e.currentTarget.value as FitFilter })}
+          onChange={(e) =>
+            onChange({ ...filters, fit: e.currentTarget.value as FitFilter })
+          }
           aria-label="Fit"
           title="Booking fit from the research"
           className={cn(pillSelect, filters.fit && "border-fg/70 font-medium")}
@@ -182,10 +236,15 @@ export function FiltersBar({
 
         <select
           value={filters.origin ?? ""}
-          onChange={(e) => onChange({ ...filters, origin: e.currentTarget.value })}
+          onChange={(e) =>
+            onChange({ ...filters, origin: e.currentTarget.value })
+          }
           aria-label="Origin"
           title="Where the contact came from"
-          className={cn(pillSelect, filters.origin && "border-fg/70 font-medium")}
+          className={cn(
+            pillSelect,
+            filters.origin && "border-fg/70 font-medium",
+          )}
         >
           <option value="">Any origin</option>
           {ORIGINS.map((o) => (
@@ -196,62 +255,115 @@ export function FiltersBar({
         </select>
       </div>
 
-      <div className={cn(scrollerClass, "-mx-4 gap-1.5 px-4 md:mx-0 md:w-full md:flex-wrap md:px-0")} role="group" aria-label="Tags">
+      <div
+        className={cn(
+          scrollerClass,
+          "-mx-4 gap-1.5 px-4 md:mx-0 md:w-full md:flex-wrap md:px-0",
+        )}
+        role="group"
+        aria-label="Tags"
+      >
         <span className="flex shrink-0 items-center self-center text-[11px] font-semibold uppercase tracking-wide text-subtle">
           Tags
-          <InfoTip title="Tags" items={TAGS_EXPLAINED} />
         </span>
         {TAGS.map(({ flag, icon: Icon, off, on: onClass }) => {
           const on = filters.flags.includes(flag);
           const n = flagCounts?.get(flag);
           return (
-            <button
-              key={flag}
-              type="button"
-              aria-pressed={on}
-              onClick={() => toggleFlag(flag)}
-              className={cn(
-                "inline-flex h-8 shrink-0 items-center gap-1 rounded-full border px-2.5 text-[13px] font-medium transition-colors md:h-7 md:text-xs",
-                on ? onClass : cn(off, "hover:brightness-95"),
-              )}
-            >
-              <Icon className="size-3.5 md:size-3" strokeWidth={2} aria-hidden />
-              {SHEET_FLAG_LABELS[flag]}
-              {n !== undefined ? <span className="tabular-nums opacity-70">{n}</span> : null}
-            </button>
+            <span key={flag} className="inline-flex shrink-0 items-center">
+              <button
+                type="button"
+                aria-pressed={on}
+                onClick={() => toggleFlag(flag)}
+                className={cn(
+                  "inline-flex h-8 shrink-0 items-center gap-1 rounded-full border px-2.5 text-[13px] font-medium transition-colors md:h-7 md:text-xs",
+                  on ? onClass : cn(off, "hover:brightness-95"),
+                )}
+              >
+                <Icon
+                  className="size-3.5 md:size-3"
+                  strokeWidth={2}
+                  aria-hidden
+                />
+                {SHEET_FLAG_LABELS[flag]}
+                {n !== undefined ? (
+                  <span className="tabular-nums opacity-70">{n}</span>
+                ) : null}
+              </button>
+              {(() => {
+                const info = explainFlag(flag);
+                return info ? (
+                  <InfoTip
+                    title={info.label}
+                    items={[info]}
+                    note={info.how === "auto" ? AUTO_LOCK_NOTE : undefined}
+                  />
+                ) : null;
+              })()}
+            </span>
           );
         })}
         <span className="ml-2 flex shrink-0 items-center self-center text-[11px] font-semibold uppercase tracking-wide text-subtle">
           Status
-          <InfoTip title="Status filters" items={STATUS_EXPLAINED} note={AUTO_LOCK_NOTE} />
         </span>
         {plain.map((flag) => {
           const on = filters.flags.includes(flag);
           return (
-            <button
-              key={flag}
-              type="button"
-              aria-pressed={on}
-              onClick={() => toggleFlag(flag)}
-              className={cn(
-                "inline-flex h-8 shrink-0 items-center gap-1 rounded-full border px-2.5 text-[13px] font-medium transition-colors md:h-7 md:text-xs",
-                on ? "border-accent bg-accent text-accent-fg" : "border-border bg-surface text-muted hover:text-fg active:bg-surface-2 md:hover:bg-surface-2",
-              )}
-            >
-              {on ? <Check className="size-3.5 md:size-3" strokeWidth={2.25} aria-hidden /> : null}
-              {SHEET_FLAG_LABELS[flag]}
-            </button>
+            <span key={flag} className="inline-flex shrink-0 items-center">
+              <button
+                type="button"
+                aria-pressed={on}
+                onClick={() => toggleFlag(flag)}
+                className={cn(
+                  "inline-flex h-8 shrink-0 items-center gap-1 rounded-full border px-2.5 text-[13px] font-medium transition-colors md:h-7 md:text-xs",
+                  on
+                    ? "border-accent bg-accent text-accent-fg"
+                    : "border-border bg-surface text-muted hover:text-fg active:bg-surface-2 md:hover:bg-surface-2",
+                )}
+              >
+                {on ? (
+                  <Check
+                    className="size-3.5 md:size-3"
+                    strokeWidth={2.25}
+                    aria-hidden
+                  />
+                ) : null}
+                {SHEET_FLAG_LABELS[flag]}
+              </button>
+              {(() => {
+                const info = explainFlag(flag);
+                return info ? (
+                  <InfoTip
+                    title={info.label}
+                    items={[info]}
+                    note={info.how === "auto" ? AUTO_LOCK_NOTE : undefined}
+                  />
+                ) : null;
+              })()}
+            </span>
           );
         })}
       </div>
 
       <div className="flex min-h-9 items-center gap-3 md:ml-auto md:min-h-0">
-        <p className={cn("min-w-0 flex-1 truncate text-[13px] text-muted md:flex-none md:text-xs", !filtered && "md:hidden")} aria-live="polite">
-          {filtered ? `${shown} of ${total}` : `${total} ${total === 1 ? "contact" : "contacts"}`}
+        <p
+          className={cn(
+            "min-w-0 flex-1 truncate text-[13px] text-muted md:flex-none md:text-xs",
+            !filtered && "md:hidden",
+          )}
+          aria-live="polite"
+        >
+          {filtered
+            ? `${shown} of ${total}`
+            : `${total} ${total === 1 ? "contact" : "contacts"}`}
           {filtered ? (
             <>
               {" · "}
-              <button type="button" onClick={() => onChange(EMPTY_FILTERS)} className="font-medium text-fg/80 underline-offset-2 active:opacity-60 md:hover:underline">
+              <button
+                type="button"
+                onClick={() => onChange(EMPTY_FILTERS)}
+                className="font-medium text-fg/80 underline-offset-2 active:opacity-60 md:hover:underline"
+              >
                 {/* Phones: room for Compact / Select on the same line. */}
                 <span className="md:hidden">Clear</span>
                 <span className="hidden md:inline">Clear filters</span>
@@ -264,7 +376,13 @@ export function FiltersBar({
           type="button"
           aria-pressed={compact}
           onClick={() => onCompact(!compact)}
-          className={cn(chip, "h-9 md:hidden", compact ? "border-fg/70 font-medium text-fg" : "border-border bg-surface text-muted")}
+          className={cn(
+            chip,
+            "h-9 md:hidden",
+            compact
+              ? "border-fg/70 font-medium text-fg"
+              : "border-border bg-surface text-muted",
+          )}
         >
           <Rows3 className="size-4" strokeWidth={1.75} aria-hidden />
           Compact
@@ -273,7 +391,13 @@ export function FiltersBar({
           type="button"
           aria-pressed={selectMode}
           onClick={() => onSelectMode(!selectMode)}
-          className={cn(chip, "h-9 md:hidden", selectMode ? "border-accent bg-accent font-medium text-accent-fg" : "border-border bg-surface text-muted")}
+          className={cn(
+            chip,
+            "h-9 md:hidden",
+            selectMode
+              ? "border-accent bg-accent font-medium text-accent-fg"
+              : "border-border bg-surface text-muted",
+          )}
         >
           <ListChecks className="size-4" strokeWidth={1.75} aria-hidden />
           {selectMode ? "Done" : "Select"}

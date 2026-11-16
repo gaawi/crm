@@ -52,7 +52,8 @@ export function stageOptions(kind: OpportunityKind | null): { value: Opportunity
  * Replied are set automatically from the emails and can't be picked).
  */
 export function pickableStageOptions(kind: OpportunityKind | null, current: OpportunityStage): { value: OpportunityStage; label: string }[] {
-  return stageOptions(kind).filter((s) => !EMAIL_STAGES.includes(s.value) || s.value === current);
+  // In conversation is no longer used in the sheets (Replied, from the emails, replaces it).
+  return stageOptions(kind).filter((s) => (!EMAIL_STAGES.includes(s.value) && s.value !== "negotiation") || s.value === current);
 }
 
 /** What a row can ask the sheet to do (stable callbacks from SheetView). */

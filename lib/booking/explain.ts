@@ -27,7 +27,6 @@ export const STAGE_EXPLAINED: Explained[] = [
     text: "Someone at the organization answered at least once (even if the last email is ours). Writing to info@ and getting an answer from the director counts.",
   },
   { label: "Offer sent", how: "manual", text: "Set by hand when a concrete offer has been sent." },
-  { label: "In conversation", how: "manual", text: "Set by hand while dates or terms are being discussed." },
   { label: "Confirmed", how: "manual", text: "Set by hand when the concert is agreed." },
   { label: "Declined", how: "manual", text: "Set by hand when they say no." },
 ];
@@ -66,3 +65,39 @@ export const STATUS_EXPLAINED: Explained[] = [
 
 export const AUTO_LOCK_NOTE =
   "Automatic values are protected in the database: nobody (the app, ChatGPT or SQL) can change them by hand; only the email detectors do.";
+
+const STAGE_BY_VALUE: Record<string, string> = {
+  lead: "To contact",
+  contacted: "Contacted",
+  replied: "Replied",
+  proposal: "Offer sent",
+  negotiation: "In conversation",
+  won: "Confirmed",
+  lost: "Declined",
+};
+
+/** How one status is set (for the (i) next to its pill). */
+export function explainStage(stage: string): Explained | undefined {
+  return STAGE_EXPLAINED.find((e) => e.label === STAGE_BY_VALUE[stage]);
+}
+
+const FLAG_LABEL: Record<string, string> = {
+  vip: "Prestigious",
+  near_nyc: "< 5 h from NYC",
+  chamber: "Chamber specialists",
+  returning: "Returning",
+  claude: "Claude / ChatGPT",
+  chatgpt: "Claude / ChatGPT",
+  phone: "Has phone",
+  due: "Follow-up due",
+  no_reply: "No reply (2+ months)",
+  bounced: "Bounced email",
+  auto_reply: "Auto-reply",
+  unresearched: "Not researched",
+};
+
+/** How one tag or status filter is set (for the (i) next to its pill). */
+export function explainFlag(flag: string): Explained | undefined {
+  const label = FLAG_LABEL[flag];
+  return [...TAGS_EXPLAINED, ...STATUS_EXPLAINED].find((e) => e.label === label);
+}
