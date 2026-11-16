@@ -344,7 +344,7 @@ export function ShowMoreButton({ hidden, onClick, className }: { hidden: number;
         className,
       )}
     >
-      Show {hidden} more
+      Show {Math.min(hidden, 50)} more{hidden > 50 ? ` (${hidden} left)` : ""}
     </button>
   );
 }

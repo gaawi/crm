@@ -208,7 +208,7 @@ function useCollapsedSections(
 }
 
 /** Rows a long section draws before "Show more". */
-const ROWS_PER_SECTION = 25;
+const ROWS_PER_SECTION = 50;
 
 export function SheetView({
   sheet,
@@ -233,9 +233,8 @@ export function SheetView({
   const searchParams = useSearchParams();
   const phone = useIsPhone(phoneHint);
   // Long sections draw their first rows; "Show more" draws the rest (filters and selection still cover every row).
-  const [expanded, setExpanded] = useState<ReadonlySet<string>>(
-    () => new Set(),
-  );
+  // The list draws its first rows; "Show more" adds 50 at a time (back to the first rows when the filters change).
+  const [more, setMore] = useState<{ key: string; n: number }>({ key: "", n: 0 });
   const [filters, setFilters] = useState<SheetFilters>(() =>
     sheetFiltersFromParams(new URLSearchParams(searchParams.toString())),
   );
@@ -282,9 +281,11 @@ export function SheetView({
   const [collapsed, toggleCollapsed, setAllCollapsed] = useCollapsedSections(
     sheet.id,
   );
+  const filtersKey = JSON.stringify(deferredFilters);
   const groups = useMemo<RowGroup[]>(
     () =>
-      groupBySection(visible).map((g) => {
+      // One flat list: the result of the filters (rows keep the category order, without headers).
+      [{ section: null, rows: groupBySection(visible).flatMap((g) => g.rows) }].map((g) => {
         const key = g.section ?? "\u0000other";
         const fold = {
           collapsed: collapsed.has(key),
@@ -293,16 +294,18 @@ export function SheetView({
             stageLabel(stage, labelKindFor(g.rows.map((r) => r.kind))),
           ),
         };
-        return expanded.has(key) || g.rows.length <= ROWS_PER_SECTION + 5
+        const limit = ROWS_PER_SECTION + (more.key === filtersKey ? more.n : 0);
+        return g.rows.length <= limit + 5
           ? { ...g, ...fold }
           : {
               ...g,
               ...fold,
-              shown: ROWS_PER_SECTION,
-              onShowAll: () => setExpanded((prev) => new Set(prev).add(key)),
+              shown: limit,
+              onShowAll: () =>
+                setMore((m) => ({ key: filtersKey, n: (m.key === filtersKey ? m.n : 0) + ROWS_PER_SECTION })),
             };
       }),
-    [visible, expanded, collapsed, toggleCollapsed],
+    [visible, more, filtersKey, collapsed, toggleCollapsed],
   );
   const confirmed = useMemo(
     () => rows.filter((r) => r.stage === "won"),
@@ -643,7 +646,8 @@ export function SheetView({
     [rows, filters.kind],
   );
 
-  const showSectionHeaders = sections.length > 0;
+  // No category headers: the Category filter picks one when wanted.
+  const showSectionHeaders = false;
   const bulkVisible = selectedVisible.length > 0;
   const stale = deferredFilters !== filters;
 
