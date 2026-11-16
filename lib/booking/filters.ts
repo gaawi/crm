@@ -8,7 +8,7 @@ import { phoneDigits } from "@/lib/booking/phone";
 import { isFollowUpDue, isNoReply, type TimingRow } from "@/lib/booking/timing";
 import type { OpportunityKind, OpportunityStage } from "@/lib/types";
 
-export const SHEET_FLAGS = ["due", "no_reply", "returning", "phone", "hot", "vip", "near_nyc", "chamber", "josefina", "claude", "chatgpt", "unresearched"] as const;
+export const SHEET_FLAGS = ["due", "no_reply", "returning", "phone", "hot", "vip", "near_nyc", "chamber", "josefina", "claude", "chatgpt", "unresearched", "bounced", "auto_reply"] as const;
 /**
  * due = follow-up due; no_reply = waiting > 10 days; hot = In conversation;
  * claude / chatgpt = the organization's profile was researched by that
@@ -32,6 +32,8 @@ export const SHEET_FLAG_LABELS: Record<SheetFlag, string> = {
   claude: "Researched by Claude",
   chatgpt: "Researched by ChatGPT",
   unresearched: "Not researched",
+  bounced: "Bounced email",
+  auto_reply: "Auto-reply",
 };
 
 export type Researcher = "claude" | "chatgpt";
@@ -231,6 +233,10 @@ export function rowHasFlag(row: FilterRow, flag: SheetFlag, today: string, timez
     case "claude":
     case "chatgpt":
       return researcherOf(row.organization?.profile) === flag;
+    case "bounced":
+      return Boolean((row.contact as { bouncedAt?: string | null } | null)?.bouncedAt);
+    case "auto_reply":
+      return Boolean((row.contact as { autoReplyAt?: string | null } | null)?.autoReplyAt);
     case "unresearched":
       return researcherOf(row.organization?.profile) === null;
     case "vip":

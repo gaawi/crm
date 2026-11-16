@@ -72,6 +72,10 @@ export interface SheetRowContact {
   lastOutboundAt: string | null;
   /** My latest unanswered email to them. */
   awaitingReplySince: string | null;
+  /** The address we write to bounced (delivery failed) at this time; it needs a new email. */
+  bouncedAt?: string | null;
+  /** An automatic reply (out of office…) after our last email: not a real answer. */
+  autoReplyAt?: string | null;
   /** An email to them already waiting in Approvals (Prepare email would skip them). */
   openDraftId: string | null;
 }

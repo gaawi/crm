@@ -131,6 +131,8 @@ export async function getSheetRows(projectId: string, options: { ids?: string[] 
              'lastInboundAt', c.last_inbound_at,
              'lastOutboundAt', c.last_outbound_at,
              'awaitingReplySince', c.awaiting_reply_since,
+             'bouncedAt', (select max(ce2.bounced_at) from contact_emails ce2 where ce2.contact_id = c.id and ce2.email = e.email),
+             'autoReplyAt', case when c.last_auto_reply_at >= coalesce(c.last_outbound_at, '-infinity'::timestamptz) then c.last_auto_reply_at end,
              'openDraftId', (select d.id from email_drafts d
                               where d.contact_id = c.id and d.status in ('proposed', 'queued', 'revising', 'sending', 'failed')
                               order by d.created_at desc limit 1)) end as contact,

@@ -51,7 +51,7 @@ const TAGS: { flag: SheetFlag; icon: LucideIcon; off: string; on: string }[] = [
 ];
 const TAG_FLAGS = TAGS.map((t) => t.flag);
 /** The rest show as plain pills after the colored tags. */
-const MORE: SheetFlag[] = ["phone", "due", "no_reply", "unresearched"];
+const MORE: SheetFlag[] = ["phone", "due", "no_reply", "bounced", "auto_reply", "unresearched"];
 
 const pillSelect =
   "h-9 shrink-0 cursor-pointer appearance-auto rounded-full border border-border bg-surface pl-3 pr-2 text-[15px] text-fg focus:border-border-strong focus:outline-none md:h-8 md:rounded-md md:pl-2.5 md:text-sm";

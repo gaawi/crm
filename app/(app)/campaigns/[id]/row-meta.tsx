@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowDownLeft, ArrowUpRight, Car, CircleSlash, Clock, Flame, History, Loader2, Mail, MailCheck, RotateCcw, Sparkles, Star } from "lucide-react";
+import { AlertTriangle, ArrowDownLeft, ArrowUpRight, Bot, Car, CircleSlash, Clock, Flame, History, Loader2, Mail, MailCheck, RotateCcw, Sparkles, Star } from "lucide-react";
 import { ActivityIcon, describeLastTouch, TOUCH_TONE_CLASS } from "@/components/booking/activity-meta";
 import { phoneActionClass, type PhoneActionSize } from "@/components/booking/phone-action-class";
 import { PlaceLink } from "@/components/organizations/place-link";
@@ -129,13 +129,15 @@ export function RowBadges({
   iconOnly = false,
   className,
 }: {
-  row: Pick<SheetRow, "returning" | "stage" | "organization">;
+  row: Pick<SheetRow, "returning" | "stage" | "organization"> & { contact?: SheetRow["contact"] };
   iconOnly?: boolean;
   className?: string;
 }) {
   const researcher = researcherOf(row.organization?.profile);
   const tags = ORG_TAG_BADGES.filter((t) => row.organization?.tags?.includes(t.tag));
-  if (!row.returning && !researcher && !tags.length && !(iconOnly && row.stage === "negotiation")) return null;
+  const bounced = Boolean(row.contact?.bouncedAt);
+  const autoReply = Boolean(row.contact?.autoReplyAt) && !bounced;
+  if (!row.returning && !researcher && !tags.length && !bounced && !autoReply && !(iconOnly && row.stage === "negotiation")) return null;
   if (iconOnly) {
     return (
       <span className={cn("inline-flex shrink-0 items-center gap-1", className)}>
@@ -160,6 +162,18 @@ export function RowBadges({
         className,
       )}
     >
+      {bounced ? (
+        <Badge className="bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300" title="Delivery failed: this address doesn't work, find a new email">
+          <AlertTriangle className="size-3" strokeWidth={2} aria-hidden />
+          Bounced
+        </Badge>
+      ) : null}
+      {autoReply ? (
+        <Badge className="bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300" title="Automatic reply (out of office…): not a real answer">
+          <Bot className="size-3" strokeWidth={2} aria-hidden />
+          Auto-reply
+        </Badge>
+      ) : null}
       {tags.map((t) => (
         <Badge key={t.tag} className={t.badge} title={t.title}>
           <t.icon className="size-3" strokeWidth={2} aria-hidden />
