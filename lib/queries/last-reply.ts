@@ -90,7 +90,7 @@ export async function getLastReply(scope: { contactId: string } | { organization
       from messages m
       join message_participants mp on mp.message_id = m.id and mp.role = 'from'
       join gmail_accounts a on a.id = m.account_id
-     where mp.email = any(${list}) and m.direction = 'inbound'
+     where mp.email = any(${list}::text[]) and m.direction = 'inbound'
        and not m.auto_reply and not coalesce(m.is_automated, false)
      order by m.sent_at desc
      limit 1`;
@@ -102,7 +102,7 @@ export async function getLastReply(scope: { contactId: string } | { organization
       from messages m
       join message_participants mp on mp.message_id = m.id and mp.role in ('to', 'cc')
       join gmail_accounts a on a.id = m.account_id
-     where mp.email = any(${list}) and m.direction = 'outbound' and m.sent_at > ${theirs.sentAt}
+     where mp.email = any(${list}::text[]) and m.direction = 'outbound' and m.sent_at > ${theirs.sentAt}
      order by m.sent_at desc
      limit 1`;
 
