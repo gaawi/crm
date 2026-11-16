@@ -20,7 +20,7 @@ export function LastReplyCard({ reply, timezone, showSender = false }: { reply: 
         <MessageSquareQuote className="size-4 text-emerald-700 dark:text-emerald-400" aria-hidden />
         <span className="font-semibold uppercase tracking-wide text-emerald-800 dark:text-emerald-300">Their last reply</span>
         <span className="text-muted">
-          {formatRelative(new Date(theirs.sentAt), timezone)} · {formatDate(theirs.sentAt, timezone)}
+          {formatRelative(new Date(theirs.sentAt), timezone)} · {formatDate(new Date(theirs.sentAt), timezone)}
         </span>
       </header>
       <div className="px-4 py-3">
@@ -43,7 +43,7 @@ export function LastReplyCard({ reply, timezone, showSender = false }: { reply: 
       {ours ? (
         <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 border-t border-emerald-200 bg-surface/60 px-4 py-2 text-[12px] text-muted dark:border-emerald-900">
           <ArrowUpRight className="size-3.5" aria-hidden />
-          <span>We answered {formatDate(ours.sentAt, timezone)} from</span>
+          <span>We answered {formatDate(new Date(ours.sentAt), timezone)} from</span>
           <AccountBadge email={ours.accountEmail} />
           {ours.text ? <span className="min-w-0 truncate italic">“{truncate(ours.text.replace(/\s+/g, " "), 140)}”</span> : null}
         </p>
