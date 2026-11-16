@@ -1,5 +1,10 @@
 "use client";
 
+import { EMAIL_STAGES } from "@/lib/constants";
+import type { OpportunityStage } from "@/lib/types";
+import { HowChip, InfoTip } from "@/components/booking/info-tip";
+import { AUTO_LOCK_NOTE, STAGE_EXPLAINED, STAGE_RULE } from "@/lib/booking/explain";
+
 import { useId, useRef, useState, useTransition } from "react";
 import { Target, Trash2 } from "lucide-react";
 import { emitActivityChanged } from "@/components/booking/activity-events";
@@ -177,6 +182,13 @@ export function StageCell({
           </option>
         ))}
       </select>
+      {EMAIL_STAGES.includes(draft as OpportunityStage) ? (
+        <span className={cn("mt-0.5 flex items-center gap-1 text-[11px] text-subtle", look === "cell" && "px-2")}>
+          <HowChip how="auto" />
+          from emails
+          <InfoTip title="Statuses" items={STAGE_EXPLAINED} note={`${STAGE_RULE} ${AUTO_LOCK_NOTE}`} />
+        </span>
+      ) : null}
       <Status pending={pending} error={error} look={look} />
     </div>
   );

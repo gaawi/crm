@@ -4,6 +4,8 @@ import { Car, Check, ListChecks, Music, RotateCcw, Rows3, Sparkles, Star, type L
 import { EMPTY_FILTERS, FIT_FILTERS, NO_SECTION, ORIGINS, SHEET_FLAG_LABELS, type FitFilter, type SheetFilters, type SheetFlag } from "@/lib/booking/filters";
 import type { OpportunityKind, OpportunityStage } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { InfoTip } from "@/components/booking/info-tip";
+import { AUTO_LOCK_NOTE, STAGE_EXPLAINED, STAGE_RULE, STATUS_EXPLAINED, TAGS_EXPLAINED } from "@/lib/booking/explain";
 import { SearchInput } from "../../_components/ui";
 import { scrollerClass } from "./stats";
 
@@ -125,6 +127,7 @@ export function FiltersBar({
             </option>
           ))}
         </select>
+        <InfoTip title="Statuses" items={STAGE_EXPLAINED} note={`${STAGE_RULE} ${AUTO_LOCK_NOTE}`} className="-ml-1 self-center" />
 
         {goalOptions.length > 1 || filters.kind ? (
           <select
@@ -194,7 +197,10 @@ export function FiltersBar({
       </div>
 
       <div className={cn(scrollerClass, "-mx-4 gap-1.5 px-4 md:mx-0 md:w-full md:flex-wrap md:px-0")} role="group" aria-label="Tags">
-        <span className="shrink-0 self-center pr-0.5 text-[11px] font-semibold uppercase tracking-wide text-subtle">Tags</span>
+        <span className="flex shrink-0 items-center self-center text-[11px] font-semibold uppercase tracking-wide text-subtle">
+          Tags
+          <InfoTip title="Tags" items={TAGS_EXPLAINED} />
+        </span>
         {TAGS.map(({ flag, icon: Icon, off, on: onClass }) => {
           const on = filters.flags.includes(flag);
           const n = flagCounts?.get(flag);
@@ -215,7 +221,10 @@ export function FiltersBar({
             </button>
           );
         })}
-        <span className="ml-2 shrink-0 self-center pr-0.5 text-[11px] font-semibold uppercase tracking-wide text-subtle">Status</span>
+        <span className="ml-2 flex shrink-0 items-center self-center text-[11px] font-semibold uppercase tracking-wide text-subtle">
+          Status
+          <InfoTip title="Status filters" items={STATUS_EXPLAINED} note={AUTO_LOCK_NOTE} />
+        </span>
         {plain.map((flag) => {
           const on = filters.flags.includes(flag);
           return (
