@@ -30,15 +30,25 @@ export interface StatItem {
  * The sheet's counts (Total · To contact · … · Follow-ups due · No reply).
  * Each one filters the list; tapping the active one again clears it.
  */
-export function StatsStrip({ items }: { items: StatItem[] }) {
+export function StatsStrip({
+  items,
+  bare = false,
+}: {
+  items: StatItem[];
+  /** Inside a filter group: no own scroller or margins. */ bare?: boolean;
+}) {
   return (
     <div
       role="toolbar"
       aria-label="Counts (tap to filter)"
-      className={cn(
-        scrollerClass,
-        "-mx-4 gap-1.5 px-4 py-2 md:mx-0 md:flex-wrap md:gap-1 md:px-0 md:py-0",
-      )}
+      className={
+        bare
+          ? "contents"
+          : cn(
+              scrollerClass,
+              "-mx-4 gap-1.5 px-4 py-2 md:mx-0 md:flex-wrap md:gap-1 md:px-0 md:py-0",
+            )
+      }
     >
       {items.map((item) => {
         // One text color only: `cn` joins classes, and text-fg would beat text-danger.

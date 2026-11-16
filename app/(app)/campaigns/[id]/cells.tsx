@@ -188,7 +188,12 @@ export function StageCell({
           from emails
           <InfoTip title="Statuses" items={STAGE_EXPLAINED} note={`${STAGE_RULE} ${AUTO_LOCK_NOTE}`} />
         </span>
-      ) : null}
+      ) : (
+        <span className={cn("mt-0.5 flex items-center gap-1 text-[11px] text-subtle", look === "cell" && "px-2")}>
+          <HowChip how="manual" />
+          set by you
+        </span>
+      )}
       <Status pending={pending} error={error} look={look} />
     </div>
   );

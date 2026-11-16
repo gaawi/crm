@@ -1,6 +1,15 @@
 "use client";
 
-import { useCallback, useDeferredValue, useEffect, useId, useMemo, useState, useSyncExternalStore, useTransition } from "react";
+import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useId,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+  useTransition,
+} from "react";
 import { useSearchParams } from "next/navigation";
 import { useActivityLogger } from "@/components/booking/log-activity-dialog";
 import { EmptyState } from "@/components/ui/layout";
@@ -20,9 +29,24 @@ import { sectionSummary } from "@/lib/booking/section-summary";
 import { explainFlag, explainStage } from "@/lib/booking/explain";
 import { suggestTemplate } from "@/lib/booking/templates";
 import { isFollowUpDue, isNoReply } from "@/lib/booking/timing";
-import type { BookingSheet, EmailTemplate, SheetRow } from "@/lib/booking/types";
-import { EMAIL_STAGES, GOAL_KINDS, goalLabel, labelKindFor, nextActionLabel, stageLabel } from "@/lib/constants";
-import type { NextAction, OpportunityKind, OpportunityStage } from "@/lib/types";
+import type {
+  BookingSheet,
+  EmailTemplate,
+  SheetRow,
+} from "@/lib/booking/types";
+import {
+  EMAIL_STAGES,
+  GOAL_KINDS,
+  goalLabel,
+  labelKindFor,
+  nextActionLabel,
+  stageLabel,
+} from "@/lib/constants";
+import type {
+  NextAction,
+  OpportunityKind,
+  OpportunityStage,
+} from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { bulkUpdateRowsAction, prepareEmailsAction } from "../actions";
 import { AddRowButton } from "./add-row";
@@ -31,11 +55,24 @@ import { FiltersBar } from "./filters-bar";
 import { HistoryDrawer } from "./history-drawer";
 import { ImportButton } from "./import-dialog";
 import { RowCard } from "./row-card";
-import { rowSubject, STAGE_DOT, stageOptions, type EmailSuggestion, type RowActions, type RowContext } from "./row-meta";
+import {
+  rowSubject,
+  STAGE_DOT,
+  stageOptions,
+  type EmailSuggestion,
+  type RowActions,
+  type RowContext,
+} from "./row-meta";
 import { useIsPhone } from "@/components/ui/sheet";
-import { RowsTable, SectionToggle, ShowMoreButton, shownRows, type RowGroup } from "./rows-table";
+import {
+  RowsTable,
+  SectionToggle,
+  ShowMoreButton,
+  shownRows,
+  type RowGroup,
+} from "./rows-table";
 import { useSheetToast } from "./sheet-toast";
-import { ConfirmedStrip, StatsStrip, type StatItem } from "./stats";
+import { ConfirmedStrip, type StatItem } from "./stats";
 
 /**
  * The booking sheet screen (below the page header): counts that filter,
@@ -77,7 +114,11 @@ function writeCompact(on: boolean) {
 
 /** Compact phone cards, remembered on this device. */
 function useCompact(): [boolean, (on: boolean) => void] {
-  const stored = useSyncExternalStore(subscribeCompact, readCompact, () => false);
+  const stored = useSyncExternalStore(
+    subscribeCompact,
+    readCompact,
+    () => false,
+  );
   const [override, setOverride] = useState<boolean | null>(null);
   const set = useCallback((on: boolean) => {
     setOverride(on);
@@ -86,8 +127,8 @@ function useCompact(): [boolean, (on: boolean) => void] {
   return [override ?? stored, set];
 }
 
-const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
-
+const plural = (n: number, one: string, many = `${one}s`) =>
+  `${n} ${n === 1 ? one : many}`;
 
 const COLLAPSED_EVENT = "crm:sheet-collapsed";
 
@@ -101,7 +142,13 @@ function subscribeCollapsed(onChange: () => void) {
 }
 
 /** Folded sections of a sheet, remembered per sheet in this browser (a JSON list of section keys). */
-function useCollapsedSections(sheetId: string): [ReadonlySet<string>, (key: string) => void, (keys: string[], on: boolean) => void] {
+function useCollapsedSections(
+  sheetId: string,
+): [
+  ReadonlySet<string>,
+  (key: string) => void,
+  (keys: string[], on: boolean) => void,
+] {
   const storageKey = `crm:sheet-collapsed:${sheetId}`;
   const raw = useSyncExternalStore(
     subscribeCollapsed,
@@ -117,7 +164,11 @@ function useCollapsedSections(sheetId: string): [ReadonlySet<string>, (key: stri
   const collapsed = useMemo<ReadonlySet<string>>(() => {
     try {
       const saved: unknown = JSON.parse(raw);
-      return new Set(Array.isArray(saved) ? saved.filter((k): k is string => typeof k === "string") : []);
+      return new Set(
+        Array.isArray(saved)
+          ? saved.filter((k): k is string => typeof k === "string")
+          : [],
+      );
     } catch {
       return new Set();
     }
@@ -182,33 +233,55 @@ export function SheetView({
   const searchParams = useSearchParams();
   const phone = useIsPhone(phoneHint);
   // Long sections draw their first rows; "Show more" draws the rest (filters and selection still cover every row).
-  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
-  const [filters, setFilters] = useState<SheetFilters>(() => sheetFiltersFromParams(new URLSearchParams(searchParams.toString())));
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const [filters, setFilters] = useState<SheetFilters>(() =>
+    sheetFiltersFromParams(new URLSearchParams(searchParams.toString())),
+  );
   const deferredFilters = useDeferredValue(filters);
   const [compact, setCompact] = useCompact();
   const [selectMode, setSelectMode] = useState(false);
-  const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
+  const [selected, setSelected] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   const [drawerRowId, setDrawerRowId] = useState<string | null>(null);
-  const [preparing, setPreparing] = useState<ReadonlySet<string>>(() => new Set());
+  const [preparing, setPreparing] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   const [bulkPending, startBulk] = useTransition();
   const sectionsListId = useId();
 
   // Filters live in the URL (links and Back keep them); replaceState keeps typing out of the history.
   useEffect(() => {
     const query = sheetFiltersToQuery(filters);
-    if (query !== window.location.search) window.history.replaceState(null, "", `${window.location.pathname}${query}`);
+    if (query !== window.location.search)
+      window.history.replaceState(
+        null,
+        "",
+        `${window.location.pathname}${query}`,
+      );
   }, [filters]);
 
   const sections = useMemo(() => sheetSections(rows), [rows]);
-  const hasUnsectioned = useMemo(() => sections.length > 0 && rows.some((r) => !r.section), [rows, sections]);
+  const hasUnsectioned = useMemo(
+    () => sections.length > 0 && rows.some((r) => !r.section),
+    [rows, sections],
+  );
   // Rows per section over the whole sheet, for the section select ("Listas · 1 ya tocamos (11)").
   const sectionCounts = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const r of rows) counts.set(r.section ?? "", (counts.get(r.section ?? "") ?? 0) + 1);
+    for (const r of rows)
+      counts.set(r.section ?? "", (counts.get(r.section ?? "") ?? 0) + 1);
     return counts;
   }, [rows]);
-  const visible = useMemo(() => filterRows(rows, deferredFilters, today, timezone), [rows, deferredFilters, today, timezone]);
-  const [collapsed, toggleCollapsed, setAllCollapsed] = useCollapsedSections(sheet.id);
+  const visible = useMemo(
+    () => filterRows(rows, deferredFilters, today, timezone),
+    [rows, deferredFilters, today, timezone],
+  );
+  const [collapsed, toggleCollapsed, setAllCollapsed] = useCollapsedSections(
+    sheet.id,
+  );
   const groups = useMemo<RowGroup[]>(
     () =>
       groupBySection(visible).map((g) => {
@@ -216,20 +289,35 @@ export function SheetView({
         const fold = {
           collapsed: collapsed.has(key),
           onToggle: () => toggleCollapsed(key),
-          summary: sectionSummary(g.rows, (stage) => stageLabel(stage, labelKindFor(g.rows.map((r) => r.kind)))),
+          summary: sectionSummary(g.rows, (stage) =>
+            stageLabel(stage, labelKindFor(g.rows.map((r) => r.kind))),
+          ),
         };
         return expanded.has(key) || g.rows.length <= ROWS_PER_SECTION + 5
           ? { ...g, ...fold }
-          : { ...g, ...fold, shown: ROWS_PER_SECTION, onShowAll: () => setExpanded((prev) => new Set(prev).add(key)) };
+          : {
+              ...g,
+              ...fold,
+              shown: ROWS_PER_SECTION,
+              onShowAll: () => setExpanded((prev) => new Set(prev).add(key)),
+            };
       }),
     [visible, expanded, collapsed, toggleCollapsed],
   );
-  const confirmed = useMemo(() => rows.filter((r) => r.stage === "won"), [rows]);
+  const confirmed = useMemo(
+    () => rows.filter((r) => r.stage === "won"),
+    [rows],
+  );
   // Sheet-level status names: the booking ones while every row is a booking (or every row shares one goal), generic ones for a mix.
-  const labelKind = useMemo(() => labelKindFor(rows.map((r) => r.kind)), [rows]);
+  const labelKind = useMemo(
+    () => labelKindFor(rows.map((r) => r.kind)),
+    [rows],
+  );
   const sheetStages = useMemo(() => stageOptions(labelKind), [labelKind]);
 
-  const noAccount = sendAccountEmail ? null : "Connect a Gmail account in Settings first";
+  const noAccount = sendAccountEmail
+    ? null
+    : "Connect a Gmail account in Settings first";
   const suggestions = useMemo(() => {
     const map = new Map<string, EmailSuggestion>();
     for (const row of rows) {
@@ -239,14 +327,23 @@ export function SheetView({
         : !template
           ? `No template for “${stageLabel(row.stage, row.kind)}” rows. Add one in Templates & settings.`
           : noAccount;
-      map.set(row.id, { template, reason, draftId: row.contact?.openDraftId ?? null });
+      map.set(row.id, {
+        template,
+        reason,
+        draftId: row.contact?.openDraftId ?? null,
+      });
     }
     return map;
   }, [rows, templates, noAccount]);
 
   // Selection only ever covers rows on screen.
-  const selectedVisible = useMemo(() => visible.filter((r) => selected.has(r.id)).map((r) => r.id), [visible, selected]);
-  const drawerRow = drawerRowId ? (rows.find((r) => r.id === drawerRowId) ?? null) : null;
+  const selectedVisible = useMemo(
+    () => visible.filter((r) => selected.has(r.id)).map((r) => r.id),
+    [visible, selected],
+  );
+  const drawerRow = drawerRowId
+    ? (rows.find((r) => r.id === drawerRowId) ?? null)
+    : null;
 
   const toast = useSheetToast({ raised: selectedVisible.length > 0 });
   const showToast = toast.show;
@@ -269,10 +366,16 @@ export function SheetView({
             showToast({
               message: `“${prepared[0].templateName}” is ready in Approvals.`,
               detail: "Review and send it from there. Nothing was sent.",
-              link: { label: "Review", href: `/approvals/${prepared[0].draftId}` },
+              link: {
+                label: "Review",
+                href: `/approvals/${prepared[0].draftId}`,
+              },
             });
           } else {
-            showToast({ tone: "error", message: skipped[0]?.reason ?? "Not prepared." });
+            showToast({
+              tone: "error",
+              message: skipped[0]?.reason ?? "Not prepared.",
+            });
           }
           return;
         }
@@ -286,7 +389,12 @@ export function SheetView({
             : campaignId
               ? `${plural(prepared.length, "email")} ready as a mailing — review in Approvals.`
               : `${plural(prepared.length, "email")} ready in Approvals.`,
-          detail: [skippedText, campaignId ? "Nothing was sent. Once you approve the campaign, they go out a few at a time." : "Nothing was sent."]
+          detail: [
+            skippedText,
+            campaignId
+              ? "Nothing was sent. Once you approve the campaign, they go out a few at a time."
+              : "Nothing was sent.",
+          ]
             .filter(Boolean)
             .join(" "),
           link: campaignId
@@ -296,7 +404,11 @@ export function SheetView({
               : undefined,
         });
       } catch {
-        showToast({ tone: "error", message: "Could not prepare the emails. Check your connection and try again." });
+        showToast({
+          tone: "error",
+          message:
+            "Could not prepare the emails. Check your connection and try again.",
+        });
       } finally {
         setPreparing((prev) => {
           const next = new Set(prev);
@@ -318,7 +430,13 @@ export function SheetView({
           return next;
         }),
       onHistory: (rowId) => setDrawerRowId(rowId),
-      onLog: (row, kind) => openLog({ target: { opportunityId: row.id }, kind, subject: rowSubject(row), phone: row.contact?.phone ?? null }),
+      onLog: (row, kind) =>
+        openLog({
+          target: { opportunityId: row.id },
+          kind,
+          subject: rowSubject(row),
+          phone: row.contact?.phone ?? null,
+        }),
       onPrepare: (row) => {
         const suggestion = suggestions.get(row.id);
         if (suggestion?.reason) {
@@ -347,7 +465,12 @@ export function SheetView({
     setSelectMode(false);
   }, []);
 
-  const bulkUpdate = (patch: { stage?: OpportunityStage; section?: string | null; kind?: OpportunityKind; nextAction?: NextAction | null }) => {
+  const bulkUpdate = (patch: {
+    stage?: OpportunityStage;
+    section?: string | null;
+    kind?: OpportunityKind;
+    nextAction?: NextAction | null;
+  }) => {
     const ids = selectedVisible;
     startBulk(async () => {
       try {
@@ -370,13 +493,22 @@ export function SheetView({
                   : "moved out of their section";
         showToast({ message: `${plural(result.updated, "row")} ${what}.` });
       } catch {
-        showToast({ tone: "error", message: "Not saved. Check your connection and try again." });
+        showToast({
+          tone: "error",
+          message: "Not saved. Check your connection and try again.",
+        });
       }
     });
   };
 
   const ctx = useMemo<RowContext>(
-    () => ({ currency: sheet.currency, today, timezone, sectionsListId, multiGoal: new Set(rows.map((r) => r.kind)).size > 1 }),
+    () => ({
+      currency: sheet.currency,
+      today,
+      timezone,
+      sectionsListId,
+      multiGoal: new Set(rows.map((r) => r.kind)).size > 1,
+    }),
     [sheet.currency, today, timezone, sectionsListId, rows],
   );
 
@@ -386,7 +518,13 @@ export function SheetView({
     () =>
       filterRows(
         rows,
-        { ...deferredFilters, status: "", flags: deferredFilters.flags.filter((f) => f !== "due" && f !== "no_reply") },
+        {
+          ...deferredFilters,
+          status: "",
+          flags: deferredFilters.flags.filter(
+            (f) => f !== "due" && f !== "no_reply",
+          ),
+        },
         today,
         timezone,
       ),
@@ -395,18 +533,35 @@ export function SheetView({
   // Each colored tag: how many rows it leaves (on: the rows shown by the other filters).
   const flagCounts = useMemo(() => {
     const m = new Map<SheetFlag, number>();
-    for (const flag of ["vip", "near_nyc", "chamber", "returning", "claude", "chatgpt"] as const) {
-      m.set(flag, counted.filter((r) => rowHasFlag(r, flag, today, timezone)).length);
+    for (const flag of [
+      "vip",
+      "near_nyc",
+      "chamber",
+      "returning",
+      "claude",
+      "chatgpt",
+    ] as const) {
+      m.set(
+        flag,
+        counted.filter((r) => rowHasFlag(r, flag, today, timezone)).length,
+      );
     }
     return m;
   }, [counted, today, timezone]);
   const stats = useMemo<StatItem[]>(() => {
-    const count = (stage: OpportunityStage) => counted.filter((r) => r.stage === stage).length;
+    const count = (stage: OpportunityStage) =>
+      counted.filter((r) => r.stage === stage).length;
     const due = counted.filter((r) => isFollowUpDue(r, today)).length;
     const noReply = counted.filter((r) => isNoReply(r, today, timezone)).length;
-    const setStatus = (stage: OpportunityStage) => () => setFilters((f) => ({ ...f, status: f.status === stage ? "" : stage }));
+    const setStatus = (stage: OpportunityStage) => () =>
+      setFilters((f) => ({ ...f, status: f.status === stage ? "" : stage }));
     const toggleFlag = (flag: "due" | "no_reply") => () =>
-      setFilters((f) => ({ ...f, flags: f.flags.includes(flag) ? f.flags.filter((x) => x !== flag) : [...f.flags, flag] }));
+      setFilters((f) => ({
+        ...f,
+        flags: f.flags.includes(flag)
+          ? f.flags.filter((x) => x !== flag)
+          : [...f.flags, flag],
+      }));
     const stage = (value: OpportunityStage, always = true): StatItem[] => {
       const n = count(value);
       if (!always && n === 0 && filters.status !== value) return [];
@@ -427,8 +582,16 @@ export function SheetView({
         key: "total",
         label: "Total",
         count: counted.length,
-        active: !filters.status && !filters.flags.includes("due") && !filters.flags.includes("no_reply"),
-        onClick: () => setFilters((f) => ({ ...f, status: "", flags: f.flags.filter((x) => x !== "due" && x !== "no_reply") })),
+        active:
+          !filters.status &&
+          !filters.flags.includes("due") &&
+          !filters.flags.includes("no_reply"),
+        onClick: () =>
+          setFilters((f) => ({
+            ...f,
+            status: "",
+            flags: f.flags.filter((x) => x !== "due" && x !== "no_reply"),
+          })),
       },
       // Only the stages that have rows (or are the active filter): fewer, clearer numbers.
       // To contact is left out (it is what remains); each count has its own (i).
@@ -439,7 +602,17 @@ export function SheetView({
       ...stage("won", false),
       ...stage("lost", false),
       ...(due || filters.flags.includes("due")
-        ? [{ key: "due", label: "Follow-ups due", info: explainFlag("due"), count: due, tone: "danger" as const, active: filters.flags.includes("due"), onClick: toggleFlag("due") }]
+        ? [
+            {
+              key: "due",
+              label: "Follow-ups due",
+              info: explainFlag("due"),
+              count: due,
+              tone: "danger" as const,
+              active: filters.flags.includes("due"),
+              onClick: toggleFlag("due"),
+            },
+          ]
         : []),
       ...(noReply || filters.flags.includes("no_reply")
         ? [
@@ -460,9 +633,11 @@ export function SheetView({
   // The sheet's goals in GOAL_KINDS order (a filter once there are two).
   const goalOptions = useMemo(
     () =>
-      GOAL_KINDS.map((k) => ({ value: k.value, label: k.label, count: rows.filter((r) => r.kind === k.value).length })).filter(
-        (k) => k.count > 0 || k.value === filters.kind,
-      ),
+      GOAL_KINDS.map((k) => ({
+        value: k.value,
+        label: k.label,
+        count: rows.filter((r) => r.kind === k.value).length,
+      })).filter((k) => k.count > 0 || k.value === filters.kind),
     [rows, filters.kind],
   );
 
@@ -476,12 +651,19 @@ export function SheetView({
         title="No contacts yet"
         action={
           <div className="flex flex-wrap justify-center gap-2">
-            <AddRowButton projectId={sheet.id} currency={sheet.currency} phonePrefix={sheet.phonePrefix} sections={[]} variant="button" />
+            <AddRowButton
+              projectId={sheet.id}
+              currency={sheet.currency}
+              phonePrefix={sheet.phonePrefix}
+              sections={[]}
+              variant="button"
+            />
             <ImportButton projectId={sheet.id} sections={[]} />
           </div>
         }
       >
-        Add them one by one, or import a list: a CSV or TSV file, or rows pasted from a spreadsheet.
+        Add them one by one, or import a list: a CSV or TSV file, or rows pasted
+        from a spreadsheet.
       </EmptyState>
     );
   }
@@ -496,6 +678,7 @@ export function SheetView({
           goalOptions={goalOptions}
           sections={sections}
           sectionCounts={sectionCounts}
+          stats={stats}
           flagCounts={flagCounts}
           hasUnsectioned={hasUnsectioned}
           shown={visible.length}
@@ -509,9 +692,6 @@ export function SheetView({
           }}
         />
         {/* The counts sit under the filters and count what they leave. */}
-        <div className="sticky top-0 z-20 -mx-4 mb-3 border-b border-border bg-bg/90 px-4 pt-[env(safe-area-inset-top)] backdrop-blur-xl md:static md:mx-0 md:mb-0 md:border-0 md:bg-transparent md:px-0 md:mt-2 md:pt-0 md:backdrop-blur-none">
-          <StatsStrip items={stats} />
-        </div>
       </div>
 
       <ConfirmedStrip rows={confirmed} label={stageLabel("won", labelKind)} />
@@ -526,10 +706,28 @@ export function SheetView({
         <div className={cn("transition-opacity", stale && "opacity-70")}>
           {showSectionHeaders && groups.length > 1 ? (
             <div className="mb-2 flex justify-end gap-3 px-1 text-[13px] md:text-xs">
-              <button type="button" onClick={() => setAllCollapsed(groups.map((g) => g.section ?? "\u0000other"), true)} className="text-muted active:opacity-60 md:hover:text-fg">
+              <button
+                type="button"
+                onClick={() =>
+                  setAllCollapsed(
+                    groups.map((g) => g.section ?? "\u0000other"),
+                    true,
+                  )
+                }
+                className="text-muted active:opacity-60 md:hover:text-fg"
+              >
                 Collapse all
               </button>
-              <button type="button" onClick={() => setAllCollapsed(groups.map((g) => g.section ?? "\u0000other"), false)} className="text-muted active:opacity-60 md:hover:text-fg">
+              <button
+                type="button"
+                onClick={() =>
+                  setAllCollapsed(
+                    groups.map((g) => g.section ?? "\u0000other"),
+                    false,
+                  )
+                }
+                className="text-muted active:opacity-60 md:hover:text-fg"
+              >
                 Expand all
               </button>
             </div>
@@ -551,7 +749,12 @@ export function SheetView({
           {phone ? (
             <div className="flex flex-col gap-6 md:hidden">
               {groups.map((group) => (
-                <section key={group.section ?? "\u0000other"} aria-label={showSectionHeaders ? (group.section ?? "Other") : undefined}>
+                <section
+                  key={group.section ?? "\u0000other"}
+                  aria-label={
+                    showSectionHeaders ? (group.section ?? "Other") : undefined
+                  }
+                >
                   {showSectionHeaders ? (
                     <h2 className="mb-2 flex items-baseline gap-2 px-1 text-[13px] text-muted">
                       <SectionToggle group={group} className="min-w-0 flex-1" />
@@ -566,14 +769,18 @@ export function SheetView({
                           }
                           className="ml-auto h-8 shrink-0 text-[13px] font-normal normal-case tracking-normal text-blue-600 active:opacity-60 dark:text-blue-400"
                         >
-                          {group.rows.every((r) => selected.has(r.id)) ? "Unselect" : "Select all"}
+                          {group.rows.every((r) => selected.has(r.id))
+                            ? "Unselect"
+                            : "Select all"}
                         </button>
                       ) : null}
                     </h2>
                   ) : null}
                   <ul
                     className={cn(
-                      compact ? "divide-y divide-border overflow-hidden rounded-2xl border border-border bg-surface" : "flex flex-col gap-3",
+                      compact
+                        ? "divide-y divide-border overflow-hidden rounded-2xl border border-border bg-surface"
+                        : "flex flex-col gap-3",
                     )}
                   >
                     {shownRows(group).map((row) => (
@@ -590,8 +797,13 @@ export function SheetView({
                       />
                     ))}
                   </ul>
-                  {!group.collapsed && shownRows(group).length < group.rows.length ? (
-                    <ShowMoreButton hidden={group.rows.length - shownRows(group).length} onClick={group.onShowAll} className="mt-2" />
+                  {!group.collapsed &&
+                  shownRows(group).length < group.rows.length ? (
+                    <ShowMoreButton
+                      hidden={group.rows.length - shownRows(group).length}
+                      onClick={group.onShowAll}
+                      className="mt-2"
+                    />
                   ) : null}
                 </section>
               ))}
@@ -611,7 +823,9 @@ export function SheetView({
             </button>
           }
         >
-          {filters.section === NO_SECTION ? "Every contact has a section." : "Try another search or fewer filters."}
+          {filters.section === NO_SECTION
+            ? "Every contact has a section."
+            : "Try another search or fewer filters."}
         </EmptyState>
       )}
 
@@ -628,15 +842,24 @@ export function SheetView({
           onClear={clearSelection}
           templates={templates}
           preparing={selectedVisible.some((id) => preparing.has(id))}
-          onPrepare={(templateId) => void prepare(selectedVisible.slice(0, 100), templateId)}
-          stageOptions={sheetStages.filter((s) => !EMAIL_STAGES.includes(s.value) && s.value !== "negotiation")}
+          onPrepare={(templateId) =>
+            void prepare(selectedVisible.slice(0, 100), templateId)
+          }
+          stageOptions={sheetStages.filter(
+            (s) => !EMAIL_STAGES.includes(s.value) && s.value !== "negotiation",
+          )}
           onSetStage={(stage) => bulkUpdate({ stage })}
           sections={sections}
           onSetSection={(section) => bulkUpdate({ section })}
           onSetKind={(kind) => bulkUpdate({ kind })}
           onSetNextAction={(nextAction) => bulkUpdate({ nextAction })}
           busy={bulkPending}
-          canPrepare={noAccount ?? (selectedVisible.length > 100 ? "Select at most 100 rows to prepare emails" : null)}
+          canPrepare={
+            noAccount ??
+            (selectedVisible.length > 100
+              ? "Select at most 100 rows to prepare emails"
+              : null)
+          }
         />
       ) : null}
 

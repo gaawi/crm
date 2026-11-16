@@ -1,10 +1,12 @@
 "use client";
 
 import {
+  Bot,
   Car,
   Check,
   ListChecks,
   Music,
+  Pencil,
   RotateCcw,
   Rows3,
   Sparkles,
@@ -26,7 +28,7 @@ import { cn } from "@/lib/utils";
 import { InfoTip } from "@/components/booking/info-tip";
 import { AUTO_LOCK_NOTE, explainFlag } from "@/lib/booking/explain";
 import { SearchInput } from "../../_components/ui";
-import { scrollerClass } from "./stats";
+import { scrollerClass, StatsStrip, type StatItem } from "./stats";
 
 /**
  * The colored tags under the search bar, in the same colors as on the rows;
@@ -70,19 +72,48 @@ const TAGS: { flag: SheetFlag; icon: LucideIcon; off: string; on: string }[] = [
     on: "border-teal-600 bg-teal-600 text-white",
   },
 ];
-const TAG_FLAGS = TAGS.map((t) => t.flag);
-/** The rest show as plain pills after the colored tags. */
-const MORE: SheetFlag[] = [
-  "phone",
-  "due",
-  "no_reply",
-  "bounced",
-  "auto_reply",
-  "unresearched",
-];
 
 const pillSelect =
   "h-9 shrink-0 cursor-pointer appearance-auto rounded-full border border-border bg-surface pl-3 pr-2 text-[15px] text-fg focus:border-border-strong focus:outline-none md:h-8 md:rounded-md md:pl-2.5 md:text-sm";
+
+/**
+ * The filters split by who sets them, so anyone opening the sheet sees what
+ * updates by itself and what a person changes.
+ */
+const GROUPS: {
+  key: "auto" | "manual";
+  title: string;
+  hint: string;
+  icon: LucideIcon;
+  stats: string[];
+  flags: SheetFlag[];
+}[] = [
+  {
+    key: "auto",
+    title: "Automatic",
+    hint: "Updated by themselves from the emails and the research. Nobody can change them by hand.",
+    icon: Bot,
+    stats: ["total", "contacted", "replied", "no_reply"],
+    flags: [
+      "bounced",
+      "auto_reply",
+      "near_nyc",
+      "chamber",
+      "claude",
+      "chatgpt",
+      "phone",
+      "unresearched",
+    ],
+  },
+  {
+    key: "manual",
+    title: "Set by you",
+    hint: "You change these on each row (status, follow-up date, Returning) or on the organization (Prestigious).",
+    icon: Pencil,
+    stats: ["proposal", "won", "lost", "due"],
+    flags: ["vip", "returning"],
+  },
+];
 
 const chip =
   "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-[15px] transition-colors md:h-8 md:rounded-md md:px-2.5 md:text-sm";
@@ -94,6 +125,7 @@ export function FiltersBar({
   sections,
   sectionCounts,
   flagCounts,
+  stats,
   hasUnsectioned,
   shown,
   total,
@@ -111,6 +143,8 @@ export function FiltersBar({
   sectionCounts?: ReadonlyMap<string, number>;
   /** Rows each tag would leave, given the other filters. */
   flagCounts?: ReadonlyMap<SheetFlag, number>;
+  /** The counts (Total, Contacted, Replied, Offer sent… Follow-ups due, No reply): placed in their group. */
+  stats: StatItem[];
   /** Some rows have no section (offers "No section"). */
   hasUnsectioned: boolean;
   shown: number;
@@ -130,10 +164,6 @@ export function FiltersBar({
     filters.origin,
   );
   // Plain pills after the colored tags: the other filters, plus any other flag that is on (e.g. ?flag=hot from a link).
-  const plain = [
-    ...MORE,
-    ...filters.flags.filter((f) => !TAG_FLAGS.includes(f) && !MORE.includes(f)),
-  ];
   const toggleFlag = (flag: SheetFlag) =>
     onChange({
       ...filters,
@@ -141,6 +171,54 @@ export function FiltersBar({
         ? filters.flags.filter((f) => f !== flag)
         : [...filters.flags, flag],
     });
+
+  const renderFlag = (flag: SheetFlag) => {
+    const on = filters.flags.includes(flag);
+    const tag = TAGS.find((t) => t.flag === flag);
+    const n = flagCounts?.get(flag);
+    const info = explainFlag(flag);
+    const Icon = tag?.icon;
+    return (
+      <span key={flag} className="inline-flex shrink-0 items-center">
+        <button
+          type="button"
+          aria-pressed={on}
+          onClick={() => toggleFlag(flag)}
+          className={cn(
+            "inline-flex h-8 shrink-0 items-center gap-1 rounded-full border px-2.5 text-[13px] font-medium transition-colors md:h-7 md:text-xs",
+            tag
+              ? on
+                ? tag.on
+                : cn(tag.off, "hover:brightness-95")
+              : on
+                ? "border-accent bg-accent text-accent-fg"
+                : "border-border bg-surface text-muted hover:text-fg active:bg-surface-2 md:hover:bg-surface-2",
+          )}
+        >
+          {Icon ? (
+            <Icon className="size-3.5 md:size-3" strokeWidth={2} aria-hidden />
+          ) : on ? (
+            <Check
+              className="size-3.5 md:size-3"
+              strokeWidth={2.25}
+              aria-hidden
+            />
+          ) : null}
+          {SHEET_FLAG_LABELS[flag]}
+          {n !== undefined ? (
+            <span className="tabular-nums opacity-70">{n}</span>
+          ) : null}
+        </button>
+        {info ? (
+          <InfoTip
+            title={info.label}
+            items={[info]}
+            note={info.how === "auto" ? AUTO_LOCK_NOTE : undefined}
+          />
+        ) : null}
+      </span>
+    );
+  };
 
   return (
     <div className="flex flex-col gap-2 pb-3 md:flex-row md:flex-wrap md:items-center md:gap-2 md:pb-0 md:pt-2">
@@ -255,92 +333,35 @@ export function FiltersBar({
         </select>
       </div>
 
-      <div
-        className={cn(
-          scrollerClass,
-          "-mx-4 gap-1.5 px-4 md:mx-0 md:w-full md:flex-wrap md:px-0",
-        )}
-        role="group"
-        aria-label="Tags"
-      >
-        <span className="flex shrink-0 items-center self-center text-[11px] font-semibold uppercase tracking-wide text-subtle">
-          Tags
-        </span>
-        {TAGS.map(({ flag, icon: Icon, off, on: onClass }) => {
-          const on = filters.flags.includes(flag);
-          const n = flagCounts?.get(flag);
+      {/* Two clearly separate groups: what updates by itself, and what a person sets. */}
+      <div className="flex w-full flex-col gap-2">
+        {GROUPS.map((g) => {
+          const groupStats = stats.filter((st) => g.stats.includes(st.key));
           return (
-            <span key={flag} className="inline-flex shrink-0 items-center">
-              <button
-                type="button"
-                aria-pressed={on}
-                onClick={() => toggleFlag(flag)}
-                className={cn(
-                  "inline-flex h-8 shrink-0 items-center gap-1 rounded-full border px-2.5 text-[13px] font-medium transition-colors md:h-7 md:text-xs",
-                  on ? onClass : cn(off, "hover:brightness-95"),
-                )}
-              >
-                <Icon
-                  className="size-3.5 md:size-3"
-                  strokeWidth={2}
-                  aria-hidden
-                />
-                {SHEET_FLAG_LABELS[flag]}
-                {n !== undefined ? (
-                  <span className="tabular-nums opacity-70">{n}</span>
+            <section
+              key={g.key}
+              aria-label={g.title}
+              className={cn(
+                "rounded-xl border px-3 py-2 md:rounded-lg",
+                g.key === "auto"
+                  ? "border-sky-200 bg-sky-50/40 dark:border-sky-900 dark:bg-sky-950/20"
+                  : "border-amber-200 bg-amber-50/40 dark:border-amber-900 dark:bg-amber-950/20",
+              )}
+            >
+              <p className="mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
+                <span className="inline-flex items-center gap-1 font-semibold uppercase tracking-wide text-fg">
+                  <g.icon className="size-3.5" strokeWidth={2} aria-hidden />
+                  {g.title}
+                </span>
+                <span className="text-muted">{g.hint}</span>
+              </p>
+              <div className={cn(scrollerClass, "gap-1.5 md:flex-wrap")}>
+                {groupStats.length ? (
+                  <StatsStrip items={groupStats} bare />
                 ) : null}
-              </button>
-              {(() => {
-                const info = explainFlag(flag);
-                return info ? (
-                  <InfoTip
-                    title={info.label}
-                    items={[info]}
-                    note={info.how === "auto" ? AUTO_LOCK_NOTE : undefined}
-                  />
-                ) : null;
-              })()}
-            </span>
-          );
-        })}
-        <span className="ml-2 flex shrink-0 items-center self-center text-[11px] font-semibold uppercase tracking-wide text-subtle">
-          Status
-        </span>
-        {plain.map((flag) => {
-          const on = filters.flags.includes(flag);
-          return (
-            <span key={flag} className="inline-flex shrink-0 items-center">
-              <button
-                type="button"
-                aria-pressed={on}
-                onClick={() => toggleFlag(flag)}
-                className={cn(
-                  "inline-flex h-8 shrink-0 items-center gap-1 rounded-full border px-2.5 text-[13px] font-medium transition-colors md:h-7 md:text-xs",
-                  on
-                    ? "border-accent bg-accent text-accent-fg"
-                    : "border-border bg-surface text-muted hover:text-fg active:bg-surface-2 md:hover:bg-surface-2",
-                )}
-              >
-                {on ? (
-                  <Check
-                    className="size-3.5 md:size-3"
-                    strokeWidth={2.25}
-                    aria-hidden
-                  />
-                ) : null}
-                {SHEET_FLAG_LABELS[flag]}
-              </button>
-              {(() => {
-                const info = explainFlag(flag);
-                return info ? (
-                  <InfoTip
-                    title={info.label}
-                    items={[info]}
-                    note={info.how === "auto" ? AUTO_LOCK_NOTE : undefined}
-                  />
-                ) : null;
-              })()}
-            </span>
+                {g.flags.map((flag) => renderFlag(flag))}
+              </div>
+            </section>
           );
         })}
       </div>
