@@ -42,6 +42,7 @@ export function StatusBadge({ status }: { status: ContactStatus }) {
 const stageStyles: Record<OpportunityStage, string> = {
   lead: "bg-surface-2 text-muted",
   contacted: "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
+  replied: "bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-300",
   proposal: "bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-300",
   negotiation: "bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
   won: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",

@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { originLabel, researcherOf, type Researcher } from "@/lib/booking/filters";
 import { lastTouch, rowFollowUpTiming, type LastTouch } from "@/lib/booking/timing";
 import type { EmailTemplate, SheetRow } from "@/lib/booking/types";
-import { OPPORTUNITY_STAGES, stageLabel } from "@/lib/constants";
+import { EMAIL_STAGES, OPPORTUNITY_STAGES, stageLabel } from "@/lib/constants";
 import { orgPlace } from "@/lib/organizations/profile";
 import type { OpportunityKind, OpportunityStage } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 export const STAGE_DOT: Record<OpportunityStage, string> = {
   lead: "bg-zinc-300 dark:bg-zinc-600",
   contacted: "bg-blue-500",
+  replied: "bg-teal-500",
   proposal: "bg-violet-500",
   negotiation: "bg-amber-500",
   won: "bg-emerald-500",
@@ -29,6 +30,7 @@ export const STAGE_DOT: Record<OpportunityStage, string> = {
 export const STAGE_STRIPE: Record<OpportunityStage, string> = {
   lead: "border-l-zinc-200 dark:border-l-zinc-700",
   contacted: "border-l-blue-500",
+  replied: "border-l-teal-500",
   proposal: "border-l-violet-500",
   negotiation: "border-l-amber-500",
   won: "border-l-emerald-500",
@@ -42,6 +44,15 @@ export const STAGE_STRIPE: Record<OpportunityStage, string> = {
  */
 export function stageOptions(kind: OpportunityKind | null): { value: OpportunityStage; label: string }[] {
   return OPPORTUNITY_STAGES.map((s) => ({ value: s.value, label: stageLabel(s.value, kind) }));
+}
+
+/**
+ * The stages a person can pick for a row: the hand-set ones, plus the row's
+ * current stage when it is one of the email stages (To contact / Contacted /
+ * Replied are set automatically from the emails and can't be picked).
+ */
+export function pickableStageOptions(kind: OpportunityKind | null, current: OpportunityStage): { value: OpportunityStage; label: string }[] {
+  return stageOptions(kind).filter((s) => !EMAIL_STAGES.includes(s.value) || s.value === current);
 }
 
 /** What a row can ask the sheet to do (stable callbacks from SheetView). */

@@ -21,7 +21,7 @@ export type SheetFlag = (typeof SHEET_FLAGS)[number];
 
 export const SHEET_FLAG_LABELS: Record<SheetFlag, string> = {
   due: "Follow-up due",
-  no_reply: "No reply",
+  no_reply: "No reply (2+ months)",
   returning: "Returning",
   phone: "Has phone",
   hot: "Hot",

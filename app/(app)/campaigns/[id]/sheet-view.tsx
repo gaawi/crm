@@ -20,7 +20,7 @@ import { sectionSummary } from "@/lib/booking/section-summary";
 import { suggestTemplate } from "@/lib/booking/templates";
 import { isFollowUpDue, isNoReply } from "@/lib/booking/timing";
 import type { BookingSheet, EmailTemplate, SheetRow } from "@/lib/booking/types";
-import { GOAL_KINDS, goalLabel, labelKindFor, nextActionLabel, stageLabel } from "@/lib/constants";
+import { EMAIL_STAGES, GOAL_KINDS, goalLabel, labelKindFor, nextActionLabel, stageLabel } from "@/lib/constants";
 import type { NextAction, OpportunityKind, OpportunityStage } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { bulkUpdateRowsAction, prepareEmailsAction } from "../actions";
@@ -442,7 +442,7 @@ export function SheetView({
         ? [
             {
               key: "no_reply",
-              label: "No reply",
+              label: "No reply (2+ months)",
               count: noReply,
               tone: "warning" as const,
               active: filters.flags.includes("no_reply"),
@@ -627,7 +627,7 @@ export function SheetView({
           templates={templates}
           preparing={selectedVisible.some((id) => preparing.has(id))}
           onPrepare={(templateId) => void prepare(selectedVisible.slice(0, 100), templateId)}
-          stageOptions={sheetStages}
+          stageOptions={sheetStages.filter((s) => !EMAIL_STAGES.includes(s.value))}
           onSetStage={(stage) => bulkUpdate({ stage })}
           sections={sections}
           onSetSection={(section) => bulkUpdate({ section })}

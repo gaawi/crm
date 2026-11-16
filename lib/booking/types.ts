@@ -13,6 +13,8 @@ export interface SheetStageCounts {
   /** lead */
   toContact: number;
   contacted: number;
+  /** they answered at least once (set automatically from the emails) */
+  replied: number;
   /** proposal ("Offer sent") */
   proposal: number;
   /** negotiation */

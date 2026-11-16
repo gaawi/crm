@@ -70,8 +70,13 @@ export function isFollowUpDue(row: Pick<TimingRow, "stage" | "followUpAt">, toda
   return Boolean(row.followUpAt && row.followUpAt <= today && isOpenStage(row.stage));
 }
 
-/** Waiting on them for more than FOLLOW_UP_OVERDUE_DAYS (the sheet's "No reply"). */
+/**
+ * The sheet's "No reply": they have never answered (no email from them) and
+ * our last email is older than FOLLOW_UP_OVERDUE_DAYS (about 2 months).
+ * A row whose contact answered once is Replied, never "No reply".
+ */
 export function isNoReply(row: TimingRow, today: string, timezone: string): boolean {
+  if (row.contact?.lastInboundAt) return false;
   return rowFollowUpTiming(row, today, timezone)?.state === "overdue";
 }
 

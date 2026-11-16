@@ -38,11 +38,13 @@ const sheetColumns = (today: string, timezone: string) => sql`
   count(op.id) filter (
     where op.stage in ('contacted', 'proposal')
       and c.awaiting_reply_since is not null
+      and c.last_inbound_at is null
       and ${today}::date - (c.awaiting_reply_since at time zone ${timezone})::date > ${FOLLOW_UP_OVERDUE_DAYS}::int
   )::int as no_reply,
   json_build_object(
     'toContact', count(op.id) filter (where op.stage = 'lead'),
     'contacted', count(op.id) filter (where op.stage = 'contacted'),
+    'replied', count(op.id) filter (where op.stage = 'replied'),
     'proposal', count(op.id) filter (where op.stage = 'proposal'),
     'inConversation', count(op.id) filter (where op.stage = 'negotiation'),
     'confirmed', count(op.id) filter (where op.stage = 'won'),
@@ -79,7 +81,7 @@ export async function getSheet(id: string, today: string = todayIn(env.timezone)
   return row ?? null;
 }
 
-const STAGE_ORDER = ["negotiation", "proposal", "contacted", "lead", "won", "lost"];
+const STAGE_ORDER = ["negotiation", "proposal", "replied", "contacted", "lead", "won", "lost"];
 
 const iso = (value: string | Date | null | undefined): string | null => (value ? new Date(value).toISOString() : null);
 

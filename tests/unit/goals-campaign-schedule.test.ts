@@ -33,7 +33,7 @@ describe("goals", () => {
     for (const old of ["booking", "fundraising", "partnership", "grant", "press", "sale", "other"]) expect(values).toContain(old);
     for (const k of GOAL_KINDS) {
       expect(GOAL_GROUPS.some((g) => g.value === k.group)).toBe(true);
-      expect(Object.keys(STAGE_LABELS_BY_KIND[k.value]).sort()).toEqual(["contacted", "lead", "lost", "negotiation", "proposal", "won"]);
+      expect(Object.keys(STAGE_LABELS_BY_KIND[k.value]).sort()).toEqual(["contacted", "lead", "lost", "negotiation", "proposal", "replied", "won"]);
     }
     expect(goalLabel("venue")).toBe("Use of a space");
     expect(goalLabel(null)).toBe("Other");

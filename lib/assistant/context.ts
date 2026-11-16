@@ -248,7 +248,7 @@ export async function buildAssistantContext(now: Date = new Date()): Promise<Ass
         ) oh on true
        where op.project_id = ${sheet.id}
        order by (op.contact_id is null),
-                array_position(array['negotiation','proposal','contacted','lead','won','lost']::text[], op.stage),
+                array_position(array['negotiation','proposal','replied','contacted','lead','won','lost']::text[], op.stage),
                 op.follow_up_at asc nulls last
        limit ${MAX_ROWS + 1}`;
 

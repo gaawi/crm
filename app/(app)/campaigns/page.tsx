@@ -22,6 +22,7 @@ export const metadata: Metadata = { title: "Campaigns" };
 const STAGE_PARTS: { key: keyof SheetStageCounts; stage: OpportunityStage }[] = [
   { key: "toContact", stage: "lead" },
   { key: "contacted", stage: "contacted" },
+  { key: "replied", stage: "replied" },
   { key: "proposal", stage: "proposal" },
   { key: "inConversation", stage: "negotiation" },
   { key: "confirmed", stage: "won" },
@@ -31,6 +32,7 @@ const STAGE_PARTS: { key: keyof SheetStageCounts; stage: OpportunityStage }[] = 
 const STAGE_BAR: Record<OpportunityStage, string> = {
   lead: "bg-zinc-300 dark:bg-zinc-600",
   contacted: "bg-blue-500",
+  replied: "bg-teal-500",
   proposal: "bg-violet-500",
   negotiation: "bg-amber-500",
   won: "bg-emerald-500",

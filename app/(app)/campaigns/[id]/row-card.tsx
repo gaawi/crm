@@ -23,7 +23,7 @@ import {
   PrepareEmailButton,
   RowBadges,
   STAGE_STRIPE,
-  stageOptions,
+  pickableStageOptions,
   TimingBadge,
   RowPlace,
   venueName,
@@ -229,7 +229,7 @@ export const RowCard = memo(function RowCard({
       )}
 
       <div className="grid grid-cols-2 gap-2 px-3 pb-3 pt-3">
-        <StageCell rowId={row.id} value={row.stage} options={stageOptions(row.kind)} look="field" />
+        <StageCell rowId={row.id} value={row.stage} options={pickableStageOptions(row.kind, row.stage)} look="field" />
         <DateCell rowId={row.id} value={row.followUpAt} overdue={isFollowUpDue(row, ctx.today)} look="field" />
       </div>
 

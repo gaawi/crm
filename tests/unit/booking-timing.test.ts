@@ -6,13 +6,12 @@ import { toDateTimeLocal, zonedDateTimeToUtc } from "@/lib/dates";
 const tz = "Europe/Madrid";
 
 describe("followUpTiming", () => {
-  it("waits 5 days, then it is a good time, and after 10 it is overdue", () => {
-    const at = (iso: string) => followUpTiming({ awaitingReplySince: iso, today: "2026-10-10", timezone: tz });
-    expect(at("2026-10-08T10:00:00Z")).toEqual({ state: "wait", days: 2, waitDays: 3, suggestedDate: "2026-10-13" });
-    expect(at("2026-10-05T10:00:00Z")).toMatchObject({ state: "ready", days: 5, waitDays: 0 });
-    expect(at("2026-09-30T10:00:00Z")).toMatchObject({ state: "ready", days: 10 });
-    expect(at("2026-09-29T10:00:00Z")).toMatchObject({ state: "overdue", days: 11, suggestedDate: "2026-10-04" });
-    expect(followUpTiming({ awaitingReplySince: null, today: "2026-10-10", timezone: tz })).toBeNull();
+  it("waits about 2 months, then it is time to follow up (No reply)", () => {
+    const at = (iso: string) => followUpTiming({ awaitingReplySince: iso, today: "2026-12-10", timezone: tz });
+    expect(at("2026-12-08T10:00:00Z")).toEqual({ state: "wait", days: 2, waitDays: 58, suggestedDate: "2027-02-06" });
+    expect(at("2026-10-11T10:00:00Z")).toMatchObject({ state: "ready", days: 60, waitDays: 0 });
+    expect(at("2026-10-10T10:00:00Z")).toMatchObject({ state: "overdue", days: 61, suggestedDate: "2026-12-09" });
+    expect(followUpTiming({ awaitingReplySince: null, today: "2026-12-10", timezone: tz })).toBeNull();
   });
 
   it("counts the owner's calendar days", () => {
@@ -20,11 +19,14 @@ describe("followUpTiming", () => {
     expect(followUpTiming({ awaitingReplySince: new Date("2026-10-04T23:30:00Z"), today: "2026-10-10", timezone: tz })?.days).toBe(5);
   });
 
-  it("only applies to Contacted / Offer sent rows", () => {
-    const contact = { awaitingReplySince: "2026-09-01T10:00:00Z", lastInboundAt: null, lastOutboundAt: "2026-09-01T10:00:00Z" };
+  it("only applies to Contacted / Offer sent rows that never answered", () => {
+    const contact = { awaitingReplySince: "2026-08-01T10:00:00Z", lastInboundAt: null, lastOutboundAt: "2026-08-01T10:00:00Z" };
     const row = { stage: "contacted" as const, followUpAt: null, contact, lastActivity: null };
     expect(rowFollowUpTiming(row, "2026-10-10", tz)?.state).toBe("overdue");
     expect(isNoReply(row, "2026-10-10", tz)).toBe(true);
+    // They answered once (then we wrote last): not "No reply".
+    expect(isNoReply({ ...row, contact: { ...contact, lastInboundAt: "2026-07-30T10:00:00Z" } }, "2026-10-10", tz)).toBe(false);
+    expect(rowFollowUpTiming({ ...row, stage: "replied" }, "2026-10-10", tz)).toBeNull();
     expect(rowFollowUpTiming({ ...row, stage: "negotiation" }, "2026-10-10", tz)).toBeNull();
     expect(isFollowUpDue({ stage: "lead", followUpAt: "2026-10-10" }, "2026-10-10")).toBe(true);
     expect(isFollowUpDue({ stage: "won", followUpAt: "2026-10-01" }, "2026-10-10")).toBe(false);

@@ -11,7 +11,7 @@ import { isFollowUpDue } from "@/lib/booking/timing";
 import type { SheetRow } from "@/lib/booking/types";
 import { goalLabel, nextActionLabel, stageLabel } from "@/lib/constants";
 import { DateCell, KindCell, NextActionCell, ReturningCell, StageCell, TextCell } from "./cells";
-import { PrepareEmailButton, RowBadges, RowPlace, rowSubject, stageOptions, venueName, type EmailSuggestion, type RowContext } from "./row-meta";
+import { PrepareEmailButton, RowBadges, RowPlace, rowSubject, pickableStageOptions, venueName, type EmailSuggestion, type RowContext } from "./row-meta";
 
 /**
  * A row's History: Call / WhatsApp (logged right after the tap), Prepare
@@ -98,7 +98,7 @@ export function HistoryDrawer({
           </summary>
           <div className="grid grid-cols-2 gap-x-2 gap-y-3 border-t border-border px-3 pb-4 pt-3">
             <DrawerField label="Status">
-              <StageCell rowId={row.id} value={row.stage} options={stageOptions(row.kind)} look="field" />
+              <StageCell rowId={row.id} value={row.stage} options={pickableStageOptions(row.kind, row.stage)} look="field" />
             </DrawerField>
             <DrawerField label="Goal">
               <KindCell rowId={row.id} value={row.kind} look="field" />

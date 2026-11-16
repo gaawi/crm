@@ -6,7 +6,7 @@
 import type { OrgWithProfile } from "@/lib/organizations/profile";
 
 export type ContactStatus = "new" | "lead" | "active" | "inactive" | "archived";
-export type OpportunityStage = "lead" | "contacted" | "proposal" | "negotiation" | "won" | "lost";
+export type OpportunityStage = "lead" | "contacted" | "replied" | "proposal" | "negotiation" | "won" | "lost";
 /**
  * An opportunity is a goal with a contact / organization: what we want from
  * them (see GOAL_KINDS in lib/constants.ts for labels and groups).

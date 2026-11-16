@@ -65,7 +65,7 @@ export interface ToolContext {
 /* ------------------------------------------------------------------------- */
 
 const STATUSES = ["new", "lead", "active", "inactive", "archived"] as const satisfies readonly ContactStatus[];
-const STAGES = ["lead", "contacted", "proposal", "negotiation", "won", "lost"] as const satisfies readonly OpportunityStage[];
+const STAGES = ["lead", "contacted", "replied", "proposal", "negotiation", "won", "lost"] as const satisfies readonly OpportunityStage[];
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD");
 const uuid = z.string().regex(/^[0-9a-f-]{36}$/i, "Expected an id from a previous tool result");
 
@@ -546,7 +546,7 @@ contact_emails(email PK lower-case, contact_id, is_primary)
 contact_projects(contact_id, project_id)
 messages(id, account_id, gmail_message_id, gmail_thread_id, rfc822_message_id, direction ['inbound','outbound'], from_email, from_name, subject, snippet, body_text, sent_at timestamptz, label_ids text[], is_automated, has_attachments, search tsvector)
 message_participants(message_id, role ['from','to','cc','bcc','reply_to'], email, name)
-opportunities(id, title, kind (the goal) ['booking','perform_with','residency','education','broadcast','venue','exchange','fundraising','sponsorship','grant','partnership','coproduction','network','introduction','press','sale','other'], stage ['lead','contacted','proposal','negotiation','won','lost'], contact_id, organization_id, project_id, value numeric, currency, follow_up_at date, next_action ['first_contact','call','send_proposal','send_materials','follow_up','meeting','agree_terms','send_contract','close_contract','logistics','invoice','thank_report','keep_informed','wait_reply'], next_step (detail), notes, event_dates, sheet_section, spaces, is_returning bool, closed_at, created_at)
+opportunities(id, title, kind (the goal) ['booking','perform_with','residency','education','broadcast','venue','exchange','fundraising','sponsorship','grant','partnership','coproduction','network','introduction','press','sale','other'], stage ['lead','contacted','replied' (automatic from emails),'proposal','negotiation','won','lost'], contact_id, organization_id, project_id, value numeric, currency, follow_up_at date, next_action ['first_contact','call','send_proposal','send_materials','follow_up','meeting','agree_terms','send_contract','close_contract','logistics','invoice','thank_report','keep_informed','wait_reply'], next_step (detail), notes, event_dates, sheet_section, spaces, is_returning bool, closed_at, created_at)
 activities(id, kind ['call','whatsapp','meeting','email','note','status'], outcome ['reached','no_answer','voicemail','call_back','wrong_number'] (calls), body, occurred_at, contact_id, organization_id, opportunity_id): calls, WhatsApp, meetings, hand-logged emails, notes, booking status changes
 email_templates(id, project_id (null = all sheets), name, trigger, subject, body)
 email_drafts(id, account_id, contact_id, opportunity_id, campaign_id, status ['proposed','queued','revising','sending','sent','discarded','failed'], to_emails text[], subject, sent_at, created_at): emails prepared for approval; queued = approved in a running campaign

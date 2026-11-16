@@ -22,11 +22,20 @@ export const CONTACT_STATUSES: { value: ContactStatus; label: string; hint: stri
 export const OPPORTUNITY_STAGES: { value: OpportunityStage; label: string; open: boolean }[] = [
   { value: "lead", label: "To contact", open: true },
   { value: "contacted", label: "Contacted", open: true },
+  { value: "replied", label: "Replied", open: true },
   { value: "proposal", label: "Proposal sent", open: true },
   { value: "negotiation", label: "In conversation", open: true },
   { value: "won", label: "Achieved", open: false },
   { value: "lost", label: "Declined", open: false },
 ];
+
+/**
+ * Stages set automatically from the emails (database trigger
+ * opportunities_email_stage): To contact (never written), Contacted (we wrote,
+ * they never answered), Replied (they answered at least once). Nobody picks
+ * them by hand; the other stages are set by hand.
+ */
+export const EMAIL_STAGES: OpportunityStage[] = ["lead", "contacted", "replied"];
 
 export const OPEN_STAGES: OpportunityStage[] = OPPORTUNITY_STAGES.filter((s) => s.open).map((s) => s.value);
 
@@ -79,6 +88,7 @@ type StageLabels = Record<OpportunityStage, string>;
 export const GENERIC_STAGE_LABELS: StageLabels = {
   lead: "To contact",
   contacted: "Contacted",
+  replied: "Replied",
   proposal: "Proposal sent",
   negotiation: "In conversation",
   won: "Achieved",
@@ -89,22 +99,22 @@ const agreed = (proposal = "Proposal sent"): StageLabels => ({ ...GENERIC_STAGE_
 
 /** Stage names as they read for each goal kind (same six stages underneath). */
 export const STAGE_LABELS_BY_KIND: Record<OpportunityKind, StageLabels> = {
-  booking: { lead: "To contact", contacted: "Contacted", proposal: "Offer sent", negotiation: "In conversation", won: "Confirmed", lost: "Declined" },
+  booking: { lead: "To contact", contacted: "Contacted", replied: "Replied", proposal: "Offer sent", negotiation: "In conversation", won: "Confirmed", lost: "Declined" },
   perform_with: agreed(),
   residency: agreed("Application sent"),
   education: agreed(),
   broadcast: agreed(),
-  venue: { lead: "To ask", contacted: "Asked", proposal: "Request sent", negotiation: "In conversation", won: "Granted", lost: "Declined" },
+  venue: { lead: "To ask", contacted: "Asked", replied: "Replied", proposal: "Request sent", negotiation: "In conversation", won: "Granted", lost: "Declined" },
   exchange: agreed(),
-  fundraising: { lead: "Prospect", contacted: "Contacted", proposal: "Ask made", negotiation: "In conversation", won: "Donated", lost: "Declined" },
-  sponsorship: { lead: "Prospect", contacted: "Contacted", proposal: "Proposal sent", negotiation: "In conversation", won: "Sponsored", lost: "Declined" },
-  grant: { lead: "To apply", contacted: "Contacted", proposal: "Applied", negotiation: "Under review", won: "Awarded", lost: "Rejected" },
+  fundraising: { lead: "Prospect", contacted: "Contacted", replied: "Replied", proposal: "Ask made", negotiation: "In conversation", won: "Donated", lost: "Declined" },
+  sponsorship: { lead: "Prospect", contacted: "Contacted", replied: "Replied", proposal: "Proposal sent", negotiation: "In conversation", won: "Sponsored", lost: "Declined" },
+  grant: { lead: "To apply", contacted: "Contacted", replied: "Replied", proposal: "Applied", negotiation: "Under review", won: "Awarded", lost: "Rejected" },
   partnership: agreed(),
   coproduction: agreed(),
   network: agreed("Application sent"),
-  introduction: { lead: "To ask", contacted: "Asked", proposal: "Details sent", negotiation: "In conversation", won: "Introduced", lost: "Declined" },
-  press: { lead: "To pitch", contacted: "Pitched", proposal: "Materials sent", negotiation: "In conversation", won: "Published", lost: "Declined" },
-  sale: { lead: "Lead", contacted: "Contacted", proposal: "Quote sent", negotiation: "Negotiating", won: "Sold", lost: "Lost" },
+  introduction: { lead: "To ask", contacted: "Asked", replied: "Replied", proposal: "Details sent", negotiation: "In conversation", won: "Introduced", lost: "Declined" },
+  press: { lead: "To pitch", contacted: "Pitched", replied: "Replied", proposal: "Materials sent", negotiation: "In conversation", won: "Published", lost: "Declined" },
+  sale: { lead: "Lead", contacted: "Contacted", replied: "Replied", proposal: "Quote sent", negotiation: "Negotiating", won: "Sold", lost: "Lost" },
   other: GENERIC_STAGE_LABELS,
 };
 
@@ -295,10 +305,10 @@ export const REPLY_LOOKBACK_DAYS = 90;
 
 /* Booking tracker ---------------------------------------------------------- */
 
-/** After an unanswered email: wait this many days before following up… */
-export const FOLLOW_UP_WAIT_DAYS = 5;
-/** …and after this many it is overdue ("No reply"). */
-export const FOLLOW_UP_OVERDUE_DAYS = 10;
+/** After an unanswered email: wait this many days (about 2 months) before following up… */
+export const FOLLOW_UP_WAIT_DAYS = 60;
+/** …and after this many it is "No reply" (only rows that never answered: stage Contacted). */
+export const FOLLOW_UP_OVERDUE_DAYS = 60;
 
 /** `past` reads in a "last touch" line: "Called 3 days ago". */
 export const ACTIVITY_KINDS: { value: ActivityKind; label: string; past: string }[] = [

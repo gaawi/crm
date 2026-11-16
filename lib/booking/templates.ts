@@ -186,6 +186,7 @@ function stageTriggers(row: SuggestRow): TemplateTrigger[] {
       const talked = call && (call.outcome === "reached" || call.outcome === "call_back");
       return talked && time(call.occurredAt) > time(row.contact?.lastOutboundAt) ? ["after_call", "follow_up"] : ["follow_up"];
     }
+    case "replied":
     case "negotiation":
       return ["next_steps"];
     case "won":

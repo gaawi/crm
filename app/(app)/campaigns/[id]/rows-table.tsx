@@ -21,7 +21,7 @@ import {
   PrepareEmailButton,
   RowBadges,
   STAGE_STRIPE,
-  stageOptions,
+  pickableStageOptions,
   TimingBadge,
   venueName,
   type EmailSuggestion,
@@ -320,7 +320,7 @@ const TableRow = memo(function TableRow({
         <TimingBadge row={row} timezone={ctx.timezone} today={ctx.today} wrap className="mt-1" />
       </td>
       <td className="px-1 py-1.5">
-        <StageCell rowId={row.id} value={row.stage} options={stageOptions(row.kind)} />
+        <StageCell rowId={row.id} value={row.stage} options={pickableStageOptions(row.kind, row.stage)} />
         {ctx.multiGoal ? <KindCell rowId={row.id} value={row.kind} /> : null}
         <DateCell rowId={row.id} value={row.followUpAt} overdue={isFollowUpDue(row, ctx.today)} className="text-xs" />
       </td>
