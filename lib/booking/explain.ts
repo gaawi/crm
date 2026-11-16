@@ -41,6 +41,11 @@ export const TAGS_EXPLAINED: Explained[] = [
     how: "auto",
     text: "The organization is in New York City (Manhattan, Brooklyn, the Bronx, Queens, Staten Island), from its city. Not a touring date: no fee pitch and no mass booking email; we look for co-productions or the use of the hall.",
   },
+  {
+    label: "Rental only",
+    how: "manual",
+    text: "The hall doesn't present its own concerts: artists rent it. Set from the research or by hand on the organization. Useful for our own NYC concerts; never a booking pitch.",
+  },
   { label: "< 5 h from NYC", how: "auto", text: "The city is about 5 hours or less by car from Midtown Manhattan (driving time without traffic), from the organization's city. Venues in New York City itself get In NYC instead." },
   { label: "Chamber specialists", how: "auto", text: "Presents mainly chamber music or recitals, from the research (name, programming and profile)." },
   { label: "Returning", how: "manual", text: "We have played there before. Set by hand on the row." },
@@ -89,6 +94,7 @@ export function explainStage(stage: string): Explained | undefined {
 const FLAG_LABEL: Record<string, string> = {
   vip: "Prestigious",
   nyc: "In NYC",
+  rental: "Rental only",
   near_nyc: "< 5 h from NYC",
   chamber: "Chamber specialists",
   returning: "Returning",

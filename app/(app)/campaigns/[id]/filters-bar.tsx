@@ -5,6 +5,7 @@ import {
   Building2,
   Car,
   Check,
+  KeyRound,
   ListChecks,
   Music,
   Pencil,
@@ -47,6 +48,12 @@ const TAGS: { flag: SheetFlag; icon: LucideIcon; off: string; on: string }[] = [
     icon: Building2,
     off: "border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-900 dark:bg-rose-950/50 dark:text-rose-300",
     on: "border-rose-600 bg-rose-600 text-white",
+  },
+  {
+    flag: "rental",
+    icon: KeyRound,
+    off: "border-stone-300 bg-stone-50 text-stone-700 dark:border-stone-700 dark:bg-stone-900/60 dark:text-stone-300",
+    on: "border-stone-600 bg-stone-600 text-white",
   },
   {
     flag: "near_nyc",
@@ -116,10 +123,10 @@ const GROUPS: {
   {
     key: "manual",
     title: "Set by you",
-    hint: "You change these on each row (status, follow-up date, Returning) or on the organization (Prestigious).",
+    hint: "You change these on each row (status, follow-up date, Returning) or on the organization (Prestigious, Rental only).",
     icon: Pencil,
     stats: ["proposal", "won", "lost", "due"],
-    flags: ["vip", "returning"],
+    flags: ["vip", "rental", "returning"],
   },
 ];
 

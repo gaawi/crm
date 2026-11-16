@@ -536,6 +536,7 @@ export function SheetView({
     for (const flag of [
       "vip",
       "nyc",
+      "rental",
       "near_nyc",
       "chamber",
       "returning",
