@@ -1,5 +1,7 @@
 "use client";
 
+import { menuItemClass } from "../../_components/ui";
+
 import { useId, useRef, useState } from "react";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -31,7 +33,7 @@ export function AddRowButton({
   /** "+34": added to numbers typed without a country code. */
   phonePrefix: string | null;
   sections: string[];
-  variant?: "header" | "button";
+  variant?: "header" | "button" | "menu";
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -54,6 +56,10 @@ export function AddRowButton({
             </Button>
           </span>
         </>
+      ) : variant === "menu" ? (
+        <button type="button" onClick={() => setOpen(true)} className={menuItemClass}>
+          <Plus className="size-4 text-muted" /> Add contact
+        </button>
       ) : (
         <Button variant="primary" onClick={() => setOpen(true)}>
           <Plus className="size-4" strokeWidth={1.75} />

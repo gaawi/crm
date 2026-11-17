@@ -9,7 +9,7 @@ import { MAX_BRIEF } from "@/lib/assistant/types";
 import { cn } from "@/lib/utils";
 
 /** Booking sheet header: the assistant's Active / Paused switch (44pt on phones). */
-export function AssistantSwitch({ projectId, active }: { projectId: string; active: boolean }) {
+export function AssistantSwitch({ projectId, active, variant = "button" }: { projectId: string; active: boolean; variant?: "button" | "menu" }) {
   const [on, setOn] = useState(active);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -35,7 +35,7 @@ export function AssistantSwitch({ projectId, active }: { projectId: string; acti
       }
       onClick={toggle}
       disabled={pending}
-      className="inline-flex h-11 shrink-0 items-center gap-2 rounded-lg px-1.5 text-[15px] font-medium active:opacity-70 md:h-8 md:rounded-md md:border md:border-border md:bg-surface md:px-2.5 md:text-sm md:hover:bg-surface-2"
+      className={variant === "menu" ? "flex min-h-11 w-full items-center gap-3 rounded-md px-3 py-2 text-left text-[15px] text-fg active:bg-surface-2 md:min-h-0 md:text-sm md:hover:bg-surface-2" : "inline-flex h-11 shrink-0 items-center gap-2 rounded-lg px-1.5 text-[15px] font-medium active:opacity-70 md:h-8 md:rounded-md md:border md:border-border md:bg-surface md:px-2.5 md:text-sm md:hover:bg-surface-2"}
     >
       <span className={cn("relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors", on ? "bg-emerald-500" : "bg-border")} aria-hidden>
         <span
@@ -43,7 +43,11 @@ export function AssistantSwitch({ projectId, active }: { projectId: string; acti
         />
       </span>
       {/* Phones: just the switch (its name and state are in aria-label / title). */}
-      <span className="hidden whitespace-nowrap md:inline">Assistant {on ? "Active" : "Paused"}</span>
+      {variant === "menu" ? (
+        <span>Daily assistant: {on ? "on" : "paused"}</span>
+      ) : (
+        <span className="hidden whitespace-nowrap md:inline">Assistant {on ? "Active" : "Paused"}</span>
+      )}
     </button>
   );
 }

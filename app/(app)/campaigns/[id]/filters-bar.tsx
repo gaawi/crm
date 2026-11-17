@@ -10,7 +10,6 @@ import {
   Music,
   Pencil,
   RotateCcw,
-  Rows3,
   SlidersHorizontal,
   Sparkles,
   Star,
@@ -279,66 +278,20 @@ export function FiltersBar({
             </span>
           ) : null}
         </button>
-      </div>
-
-      {/* The results, in one quiet line: each number filters the list. */}
-      <div className="flex items-start gap-2">
-        <p className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 text-[15px] md:gap-1 md:text-sm" aria-label="Results (tap one to filter)">
-          {stats.map((st) => {
-            const tone =
-              st.count > 0 && st.tone === "danger"
-                ? "text-danger"
-                : st.count > 0 && st.tone === "warning"
-                  ? "text-warning"
-                  : "text-fg";
-            return (
-              <button
-                key={st.key}
-                type="button"
-                aria-pressed={st.active && st.key !== "total"}
-                onClick={st.onClick}
-                className={cn(
-                  "inline-flex h-10 items-center gap-1 rounded-full px-3 active:opacity-70 md:h-7 md:px-2.5",
-                  st.active && st.key !== "total"
-                    ? "bg-fg text-bg"
-                    : "bg-surface-2/70 text-muted md:hover:bg-surface-2",
-                )}
-              >
-                <span className={cn("font-semibold tabular-nums", st.active && st.key !== "total" ? "text-bg" : tone)}>{st.count}</span>
-                <span>{st.key === "total" ? (st.count === 1 ? "contact" : "contacts") : st.label.toLowerCase()}</span>
-              </button>
-            );
-          })}
-        </p>
-        {/* Phones: compact cards and select mode, as small icons. */}
-        <div className="flex shrink-0 items-center gap-1 md:hidden">
-          <button
-            type="button"
-            aria-pressed={compact}
-            aria-label="Compact cards"
-            title="Compact cards"
-            onClick={() => onCompact(!compact)}
-            className={cn(
-              "inline-flex size-9 items-center justify-center rounded-full",
-              compact ? "bg-fg text-bg" : "text-muted active:bg-surface-2",
-            )}
-          >
-            <Rows3 className="size-[18px]" strokeWidth={1.75} aria-hidden />
-          </button>
-          <button
-            type="button"
-            aria-pressed={selectMode}
-            aria-label={selectMode ? "Done selecting" : "Select rows"}
-            title={selectMode ? "Done" : "Select"}
-            onClick={() => onSelectMode(!selectMode)}
-            className={cn(
-              "inline-flex size-9 items-center justify-center rounded-full",
-              selectMode ? "bg-accent text-accent-fg" : "text-muted active:bg-surface-2",
-            )}
-          >
-            <ListChecks className="size-[18px]" strokeWidth={1.75} aria-hidden />
-          </button>
-        </div>
+        {/* Phones: select mode (the desktop table always has checkboxes). */}
+        <button
+          type="button"
+          aria-pressed={selectMode}
+          aria-label={selectMode ? "Done selecting" : "Select rows"}
+          title={selectMode ? "Done" : "Select"}
+          onClick={() => onSelectMode(!selectMode)}
+          className={cn(
+            "inline-flex size-10 shrink-0 items-center justify-center rounded-full md:hidden",
+            selectMode ? "bg-accent text-accent-fg" : "text-muted active:bg-surface-2",
+          )}
+        >
+          <ListChecks className="size-5" strokeWidth={1.75} aria-hidden />
+        </button>
       </div>
 
       {filtered ? (
@@ -358,6 +311,22 @@ export function FiltersBar({
       {panelOpen ? (
         <div id={panelId} className="flex flex-col gap-2 rounded-xl border border-border bg-surface p-3 md:rounded-lg">
           <div className={cn(scrollerClass, "-mx-3 gap-2 px-3 md:mx-0 md:flex-wrap md:px-0")}>
+            {/* Where each row stands: one choice at a time, with its count. */}
+            <select
+              value={stats.find((st) => st.active && st.key !== "total")?.key ?? ""}
+              onChange={(e) => {
+                const key = e.currentTarget.value;
+                (stats.find((st) => st.key === (key || "total")) ?? stats[0])?.onClick();
+              }}
+              aria-label="Status"
+              className={cn(pillSelect, "max-w-[16rem]", stats.some((st) => st.active && st.key !== "total") && "border-fg/70 font-medium")}
+            >
+              {stats.map((st) => (
+                <option key={st.key} value={st.key === "total" ? "" : st.key}>
+                  {st.key === "total" ? `Any status (${st.count})` : `${st.label} (${st.count})`}
+                </option>
+              ))}
+            </select>
             {goalOptions.length > 1 || filters.kind ? (
               <select
                 value={filters.kind ?? ""}
@@ -448,6 +417,10 @@ export function FiltersBar({
               <div className="flex flex-wrap gap-1.5">{g.flags.map((flag) => renderFlag(flag))}</div>
             </section>
           ))}
+          <label className="flex min-h-11 items-center gap-2 text-[15px] text-muted md:hidden">
+            <input type="checkbox" checked={compact} onChange={(e) => onCompact(e.currentTarget.checked)} className="size-5" />
+            Compact list (name, place and last interaction)
+          </label>
         </div>
       ) : null}
     </div>

@@ -1,5 +1,7 @@
 "use client";
 
+import { menuItemClass } from "../../_components/ui";
+
 import { useDeferredValue, useId, useMemo, useState, useTransition, type ChangeEvent } from "react";
 import { Download, FileUp, Upload } from "lucide-react";
 import { Badge, StageBadge } from "@/components/ui/badge";
@@ -91,13 +93,19 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
  * pick a .csv / .tsv file, check the preview (recognized columns, first rows,
  * problems) and add them all. One bad row never stops the others.
  */
-export function ImportButton({ projectId, sections }: { projectId: string; sections: string[] }) {
+export function ImportButton({ projectId, sections, variant = "button" }: { projectId: string; sections: string[]; variant?: "button" | "menu" }) {
   const [open, setOpen] = useState(false);
   return (
     <>
+      {variant === "menu" ? (
+        <button type="button" onClick={() => setOpen(true)} className={menuItemClass}>
+          <Upload className="size-4 text-muted" /> Import a list
+        </button>
+      ) : (
       <Button onClick={() => setOpen(true)} aria-label="Import" title="Import a list" className="max-md:size-11 max-md:px-0">
         <Upload className="size-4" /> <span className="hidden md:inline">Import</span>
       </Button>
+      )}
       {open ? <ImportSheet projectId={projectId} sections={sections} onClose={() => setOpen(false)} /> : null}
     </>
   );

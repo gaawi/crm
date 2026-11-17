@@ -2,7 +2,7 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { Download, MoreHorizontal, Settings2 } from "lucide-react";
+import { Download, Menu, Settings2 } from "lucide-react";
 import { buttonClass } from "@/components/ui/button";
 import { AssistantSwitch } from "@/components/assistant/sheet-controls";
 import { PageHeader } from "@/components/ui/layout";
@@ -56,23 +56,28 @@ export default async function CampaignPage({ params }: PageProps<"/campaigns/[id
             ? "The organizations and people in this campaign: where each one stands and what comes next."
             : "Add the organizations and people for this campaign.")
         }
+        titleClassName="truncate text-[17px] font-semibold leading-tight text-fg md:text-lg"
         actions={
           <>
-            <AssistantSwitch projectId={sheet.id} active={assistant?.active ?? false} />
-            {rows.length ? (
-              <span className="hidden md:inline-flex">
+            {/* Desktop: the buttons. */}
+            <div className="hidden items-center gap-2 md:flex">
+              <AssistantSwitch projectId={sheet.id} active={assistant?.active ?? false} />
+              {rows.length ? (
                 <a href={`/campaigns/${sheet.id}/export`} className={buttonClass("secondary", "md")} download>
                   <Download className="size-4" /> CSV
                 </a>
-              </span>
-            ) : null}
-            <ImportButton projectId={sheet.id} sections={sections} />
-            <span className="hidden md:inline-flex">
+              ) : null}
+              <ImportButton projectId={sheet.id} sections={sections} />
               <Link href={`/campaigns/${sheet.id}/templates`} className={buttonClass("secondary", "md")}>
                 <Settings2 className="size-4" /> Templates &amp; settings
               </Link>
-            </span>
-            <Dropdown trigger={<MoreHorizontal className="size-6" strokeWidth={1.75} />} label="More" className="md:hidden">
+              <AddRowButton projectId={sheet.id} currency={sheet.currency} phonePrefix={sheet.phonePrefix} sections={sections} />
+            </div>
+            {/* Phones: everything behind one menu, so the list gets the screen. */}
+            <Dropdown trigger={<Menu className="size-6" strokeWidth={1.75} />} label="Campaign menu" className="md:hidden">
+              <AddRowButton projectId={sheet.id} currency={sheet.currency} phonePrefix={sheet.phonePrefix} sections={sections} variant="menu" />
+              <ImportButton projectId={sheet.id} sections={sections} variant="menu" />
+              <AssistantSwitch projectId={sheet.id} active={assistant?.active ?? false} variant="menu" />
               <Link href={`/campaigns/${sheet.id}/templates`} className={menuItemClass}>
                 <Settings2 className="size-4 text-muted" /> Templates &amp; settings
               </Link>
@@ -82,7 +87,6 @@ export default async function CampaignPage({ params }: PageProps<"/campaigns/[id
                 </a>
               ) : null}
             </Dropdown>
-            <AddRowButton projectId={sheet.id} currency={sheet.currency} phonePrefix={sheet.phonePrefix} sections={sections} />
           </>
         }
       />

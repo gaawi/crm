@@ -14,6 +14,7 @@ export function PageHeader({
   back,
   children,
   compact = false,
+  titleClassName,
 }: {
   title: ReactNode;
   description?: ReactNode;
@@ -23,10 +24,12 @@ export function PageHeader({
   children?: ReactNode;
   /** One short row: back chevron and title on the same line, the description as a tooltip only. */
   compact?: boolean;
+  /** Replaces the compact title's size classes (a smaller title on phones). */
+  titleClassName?: string;
 }) {
   if (compact) {
     return (
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+      <div className="mb-3 flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-1">
           {back ? (
             <Link
@@ -39,7 +42,7 @@ export function PageHeader({
             </Link>
           ) : null}
           <h1
-            className="truncate text-[22px] font-bold leading-tight tracking-tight text-fg md:text-lg md:font-semibold"
+            className={titleClassName ?? "truncate text-[22px] font-bold leading-tight tracking-tight text-fg md:text-lg md:font-semibold"}
             title={typeof description === "string" ? description : undefined}
           >
             {title}
