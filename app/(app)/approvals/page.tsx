@@ -4,6 +4,7 @@ import { ChevronRight, Hourglass, Layers } from "lucide-react";
 import { DraftCard } from "@/components/draft-card";
 import { EmptyState, PageHeader, SectionTitle } from "@/components/ui/layout";
 import { heldBackCounts, listCampaigns, listCampaignSummaries } from "@/lib/campaigns/campaigns";
+import { campaignResults, resultsLine } from "@/lib/campaigns/results";
 import { env } from "@/lib/env";
 import { ASSISTANT_REVIEW_TIMES } from "@/lib/assistant/types";
 import { releasePostponed } from "@/lib/queries/assistant";
@@ -33,7 +34,10 @@ export default async function ApprovalsPage() {
   ]);
   // Finished campaigns with nothing left for the owner: a way back to them (what was sent, when).
   const past = finished.filter((c) => !campaigns.some((x) => x.id === c.id)).slice(0, 5);
-  const held = await heldBackCounts(campaigns.map((c) => c.id));
+  const [held, results] = await Promise.all([
+    heldBackCounts(campaigns.map((c) => c.id)),
+    campaignResults([...campaigns, ...past].map((c) => c.id)),
+  ]);
   // Waiting for the owner's approval: prepared, or cancelled / done with emails left to approve.
   const waitingCampaigns = campaigns.filter((c) => c.status !== "running" && c.status !== "paused" && c.remaining > 0).length;
 
@@ -53,7 +57,7 @@ export default async function ApprovalsPage() {
           <SectionTitle count={campaigns.length}>Mass mailings</SectionTitle>
           <div className="flex flex-col gap-3">
             {campaigns.map((c) => (
-              <CampaignCard key={c.id} campaign={c} held={held[c.id] ?? 0} now={now} />
+              <CampaignCard key={c.id} campaign={c} held={held[c.id] ?? 0} now={now} results={results[c.id]} />
             ))}
           </div>
         </section>
@@ -127,6 +131,7 @@ export default async function ApprovalsPage() {
                     <span className="block truncate font-medium">{c.name}</span>
                     <span className="block truncate text-[13px] text-muted md:text-xs">
                       {plural(c.counts.sent, "email")} sent{c.status === "cancelled" ? " · cancelled" : ""}
+                      {resultsLine(results[c.id]) ? ` · ${resultsLine(results[c.id])}` : ""}
                     </span>
                   </span>
                   <span className="shrink-0 text-xs text-subtle">

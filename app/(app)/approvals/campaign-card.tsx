@@ -4,6 +4,7 @@ import { AccountBadge } from "@/components/ui/badge";
 import { buttonClass } from "@/components/ui/button";
 import { campaignSize, countParts, paceSentence, roundUpToTick, whenPhrase } from "@/lib/campaigns/format";
 import type { CampaignSummary } from "@/lib/campaigns/types";
+import { resultsLine, type CampaignResults } from "@/lib/campaigns/results";
 import { cn } from "@/lib/utils";
 import { CampaignStatusBadge, CountList, ProgressBar } from "./campaign-ui";
 
@@ -12,7 +13,8 @@ import { CampaignStatusBadge, CountList, ProgressBar } from "./campaign-ui";
  * where it stands (waiting for approval / sending, next send / paused, why).
  * The whole card opens the campaign page.
  */
-export function CampaignCard({ campaign: c, held, now }: { campaign: CampaignSummary; held: number; now: Date }) {
+export function CampaignCard({ campaign: c, held, now, results }: { campaign: CampaignSummary; held: number; now: Date; results?: CampaignResults }) {
+  const outcome = resultsLine(results);
   const size = campaignSize(c.counts);
   const attention = held + c.counts.failed;
   const line =
@@ -71,6 +73,7 @@ export function CampaignCard({ campaign: c, held, now }: { campaign: CampaignSum
           <CountList parts={countParts(c.counts, held)} className="mt-2" />
           {c.status !== "draft" ? <ProgressBar sent={c.counts.sent} held={held} failed={c.counts.failed} total={size} className="mt-2 max-w-sm" /> : null}
           <p className="mt-1.5 text-[13px] text-muted md:text-xs">{line}</p>
+          {outcome ? <p className="mt-0.5 text-[13px] font-medium text-emerald-700 md:text-xs dark:text-emerald-400">{outcome}</p> : null}
           {c.error && c.status === "paused" ? <p className="mt-1 text-[13px] text-warning md:text-xs">{c.error}</p> : null}
           {attention && c.status !== "draft" ? (
             <p className="mt-1 text-[13px] text-warning md:text-xs">

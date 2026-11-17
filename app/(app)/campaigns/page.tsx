@@ -13,6 +13,7 @@ import { advanceSheetStages, listSheets } from "@/lib/queries/booking";
 import { listCampaignSummaries } from "@/lib/campaigns/campaigns";
 import { campaignSize, roundUpToTick, whenPhrase } from "@/lib/campaigns/format";
 import type { CampaignSummary } from "@/lib/campaigns/types";
+import { campaignResults, resultsLine, type CampaignResults } from "@/lib/campaigns/results";
 import { CampaignStatusBadge, ProgressBar } from "../approvals/campaign-ui";
 import type { OpportunityStage } from "@/lib/types";
 import { ActionForm, FormSubmit } from "../_components/action-form";
@@ -63,7 +64,8 @@ function StageBar({ sheet }: { sheet: BookingSheet }) {
 }
 
 /** One mass mailing: where it stands (sent of total, next send or why it is paused). Opens its page. */
-function MailingRow({ c, now }: { c: CampaignSummary; now: Date }) {
+function MailingRow({ c, now, results }: { c: CampaignSummary; now: Date; results?: CampaignResults }) {
+  const outcome = resultsLine(results);
   const size = campaignSize(c.counts);
   const line =
     c.status === "draft"
@@ -83,6 +85,7 @@ function MailingRow({ c, now }: { c: CampaignSummary; now: Date }) {
           </div>
           {c.status !== "draft" ? <ProgressBar sent={c.counts.sent} held={0} failed={c.counts.failed} total={size} className="mt-2 max-w-sm" /> : null}
           <p className="mt-1 text-[13px] text-muted md:text-xs">{line}</p>
+          {outcome ? <p className="mt-0.5 text-[13px] font-medium text-emerald-700 md:text-xs dark:text-emerald-400">{outcome}</p> : null}
           {c.error && c.status === "paused" ? <p className="mt-0.5 text-[13px] text-warning md:text-xs">{c.error}</p> : null}
         </div>
         <ChevronRight className="size-5 shrink-0 text-subtle" aria-hidden />
@@ -97,6 +100,7 @@ export default async function CampaignsPage({ searchParams }: PageProps<"/campai
   await advanceSheetStages();
   const now = new Date();
   const [sheets, mailings] = await Promise.all([listSheets(todayIn(env.timezone)), listCampaignSummaries({}, now)]);
+  const results = await campaignResults(mailings.map((m) => m.id));
 
   return (
     <>
@@ -148,7 +152,7 @@ export default async function CampaignsPage({ searchParams }: PageProps<"/campai
           </GroupTitle>
           <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface md:rounded-lg">
             {mailings.map((c) => (
-              <MailingRow key={c.id} c={c} now={now} />
+              <MailingRow key={c.id} c={c} now={now} results={results[c.id]} />
             ))}
           </ul>
         </section>
