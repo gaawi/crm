@@ -95,8 +95,8 @@ export function ImportButton({ projectId, sections }: { projectId: string; secti
   const [open, setOpen] = useState(false);
   return (
     <>
-      <Button onClick={() => setOpen(true)}>
-        <Upload className="size-4" /> Import
+      <Button onClick={() => setOpen(true)} aria-label="Import" title="Import a list" className="max-md:size-11 max-md:px-0">
+        <Upload className="size-4" /> <span className="hidden md:inline">Import</span>
       </Button>
       {open ? <ImportSheet projectId={projectId} sections={sections} onClose={() => setOpen(false)} /> : null}
     </>

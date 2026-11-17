@@ -35,17 +35,15 @@ export function AssistantSwitch({ projectId, active }: { projectId: string; acti
       }
       onClick={toggle}
       disabled={pending}
-      className="inline-flex h-11 shrink-0 items-center gap-2 rounded-lg border border-border bg-surface px-3 text-[15px] font-medium active:opacity-70 md:h-8 md:rounded-md md:px-2.5 md:text-sm md:hover:bg-surface-2"
+      className="inline-flex h-11 shrink-0 items-center gap-2 rounded-lg px-1.5 text-[15px] font-medium active:opacity-70 md:h-8 md:rounded-md md:border md:border-border md:bg-surface md:px-2.5 md:text-sm md:hover:bg-surface-2"
     >
       <span className={cn("relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors", on ? "bg-emerald-500" : "bg-border")} aria-hidden>
         <span
           className={cn("absolute top-0.5 size-4 rounded-full bg-white shadow transition-transform", on ? "translate-x-[18px]" : "translate-x-0.5")}
         />
       </span>
-      <span className="whitespace-nowrap">
-        <span className="hidden md:inline">Assistant </span>
-        {on ? "Active" : "Paused"}
-      </span>
+      {/* Phones: just the switch (its name and state are in aria-label / title). */}
+      <span className="hidden whitespace-nowrap md:inline">Assistant {on ? "Active" : "Paused"}</span>
     </button>
   );
 }
