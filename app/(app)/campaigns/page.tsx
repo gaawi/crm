@@ -10,6 +10,10 @@ import { labelKindFor, stageLabel } from "@/lib/constants";
 import { todayIn } from "@/lib/dates";
 import { env } from "@/lib/env";
 import { advanceSheetStages, listSheets } from "@/lib/queries/booking";
+import { listCampaignSummaries } from "@/lib/campaigns/campaigns";
+import { campaignSize, roundUpToTick, whenPhrase } from "@/lib/campaigns/format";
+import type { CampaignSummary } from "@/lib/campaigns/types";
+import { CampaignStatusBadge, ProgressBar } from "../approvals/campaign-ui";
 import type { OpportunityStage } from "@/lib/types";
 import { ActionForm, FormSubmit } from "../_components/action-form";
 import { FormActions, GroupTitle, HeaderAddButton } from "../_components/ui";
@@ -58,11 +62,41 @@ function StageBar({ sheet }: { sheet: BookingSheet }) {
   );
 }
 
+/** One mass mailing: where it stands (sent of total, next send or why it is paused). Opens its page. */
+function MailingRow({ c, now }: { c: CampaignSummary; now: Date }) {
+  const size = campaignSize(c.counts);
+  const line =
+    c.status === "draft"
+      ? `${c.counts.proposed + c.counts.failed} emails waiting for your approval`
+      : c.status === "running"
+        ? `${c.counts.sent} of ${size} sent${c.nextSendAt ? ` · next ${whenPhrase(roundUpToTick(new Date(c.nextSendAt)), c.timezone, now)}` : ""}${c.sentToday ? ` · ${c.sentToday} today` : ""}`
+        : c.status === "paused"
+          ? `${c.counts.sent} of ${size} sent · paused`
+          : `${c.counts.sent} of ${size} sent`;
+  return (
+    <li>
+      <Link href={`/approvals/mailings/${c.id}`} className="flex items-center gap-3 px-4 py-3 active:bg-surface-2 md:hover:bg-surface-2/60">
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="min-w-0 truncate text-[15px] font-medium md:text-sm">{c.name}</span>
+            <CampaignStatusBadge status={c.status} className="shrink-0" />
+          </div>
+          {c.status !== "draft" ? <ProgressBar sent={c.counts.sent} held={0} failed={c.counts.failed} total={size} className="mt-2 max-w-sm" /> : null}
+          <p className="mt-1 text-[13px] text-muted md:text-xs">{line}</p>
+          {c.error && c.status === "paused" ? <p className="mt-0.5 text-[13px] text-warning md:text-xs">{c.error}</p> : null}
+        </div>
+        <ChevronRight className="size-5 shrink-0 text-subtle" aria-hidden />
+      </Link>
+    </li>
+  );
+}
+
 export default async function CampaignsPage({ searchParams }: PageProps<"/campaigns">) {
   const sp = await searchParams;
   const creating = param(sp, "new") === "1";
   await advanceSheetStages();
-  const sheets = await listSheets(todayIn(env.timezone));
+  const now = new Date();
+  const [sheets, mailings] = await Promise.all([listSheets(todayIn(env.timezone)), listCampaignSummaries({}, now)]);
 
   return (
     <>
@@ -98,6 +132,25 @@ export default async function CampaignsPage({ searchParams }: PageProps<"/campai
               </ButtonLink>
             </FormActions>
           </ActionForm>
+        </section>
+      ) : null}
+
+      {mailings.length ? (
+        <section className="mb-8" aria-label="Mass mailings">
+          <GroupTitle
+            actions={
+              <Link href="/approvals" className="text-[13px] text-muted active:opacity-60 md:text-xs md:hover:text-fg">
+                All, and past ones
+              </Link>
+            }
+          >
+            Mass mailings
+          </GroupTitle>
+          <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface md:rounded-lg">
+            {mailings.map((c) => (
+              <MailingRow key={c.id} c={c} now={now} />
+            ))}
+          </ul>
         </section>
       ) : null}
 
