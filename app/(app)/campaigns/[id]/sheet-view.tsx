@@ -72,7 +72,7 @@ import {
   type RowGroup,
 } from "./rows-table";
 import { useSheetToast } from "./sheet-toast";
-import { ConfirmedStrip, type StatItem } from "./stats";
+import { type StatItem } from "./stats";
 
 /**
  * The booking sheet screen (below the page header): counts that filter,
@@ -96,16 +96,16 @@ function subscribeCompact(onChange: () => void) {
 
 function readCompact(): boolean {
   try {
-    return window.localStorage.getItem(COMPACT_KEY) === "1";
+    // Compact by default; "0" = the owner chose the full cards.
+    return window.localStorage.getItem(COMPACT_KEY) !== "0";
   } catch {
-    return false;
+    return true;
   }
 }
 
 function writeCompact(on: boolean) {
   try {
-    if (on) window.localStorage.setItem(COMPACT_KEY, "1");
-    else window.localStorage.removeItem(COMPACT_KEY);
+    window.localStorage.setItem(COMPACT_KEY, on ? "1" : "0");
   } catch {
     // Private mode / blocked storage: the toggle still works for this visit.
   }
@@ -117,7 +117,7 @@ function useCompact(): [boolean, (on: boolean) => void] {
   const stored = useSyncExternalStore(
     subscribeCompact,
     readCompact,
-    () => false,
+    () => true,
   );
   const [override, setOverride] = useState<boolean | null>(null);
   const set = useCallback((on: boolean) => {
@@ -306,10 +306,6 @@ export function SheetView({
             };
       }),
     [visible, more, filtersKey, collapsed, toggleCollapsed],
-  );
-  const confirmed = useMemo(
-    () => rows.filter((r) => r.stage === "won"),
-    [rows],
   );
   // Sheet-level status names: the booking ones while every row is a booking (or every row shares one goal), generic ones for a mix.
   const labelKind = useMemo(
@@ -700,7 +696,6 @@ export function SheetView({
         {/* The counts sit under the filters and count what they leave. */}
       </div>
 
-      <ConfirmedStrip rows={confirmed} label={stageLabel("won", labelKind)} />
 
       <datalist id={sectionsListId}>
         {sections.map((s) => (

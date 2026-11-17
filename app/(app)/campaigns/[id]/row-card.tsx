@@ -5,16 +5,14 @@ import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { CallButton, WhatsAppButton } from "@/components/booking/phone-actions";
 import { ContactOrgAvatar } from "@/components/contact-org-avatar";
-import { GoalBadge, NextActionIcon } from "@/components/goals";
+import { GoalBadge } from "@/components/goals";
 import { PersonFlagBadges } from "@/components/organizations/person-flags";
 import { OrgProfileLine } from "@/components/organizations/profile-card";
 import { deciderOf, flagBorderClass, personFlags } from "@/lib/organizations/people";
-import { StageBadge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/field";
 import { formatPhone } from "@/lib/booking/phone";
 import { isFollowUpDue } from "@/lib/booking/timing";
 import type { SheetRow } from "@/lib/booking/types";
-import { nextActionLabel, stageLabel } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { DateCell, DeleteRowButton, KindCell, ReturningCell, StageCell, TextCell } from "./cells";
 import {
@@ -40,8 +38,8 @@ const label = "px-1 text-[13px] text-muted";
  * Phone card for one venue: who, where things stand (last touch, when to
  * follow up, the next step), big Call / WhatsApp / Email / History tiles,
  * status, follow-up date and next step, and the rest (goal, detail…) behind
- * "Details". Compact cards keep one line of context and small Call /
- * WhatsApp / History buttons.
+ * "Details". Compact cards show only the name, the place and the last
+ * interaction; tapping one opens its history.
  */
 export const RowCard = memo(function RowCard({
   row,
@@ -88,59 +86,32 @@ export const RowCard = memo(function RowCard({
     <span className="text-[17px] font-semibold leading-snug [overflow-wrap:anywhere]">{name}</span>
   );
 
+  // Compact: one small line per venue (name, then place and the last interaction); the status is the left stripe.
   if (compact) {
     return (
       <li
         className={cn(
-          "flex items-center gap-3 border-l-4 bg-surface py-2.5 pl-3 pr-2",
+          "flex items-center gap-2 border-l-4 bg-surface py-2 pl-3 pr-1",
           STAGE_STRIPE[row.stage],
           selected && "bg-blue-50/70 dark:bg-blue-950/30",
         )}
       >
         {select}
-        {c ? (
-          <ContactOrgAvatar
-            contact={c}
-            organization={row.organization ? { id: row.organization.id, name: row.organization.name, logo: row.organization.profile?.logo } : null}
-            layout="badge"
-            size="sm"
-          />
-        ) : null}
-        <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 items-center gap-1.5">
-            <span className="truncate text-[15px] font-semibold">{name}</span>
-          </div>
-          <RowBadges row={row} className="mt-0.5" />
-          <div className="mt-0.5 flex min-w-0 items-center gap-1.5">
-            <StageBadge stage={row.stage} label={stageLabel(row.stage, row.kind)} />
-            {row.nextAction ? (
-              <span
-                className="flex min-w-0 shrink items-center gap-1 text-[13px] font-medium text-fg/80"
-                title={`Next step: ${nextActionLabel(row.nextAction)}`}
-              >
-                <NextActionIcon action={row.nextAction} />
-                <span className="truncate">{nextActionLabel(row.nextAction)}</span>
-              </span>
-            ) : null}
-            <RowPlace row={row} className="shrink-[2] text-[13px] text-muted" />
-            {c?.displayName ? <span className="min-w-0 truncate text-[13px] text-muted">{c.displayName}</span> : null}
-          </div>
-          <LastTouchLine row={row} timezone={ctx.timezone} today={ctx.today} className="mt-0.5" />
-        </div>
-        {selectMode ? null : (
-          <div className="flex shrink-0 items-center">
-            <CallButton phone={c?.phone} onCall={() => actions.onLog(row, "call")} />
-            <WhatsAppButton contact={c} onOpen={() => actions.onLog(row, "whatsapp")} />
-            <button
-              type="button"
-              onClick={() => actions.onHistory(row.id)}
-              aria-label={`Open ${name}`}
-              className="inline-flex size-10 items-center justify-center rounded-full text-subtle active:bg-surface-2"
-            >
-              <ChevronRight className="size-5" strokeWidth={2} />
-            </button>
-          </div>
-        )}
+        <button
+          type="button"
+          onClick={() => (selectMode ? actions.onToggle(row.id) : actions.onHistory(row.id))}
+          aria-label={selectMode ? `Select ${name}` : `Open ${name}`}
+          className="flex min-w-0 flex-1 items-center gap-2 text-left active:opacity-60"
+        >
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[15px] font-semibold">{name}</span>
+            <span className="mt-0.5 flex min-w-0 items-center gap-2">
+              <RowPlace row={row} className="shrink-[2] text-[13px] text-muted" />
+              <LastTouchLine row={row} timezone={ctx.timezone} today={ctx.today} className="min-w-0 shrink" />
+            </span>
+          </span>
+          {selectMode ? null : <ChevronRight className="size-5 shrink-0 text-subtle" strokeWidth={2} aria-hidden />}
+        </button>
       </li>
     );
   }
