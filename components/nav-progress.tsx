@@ -22,7 +22,9 @@ export function NavProgress() {
 
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
-      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      // Capture phase: Next's <Link> calls preventDefault() in its own click handler, so a
+      // bubbling listener would never see a link tap as a navigation.
+      if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
       const a = (e.target as Element | null)?.closest?.("a[href]") as HTMLAnchorElement | null;
       if (!a || a.target === "_blank" || a.hasAttribute("download")) return;
       const url = new URL(a.href, location.href);
@@ -30,8 +32,8 @@ export function NavProgress() {
       if (url.pathname === location.pathname && url.search === location.search) return;
       setFrom(`${location.pathname}?${location.search.replace(/^\?/, "")}`);
     };
-    document.addEventListener("click", onClick);
-    return () => document.removeEventListener("click", onClick);
+    document.addEventListener("click", onClick, true);
+    return () => document.removeEventListener("click", onClick, true);
   }, []);
 
   useEffect(() => {
