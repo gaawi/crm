@@ -1,4 +1,5 @@
 import "server-only";
+import { notifyNewSafely } from "@/lib/push/notify";
 import { sql } from "@/lib/db";
 import { runAutopilotIfDue } from "@/lib/ai/autopilot";
 import { runCampaigns, type RunCampaignsSummary } from "@/lib/campaigns/scheduler";
@@ -166,6 +167,7 @@ export async function runCron(options: { deadline: number; fetchImpl?: typeof fe
   } catch (error) {
     summary.errors.push(`campaigns: ${describeSyncError(error)}`);
   }
+  await notifyNewSafely();
   return summary;
 }
 
@@ -186,6 +188,8 @@ export async function handlePushNotification(
   const sync = await runIncrementalSync(account.id, { deadline: options.deadline, fetchImpl: options.fetchImpl });
   // New mail: sort it and prepare the replies it needs.
   await runInboxAssistant({ deadline: options.deadline });
+  // A campaign reply or a mailing to approve: tell the phone.
+  await notifyNewSafely();
   let backfillTriggered = false;
   if (sync.status !== "recovered") {
     const [row] = await sql<{ stalled: boolean }[]>`
@@ -224,6 +228,7 @@ export async function syncStaleAccounts(options: { deadline: number; maxAgeMinut
       }),
     );
     await runInboxAssistant({ deadline: options.deadline });
+    await notifyNewSafely();
   } catch (error) {
     console.warn("syncStaleAccounts failed:", describeSyncError(error));
   }

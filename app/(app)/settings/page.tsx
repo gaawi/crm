@@ -30,6 +30,7 @@ import {
   syncNow,
 } from "./actions";
 import { ImportPump } from "./import-pump";
+import { PushCard } from "./push-card";
 
 export const metadata: Metadata = { title: "Settings" };
 
@@ -114,6 +115,10 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
           <Notice tone="error">{Object.hasOwn(ERRORS, errorCode) ? ERRORS[errorCode] : "Something went wrong. Please try again."}</Notice>
         ) : null}
         {saved ? <Notice tone="success">Saved.</Notice> : null}
+
+        <Card title="Notifications" description="Replies and mailings to approve, on your phone." bodyClassName="p-0">
+          <PushCard />
+        </Card>
 
         <Card
           title="Gmail accounts"

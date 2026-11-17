@@ -24,6 +24,8 @@ const PUBLIC_PREFIXES = [
   "/manifest.webmanifest",
   "/apple-icon",
   "/icons/",
+  // The service worker (shows notifications; static, no data).
+  "/sw.js",
 ];
 
 export async function proxy(request: NextRequest) {
