@@ -111,6 +111,16 @@ export async function runCampaigns(options: RunCampaignsOptions): Promise<RunCam
             or not exists (select 1 from email_campaigns c where c.id = d.campaign_id and c.status in ('running', 'paused')))`;
   summary.released = released.count;
 
+  // Mailings paused only because their account had to be reconnected start again by
+  // themselves once it is back (a pause the owner chose has no such error).
+  const accountPaused = await sql<{ id: string; accountId: string }[]>`
+    select id, account_id from email_campaigns where status = 'paused' and error like 'Reconnect %'`;
+  for (const c of accountPaused) {
+    if (!(await accountProblem(c.accountId))) {
+      await sql`update email_campaigns set status = 'running', error = null where id = ${c.id} and status = 'paused' and error like 'Reconnect %'`;
+    }
+  }
+
   const running = await sql<{ id: string; name: string }[]>`
     select id, name from email_campaigns where status = 'running' order by started_at nulls last, created_at, id`;
   for (const { id, name } of running) {

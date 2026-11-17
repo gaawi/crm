@@ -11,6 +11,7 @@ import { FeaturesProvider } from "@/components/features";
 import { SideNav, TabBar } from "@/components/nav";
 import { NavProgress } from "@/components/nav-progress";
 import { env } from "@/lib/env";
+import { sql } from "@/lib/db";
 import { logout } from "@/app/(auth)/login/actions";
 
 /** Also the limit for server actions (Claude drafting, import chunks) and the sync-on-visit below. */
@@ -86,12 +87,25 @@ async function CountedTabBar() {
 }
 
 async function ReauthBanner() {
-  const { accountsNeedingReauth } = await navCountsForRender();
-  if (accountsNeedingReauth <= 0) return null;
+  const [{ accountsNeedingReauth }, paused] = await Promise.all([
+    navCountsForRender(),
+    // Mailings stopped because their Gmail account must be reconnected (they start again by themselves after).
+    sql<{ n: number; queued: number }[]>`
+      select count(distinct c.id)::int as n, count(d.id)::int as queued
+        from email_campaigns c left join email_drafts d on d.campaign_id = c.id and d.status = 'queued'
+       where c.status = 'paused' and c.error like 'Reconnect %'`,
+  ]);
+  const mailings = paused[0]?.n ?? 0;
+  if (accountsNeedingReauth <= 0 && mailings <= 0) return null;
   return (
-    <div className="border-b border-amber-200 bg-amber-50 px-4 pb-2 pt-[calc(env(safe-area-inset-top)+0.5rem)] text-sm text-amber-900 md:pt-2 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
-      {accountsNeedingReauth === 1 ? "A Gmail account" : `${accountsNeedingReauth} Gmail accounts`} stopped syncing and must be reconnected.{" "}
-      <Link href="/settings" className="font-medium underline underline-offset-2">
+    <div className="border-b border-red-300 bg-red-50 px-4 pb-2.5 pt-[calc(env(safe-area-inset-top)+0.5rem)] text-[15px] font-medium text-red-900 md:pt-2 md:text-sm dark:border-red-900 dark:bg-red-950 dark:text-red-200">
+      {accountsNeedingReauth > 0
+        ? `${accountsNeedingReauth === 1 ? "A Gmail account" : `${accountsNeedingReauth} Gmail accounts`} stopped syncing and must be reconnected.`
+        : ""}
+      {mailings > 0
+        ? ` ${mailings === 1 ? "A mass mailing is" : `${mailings} mass mailings are`} paused (${paused[0].queued} emails waiting) until its account is reconnected.`
+        : ""}{" "}
+      <Link href="/settings" className="underline underline-offset-2">
         Reconnect
       </Link>
     </div>
