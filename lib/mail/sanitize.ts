@@ -257,6 +257,9 @@ export function buildSrcDoc(sanitizedHtml: string): string {
     '<base target="_blank">',
     "<style>",
     ":root{color-scheme:light}",
+    // iPhone Safari enlarges small text in frames ("text autosizing") but not a fixed line-height:
+    // lines of an email with line-height in px then overlap. Keep the email's own sizes.
+    "html{-webkit-text-size-adjust:100%;text-size-adjust:100%}",
     "html,body{margin:0;padding:0;background:#fff}",
     "body{color:#1f1f1f;font:14px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;overflow-wrap:break-word;word-break:break-word}",
     "img{max-width:100%;height:auto}",
