@@ -4,6 +4,7 @@ import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireSession } from "@/lib/auth";
+import { sql } from "@/lib/db";
 import { IMPORT_MAX_BYTES } from "@/lib/booking/csv-import";
 import { normalizeFee } from "@/lib/booking/fee";
 import type { ActionOutcome, ImportResult, PrepareEmailsResult, SheetField, Timeline } from "@/lib/booking/types";
@@ -225,4 +226,12 @@ export async function importRowsAction(projectId: string, text: string): Promise
   } catch (error) {
     return { ok: false, error: errorMessage(error) };
   }
+}
+
+/** Archive a campaign (it leaves the list, nothing is deleted) or bring it back. */
+export async function setSheetArchivedAction(projectId: string, archived: boolean): Promise<void> {
+  await requireSession();
+  if (!/^[0-9a-f-]{36}$/i.test(projectId)) return;
+  await sql`update projects set archived = ${archived}, updated_at = now() where id = ${projectId} and sheet`;
+  refresh();
 }

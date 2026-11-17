@@ -554,14 +554,15 @@ export function SheetView({
       counted.filter((r) => r.stage === stage).length;
     const due = counted.filter((r) => isFollowUpDue(r, today)).length;
     const noReply = counted.filter((r) => isNoReply(r, today, timezone)).length;
+    // The results line is one choice at a time: a status, Follow-ups due or No reply (tapping the chosen one clears it).
+    const withoutResult = (flags: SheetFlag[]) => flags.filter((x) => x !== "due" && x !== "no_reply");
     const setStatus = (stage: OpportunityStage) => () =>
-      setFilters((f) => ({ ...f, status: f.status === stage ? "" : stage }));
+      setFilters((f) => ({ ...f, status: f.status === stage ? "" : stage, flags: withoutResult(f.flags) }));
     const toggleFlag = (flag: "due" | "no_reply") => () =>
       setFilters((f) => ({
         ...f,
-        flags: f.flags.includes(flag)
-          ? f.flags.filter((x) => x !== flag)
-          : [...f.flags, flag],
+        status: "",
+        flags: f.flags.includes(flag) ? withoutResult(f.flags) : [...withoutResult(f.flags), flag],
       }));
     const stage = (value: OpportunityStage, always = true): StatItem[] => {
       const n = count(value);

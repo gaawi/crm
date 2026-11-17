@@ -283,7 +283,7 @@ export function FiltersBar({
 
       {/* The results, in one quiet line: each number filters the list. */}
       <div className="flex items-start gap-2">
-        <p className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 text-[15px] md:text-sm" aria-label="Results (tap to filter)">
+        <p className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 text-[15px] md:gap-1 md:text-sm" aria-label="Results (tap one to filter)">
           {stats.map((st) => {
             const tone =
               st.count > 0 && st.tone === "danger"
@@ -298,11 +298,13 @@ export function FiltersBar({
                 aria-pressed={st.active && st.key !== "total"}
                 onClick={st.onClick}
                 className={cn(
-                  "inline-flex items-baseline gap-1 rounded text-muted active:opacity-60",
-                  st.active && st.key !== "total" && "underline decoration-2 underline-offset-4",
+                  "inline-flex h-10 items-center gap-1 rounded-full px-3 active:opacity-70 md:h-7 md:px-2.5",
+                  st.active && st.key !== "total"
+                    ? "bg-fg text-bg"
+                    : "bg-surface-2/70 text-muted md:hover:bg-surface-2",
                 )}
               >
-                <span className={cn("font-semibold tabular-nums", tone)}>{st.count}</span>
+                <span className={cn("font-semibold tabular-nums", st.active && st.key !== "total" ? "text-bg" : tone)}>{st.count}</span>
                 <span>{st.key === "total" ? (st.count === 1 ? "contact" : "contacts") : st.label.toLowerCase()}</span>
               </button>
             );

@@ -9,6 +9,7 @@ import type { BookingSheet, SheetStageCounts } from "@/lib/booking/types";
 import { labelKindFor, stageLabel } from "@/lib/constants";
 import { todayIn } from "@/lib/dates";
 import { env } from "@/lib/env";
+import { sql } from "@/lib/db";
 import { advanceSheetStages, listSheets } from "@/lib/queries/booking";
 import { listCampaignSummaries } from "@/lib/campaigns/campaigns";
 import { campaignSize, roundUpToTick, whenPhrase } from "@/lib/campaigns/format";
@@ -20,6 +21,7 @@ import { ActionForm, FormSubmit } from "../_components/action-form";
 import { FormActions, GroupTitle, HeaderAddButton } from "../_components/ui";
 import { param } from "../_lib/url";
 import { createSheetAction } from "./actions";
+import { SheetSwipeList, UnarchiveButton } from "./sheet-swipe-list";
 
 export const metadata: Metadata = { title: "Campaigns" };
 
@@ -100,7 +102,12 @@ export default async function CampaignsPage({ searchParams }: PageProps<"/campai
   await advanceSheetStages();
   const now = new Date();
   const [sheets, mailings] = await Promise.all([listSheets(todayIn(env.timezone)), listCampaignSummaries({}, now)]);
-  const results = await campaignResults(mailings.map((m) => m.id));
+  const [results, archived] = await Promise.all([
+    campaignResults(mailings.map((m) => m.id)),
+    sql<{ id: string; name: string; color: string; rows: number }[]>`
+      select p.id, p.name, p.color, (select count(*)::int from opportunities op where op.project_id = p.id) as rows
+        from projects p where p.sheet and p.archived order by p.updated_at desc`,
+  ]);
 
   return (
     <>
@@ -159,9 +166,11 @@ export default async function CampaignsPage({ searchParams }: PageProps<"/campai
       ) : null}
 
       {sheets.length ? (
-        <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface md:rounded-lg">
-          {sheets.map((s) => (
-            <li key={s.id}>
+        <SheetSwipeList
+          items={sheets.map((s) => ({
+            id: s.id,
+            name: s.name,
+            row: (
               <Link href={`/campaigns/${s.id}`} className="flex min-h-[64px] items-center gap-3 px-4 py-3 active:bg-surface-2 md:hover:bg-surface-2/60">
                 <ProjectDot color={s.color} className="size-2.5 self-start mt-2 md:mt-1.5" />
                 <div className="min-w-0 flex-1">
@@ -186,14 +195,38 @@ export default async function CampaignsPage({ searchParams }: PageProps<"/campai
                 </div>
                 <ChevronRight className="size-5 shrink-0 text-subtle md:size-4" />
               </Link>
-            </li>
-          ))}
-        </ul>
+            ),
+          }))}
+        />
       ) : (
         <EmptyState title="No campaigns yet" action={<ButtonLink href="/campaigns?new=1" variant="primary">New campaign</ButtonLink>}>
           One per push, e.g. “Booking USA 2026/27”, “Gira España 2027”, “Press spring 2027” or “Partners NYC”.
         </EmptyState>
       )}
+
+      {sheets.length ? (
+        <p className="mt-2 px-4 text-[13px] text-subtle md:px-0 md:text-xs">Swipe a campaign to the left to archive it.</p>
+      ) : null}
+
+      {archived.length ? (
+        <details className="group mt-8">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-4 text-[13px] uppercase tracking-wide text-subtle md:min-h-0 md:px-0 md:text-xs">
+            <ChevronRight className="size-4 transition-transform group-open:rotate-90" aria-hidden />
+            Archived {archived.length}
+          </summary>
+          <ul className="mt-2 divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface md:rounded-lg">
+            {archived.map((a) => (
+              <li key={a.id} className="flex items-center gap-3 px-4 py-2">
+                <ProjectDot color={a.color} className="size-2.5" />
+                <Link href={`/campaigns/${a.id}`} className="min-w-0 flex-1 truncate text-[15px] text-muted active:opacity-60 md:text-sm">
+                  {a.name} <span className="text-subtle">· {a.rows} contacts</span>
+                </Link>
+                <UnarchiveButton id={a.id} />
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
     </>
   );
 }
