@@ -4,6 +4,8 @@ import { ArrowDownLeft, ArrowUpRight, Check, Clock, Sparkles } from "lucide-reac
 import { loadReviewInbox, ReviewInbox } from "@/components/assistant/review-inbox";
 import { ApprovalsBlock } from "@/components/today/approvals-block";
 import { ConcertTodayBlock } from "@/components/today/concert-today";
+import { CampaignRepliesBlock } from "@/components/today/campaign-replies";
+import { listCampaignReplies } from "@/lib/queries/campaign-replies";
 import { loadPendingApprovals } from "@/lib/approvals/pending";
 import { PhoneActions } from "@/components/booking/phone-actions";
 import { ContactRow, RowList } from "@/components/contact-row";
@@ -61,7 +63,7 @@ function ContactPhoneActions({ contact, timezone }: { contact: ContactSummary; t
 export default async function TodayPage({ searchParams }: PageProps<"/">) {
   const timezone = env.timezone;
   const today = todayIn(timezone);
-  const [allFollowUps, allScheduled, allActivity, counts, allReview, campaigns, pending, concerts] = await Promise.all([
+  const [allFollowUps, allScheduled, allActivity, counts, allReview, campaigns, pending, concerts, allReplies] = await Promise.all([
     getFollowUps({ today, limit: 30 }),
     getScheduled({ today, limit: 80 }),
     recentActivity(12),
@@ -70,6 +72,7 @@ export default async function TodayPage({ searchParams }: PageProps<"/">) {
     listCampaignRefs(),
     loadPendingApprovals(),
     concertsToday(),
+    listCampaignReplies(40),
   ]);
 
   // Filter by campaign (?campaign=<id>): each item knows its campaigns; items outside every campaign show under All only.
@@ -95,10 +98,13 @@ export default async function TodayPage({ searchParams }: PageProps<"/">) {
     drafts: allReview.drafts.filter((d) => inCampaign([d.projectId], selected)),
     actions: allReview.actions.filter((a) => inCampaign([a.projectId], selected)),
   };
+  const replies = allReplies.filter((r) => inCampaign([r.projectId], selected));
+  // The first replies are shown in full above; "Needs your reply" keeps the rest.
+  const shownReplies = new Set(replies.slice(0, 6).map((r) => r.contactId));
   const followUps = {
     due: allFollowUps.due.filter((c) => inCampaign(ofContact(c.id), selected)),
     opportunities: allFollowUps.opportunities.filter((o) => inCampaign(ofOpportunity(o), selected)),
-    needsReply: allFollowUps.needsReply.filter((c) => inCampaign(ofContact(c.id), selected)),
+    needsReply: allFollowUps.needsReply.filter((c) => inCampaign(ofContact(c.id), selected) && !shownReplies.has(c.id)),
     awaitingReply: allFollowUps.awaitingReply.filter((c) => inCampaign(ofContact(c.id), selected)),
   };
   const scheduled = allScheduled.filter((item) => inCampaign(item.campaign ? [item.campaign.id] : undefined, selected));
@@ -106,7 +112,7 @@ export default async function TodayPage({ searchParams }: PageProps<"/">) {
 
   const dateLabel = new Intl.DateTimeFormat("en-US", { timeZone: timezone, weekday: "long", month: "long", day: "numeric" }).format(new Date());
   const nothingToDo =
-    !pending.total &&
+    !pending.total && !replies.length &&
     !followUps.due.length && !followUps.opportunities.length && !followUps.needsReply.length && !followUps.awaitingReply.length;
 
   return (
@@ -140,6 +146,8 @@ export default async function TodayPage({ searchParams }: PageProps<"/">) {
       <div className="grid gap-8 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] [&>*]:min-w-0">
         <div className="flex flex-col gap-8">
           <ConcertTodayBlock concerts={concerts} />
+
+          <CampaignRepliesBlock replies={replies} timezone={timezone} onDone={(id) => markReplyDone.bind(null, id)} />
 
           <ApprovalsBlock pending={pending} />
 
