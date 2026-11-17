@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { loadOrganizationProfileAction } from "@/app/(app)/organizations/actions";
 import {
   ArrowRight,
   Building2,
@@ -327,6 +328,22 @@ export function OrgProfileDialog({
   organization?: OrgProfileOwner | null;
   editHref?: string | null;
 }) {
+  // Lists (the booking sheet) carry a short profile: the full one is loaded when the card opens.
+  const [full, setFull] = useState<{ id: string; profile: OrgProfile } | null>(null);
+  const orgId = organization?.id;
+  useEffect(() => {
+    if (!open || !orgId || full?.id === orgId) return;
+    let live = true;
+    loadOrganizationProfileAction(orgId)
+      .then((p) => {
+        if (live && p) setFull({ id: orgId, profile: p });
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [open, orgId, full?.id]);
+  if (full && full.id === orgId) profile = full.profile;
   return (
     <Sheet
       open={open}

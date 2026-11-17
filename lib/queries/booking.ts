@@ -83,6 +83,25 @@ export async function getSheet(id: string, today: string = todayIn(env.timezone)
 
 const STAGE_ORDER = ["negotiation", "proposal", "replied", "contacted", "lead", "won", "lost"];
 
+/**
+ * The part of an organization's research profile the sheet shows on its rows
+ * (what it is, where, logo and first photos, who played there, whom to pitch,
+ * fit, who researched it). The full card (evidence, audits, sources…) is
+ * loaded when it is opened: the whole profiles of a big campaign weigh about
+ * 11 MB and made the sheet slow to open on a phone.
+ */
+const sheetProfile = () => sql`case when o.profile is null then null else jsonb_strip_nulls(jsonb_build_object(
+  'tagline', o.profile->'tagline',
+  'summary', case when jsonb_typeof(o.profile->'summary') = 'string' then to_jsonb(left(o.profile->>'summary', 300)) end, 'kind', o.profile->'kind',
+  'city', o.profile->'city', 'country', o.profile->'country', 'location', o.profile->'location', 'address', o.profile->'address',
+  'formats', o.profile->'formats', 'logo', o.profile->'logo',
+  'images', case when jsonb_typeof(o.profile->'images') = 'array' then jsonb_path_query_array(o.profile->'images', '$[0 to 1]') end,
+  'artists', case when jsonb_typeof(o.profile->'artists') = 'array' then jsonb_path_query_array(o.profile->'artists', '$[0 to 11]') end, 'contacts', o.profile->'contacts',
+  'booking', case when jsonb_typeof(o.profile->'booking') = 'object'
+                  then jsonb_strip_nulls(jsonb_build_object('fit', o.profile->'booking'->'fit', 'pitchTo', o.profile->'booking'->'pitchTo')) end,
+  'researchedBy', o.profile->'researchedBy', 'researchedAt', o.profile->'researchedAt'
+)) end`;
+
 const iso = (value: string | Date | null | undefined): string | null => (value ? new Date(value).toISOString() : null);
 
 type RawSheetRow = Omit<SheetRow, "createdAt" | "updatedAt"> & { createdAt: Date; updatedAt: Date };
@@ -117,7 +136,7 @@ export async function getSheetRows(projectId: string, options: { ids?: string[] 
   const rows = await sql<RawSheetRow[]>`
     select op.id, op.title, op.kind, op.stage, op.value, op.currency, op.follow_up_at, op.next_action, op.next_step, op.notes, op.event_dates,
            op.sheet_section as section, op.spaces, op.is_returning as "returning", op.origin, op.notes_history, op.created_at, op.updated_at,
-           case when o.id is null then null else json_build_object('id', o.id, 'name', o.name, 'city', o.city, 'website', o.website, 'tags', o.tags, 'profile', o.profile) end as organization,
+           case when o.id is null then null else json_build_object('id', o.id, 'name', o.name, 'city', o.city, 'website', o.website, 'tags', o.tags, 'profile', ${sheetProfile()}) end as organization,
            case when c.id is null then null else json_build_object(
              'id', c.id,
              'name', nullif(btrim(c.name), ''),

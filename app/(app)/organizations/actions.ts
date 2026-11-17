@@ -17,6 +17,7 @@ import {
   parseVenueLines,
   profileIssue,
   PROFILE_KINDS,
+  type OrgProfile,
   type OrgProfileInput,
 } from "@/lib/organizations/profile";
 import { getOrganizationProfile, setOrganizationProfile } from "@/lib/queries/org-profiles";
@@ -192,4 +193,10 @@ export async function removeOrganizationProfileAction(organizationId: string): P
   const id = parseId(organizationId);
   await setOrganizationProfile(id, null);
   redirect(`/organizations/${id}`);
+}
+
+/** The full research profile, for the card opened from a list that only carries a short one (the booking sheet). */
+export async function loadOrganizationProfileAction(organizationId: string): Promise<OrgProfile | null> {
+  await requireSession();
+  return (await getOrganizationProfile(organizationId))?.profile ?? null;
 }
