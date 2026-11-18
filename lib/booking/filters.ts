@@ -8,7 +8,7 @@ import { phoneDigits } from "@/lib/booking/phone";
 import { isFollowUpDue, isNoReply, type TimingRow } from "@/lib/booking/timing";
 import type { OpportunityKind, OpportunityStage } from "@/lib/types";
 
-export const SHEET_FLAGS = ["due", "no_reply", "returning", "phone", "hot", "vip", "nyc", "rental", "near_nyc", "chamber", "josefina", "claude", "chatgpt", "unresearched", "bounced", "auto_reply"] as const;
+export const SHEET_FLAGS = ["due", "no_reply", "returning", "phone", "hot", "vip", "tour_nw", "tour_mw", "nyc", "rental", "near_nyc", "chamber", "josefina", "claude", "chatgpt", "unresearched", "bounced", "auto_reply"] as const;
 /**
  * due = follow-up due; no_reply = waiting > 10 days; hot = In conversation;
  * claude / chatgpt = the organization's profile was researched by that
@@ -28,6 +28,8 @@ export const SHEET_FLAG_LABELS: Record<SheetFlag, string> = {
   phone: "Has phone",
   hot: "Hot",
   vip: "Prestigious",
+  tour_nw: "Tour: Northwest",
+  tour_mw: "Tour: Midwest",
   nyc: "In NYC",
   rental: "Rental only",
   near_nyc: "< 5 h from NYC",
@@ -245,6 +247,10 @@ export function rowHasFlag(row: FilterRow, flag: SheetFlag, today: string, timez
       return researcherOf(row.organization?.profile) === null;
     case "vip":
       return Boolean(row.organization?.tags?.includes("prestigious"));
+    case "tour_nw":
+      return Boolean(row.organization?.tags?.includes("tour-northwest"));
+    case "tour_mw":
+      return Boolean(row.organization?.tags?.includes("tour-midwest"));
     case "rental":
       return Boolean(row.organization?.tags?.includes("rental-only"));
     case "nyc":

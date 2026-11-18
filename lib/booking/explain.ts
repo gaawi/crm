@@ -42,6 +42,16 @@ export const TAGS_EXPLAINED: Explained[] = [
     text: "The organization is in New York City (Manhattan, Brooklyn, the Bronx, Queens, Staten Island), from its city. Not a touring date: no fee pitch and no mass booking email; we look for co-productions or the use of the hall.",
   },
   {
+    label: "Tour: Northwest",
+    how: "manual",
+    text: "Part of the 2028-29 Pacific Northwest tour around the Smith Fine Arts Series (Monmouth, OR): presenters within reach for block booking. Tag tour-northwest on the organization.",
+  },
+  {
+    label: "Tour: Midwest",
+    how: "manual",
+    text: "Part of the 2028-29 Upper Midwest tour around Matinee Musicale (Duluth, MN): Minnesota, Wisconsin, Chicago, Iowa and the Dakotas. Tag tour-midwest on the organization.",
+  },
+  {
     label: "Rental only",
     how: "manual",
     text: "The hall doesn't present its own concerts: artists rent it. Set from the research or by hand on the organization. Useful for our own NYC concerts; never a booking pitch.",
@@ -94,6 +104,8 @@ export function explainStage(stage: string): Explained | undefined {
 const FLAG_LABEL: Record<string, string> = {
   vip: "Prestigious",
   nyc: "In NYC",
+  tour_nw: "Tour: Northwest",
+  tour_mw: "Tour: Midwest",
   rental: "Rental only",
   near_nyc: "< 5 h from NYC",
   chamber: "Chamber specialists",

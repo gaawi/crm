@@ -7,6 +7,7 @@ import {
   Check,
   KeyRound,
   ListChecks,
+  MapPin,
   Music,
   Pencil,
   RotateCcw,
@@ -49,6 +50,18 @@ const TAGS: { flag: SheetFlag; icon: LucideIcon; off: string; on: string }[] = [
     icon: Building2,
     off: "border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-900 dark:bg-rose-950/50 dark:text-rose-300",
     on: "border-rose-600 bg-rose-600 text-white",
+  },
+  {
+    flag: "tour_nw",
+    icon: MapPin,
+    off: "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-300",
+    on: "border-emerald-600 bg-emerald-600 text-white",
+  },
+  {
+    flag: "tour_mw",
+    icon: MapPin,
+    off: "border-cyan-200 bg-cyan-50 text-cyan-800 dark:border-cyan-900 dark:bg-cyan-950/50 dark:text-cyan-300",
+    on: "border-cyan-600 bg-cyan-600 text-white",
   },
   {
     flag: "rental",
@@ -124,10 +137,10 @@ const GROUPS: {
   {
     key: "manual",
     title: "Set by you",
-    hint: "You change these on each row (status, follow-up date, Returning) or on the organization (Prestigious, Rental only).",
+    hint: "You change these on each row (status, follow-up date, Returning) or on the organization (Prestigious, Tour, Rental only).",
     icon: Pencil,
     stats: ["proposal", "won", "lost", "due"],
-    flags: ["vip", "rental", "returning"],
+    flags: ["vip", "tour_nw", "tour_mw", "rental", "returning"],
   },
 ];
 
