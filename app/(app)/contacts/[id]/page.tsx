@@ -461,11 +461,12 @@ function ContactHeader({
           )}
         </div>
         <div className="flex w-full min-w-0 flex-1 flex-col items-start">
-          <h1 className="max-w-full truncate text-[20px] font-bold leading-tight tracking-tight text-fg md:text-xl md:font-semibold">
+          <h1 className="max-w-full text-[20px] font-bold leading-tight tracking-tight text-fg [overflow-wrap:anywhere] md:text-xl md:font-semibold">
             {contact.displayName}
           </h1>
           {contact.role || contact.organization ? (
-            <p className="mt-0.5 max-w-full truncate text-[15px] text-muted md:text-sm">
+            {/* The full name of the series, never cut. */}
+            <p className="mt-0.5 max-w-full text-[15px] leading-snug text-muted [overflow-wrap:anywhere] md:text-sm">
               {contact.role}
               {contact.role && contact.organization ? " · " : null}
               {contact.organization ? (
