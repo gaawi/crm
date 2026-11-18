@@ -465,7 +465,6 @@ function ContactHeader({
             {contact.displayName}
           </h1>
           {contact.role || contact.organization ? (
-            {/* The full name of the series, never cut. */}
             <p className="mt-0.5 max-w-full text-[15px] leading-snug text-muted [overflow-wrap:anywhere] md:text-sm">
               {contact.role}
               {contact.role && contact.organization ? " · " : null}
