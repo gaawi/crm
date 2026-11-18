@@ -4,7 +4,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { cache, type ReactNode } from "react";
-import { Archive, CalendarClock, Check, Ellipsis, GitMerge, Mail, Music, Plus, Trash2, X } from "lucide-react";
+import { Archive, CalendarClock, Check, Ellipsis, GitMerge, Image as ImageIcon, Mail, Music, Plus, Trash2, X } from "lucide-react";
 import { ContactAvatar } from "@/components/contact-avatar";
 import { ContactOrgAvatar } from "@/components/contact-org-avatar";
 import { DraftFollowUp } from "@/components/draft-follow-up";
@@ -401,10 +401,28 @@ function ContactHeader({
 }) {
   const base = `/contacts/${contact.id}`;
   return (
-    <header className="mb-6 flex flex-col gap-3">
+    <header className="mb-4 flex flex-col gap-2 md:mb-6 md:gap-3">
       <div className="flex min-w-0 items-center justify-between gap-3">
         <BackLink href="/contacts" label="Contacts" />
         <Dropdown label="More actions" trigger={<Ellipsis className="size-5" strokeWidth={1.75} />}>
+          {/* Phones: Call, WhatsApp, Email and Log live here, leaving the screen to the emails. */}
+          <div className="md:hidden">
+            <ContactActions
+              contactId={contact.id}
+              phone={contact.phone}
+              whatsapp={contact.whatsapp}
+              email={contact.primaryEmail}
+              subject={[contact.displayName, contact.organization?.name].filter(Boolean).join(" · ")}
+              timezone={timezone}
+              addPhoneHref={`${base}?tab=details&edit=profile#phone`}
+              variant="menu"
+            />
+            <Link href={`${base}?edit=photo`} className={menuItemClass}>
+              <ImageIcon className="size-4 text-muted" strokeWidth={1.75} />
+              {contact.photoUrl ? "Edit photo" : "Add photo"}
+            </Link>
+            <div className="my-1 border-t border-border" />
+          </div>
           <Link href={`${base}?merge=1`} className={menuItemClass}>
             <GitMerge className="size-4 text-muted" strokeWidth={1.75} />
             Merge a duplicate…
@@ -424,20 +442,26 @@ function ContactHeader({
         </Dropdown>
       </div>
 
-      <div className="flex flex-col items-center gap-3 text-center md:flex-row md:gap-4 md:text-left">
+      <div className="flex items-center gap-3 text-left md:gap-4">
         <div className="flex shrink-0 flex-col items-center">
-          <ContactOrgAvatar contact={contact} organization={contact.organization} size="lg" zoomable photoSource={contact.photoSource} />
+          {/* Phones: a small avatar with the name beside it; desktop: the large one. */}
+          <span className="md:hidden">
+            <ContactOrgAvatar contact={contact} organization={contact.organization} size="md" zoomable photoSource={contact.photoSource} />
+          </span>
+          <span className="hidden md:block">
+            <ContactOrgAvatar contact={contact} organization={contact.organization} size="lg" zoomable photoSource={contact.photoSource} />
+          </span>
           {editingPhoto ? null : (
             <Link
               href={`${base}?edit=photo`}
-              className="inline-flex min-h-11 items-center px-2 text-[13px] text-muted hover:text-fg hover:underline md:min-h-0 md:pt-1 md:text-[11px]"
+              className="hidden items-center px-2 text-muted hover:text-fg hover:underline md:inline-flex md:pt-1 md:text-[11px]"
             >
               {contact.photoUrl ? "Edit photo" : "Add photo"}
             </Link>
           )}
         </div>
-        <div className="flex w-full min-w-0 flex-col items-center md:flex-1 md:items-start">
-          <h1 className="max-w-full truncate text-[26px] font-bold leading-tight tracking-tight text-fg md:text-xl md:font-semibold">
+        <div className="flex w-full min-w-0 flex-1 flex-col items-start">
+          <h1 className="max-w-full truncate text-[20px] font-bold leading-tight tracking-tight text-fg md:text-xl md:font-semibold">
             {contact.displayName}
           </h1>
           {contact.role || contact.organization ? (
@@ -451,7 +475,7 @@ function ContactHeader({
               ) : null}
             </p>
           ) : null}
-          <div className="mt-2 flex max-w-full flex-wrap items-center justify-center gap-x-2 gap-y-1 md:justify-start">
+          <div className="mt-1 flex max-w-full flex-wrap items-center justify-start gap-x-2 gap-y-1 md:mt-2">
             <StatusBadge status={contact.status} />
             {musician ? (
               <Link href={`${base}?tab=details#musician`} className="active:opacity-60">
@@ -474,7 +498,7 @@ function ContactHeader({
 
       {editingPhoto ? <PhotoForm contact={contact} cancelHref={base} /> : null}
 
-      <div className="flex flex-col items-center gap-3 md:flex-row md:flex-wrap md:items-start md:gap-2">
+      <div className="hidden md:flex md:flex-row md:flex-wrap md:items-start md:gap-2">
         <ContactActions
           contactId={contact.id}
           phone={contact.phone}
@@ -486,6 +510,12 @@ function ContactHeader({
         />
         {env.claudeEnabled ? <DraftFollowUp contactId={contact.id} accounts={accounts} hasEmail={contact.emails.length > 0} /> : null}
       </div>
+      {/* Phones: Claude's follow-up draft stays at hand, the rest is in the ⋯ menu. */}
+      {env.claudeEnabled ? (
+        <div className="md:hidden">
+          <DraftFollowUp contactId={contact.id} accounts={accounts} hasEmail={contact.emails.length > 0} />
+        </div>
+      ) : null}
     </header>
   );
 }

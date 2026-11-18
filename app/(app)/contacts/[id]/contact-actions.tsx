@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { Mail, NotebookPen, Phone } from "lucide-react";
+import { Mail, MessageCircle, NotebookPen, Phone } from "lucide-react";
+import { menuItemClass } from "../../_components/ui";
 import { CallButton, WhatsAppButton } from "@/components/booking/phone-actions";
 import { phoneActionClass } from "@/components/booking/phone-action-class";
 import { useActivityLogger } from "@/components/booking/log-activity-dialog";
@@ -23,6 +24,7 @@ export function ContactActions({
   subject,
   timezone,
   addPhoneHref,
+  variant = "default",
 }: {
   contactId: string;
   phone: string | null;
@@ -33,6 +35,8 @@ export function ContactActions({
   timezone: string;
   /** The profile form, focused on the phone field. */
   addPhoneHref: string;
+  /** "menu": items for the phone header's ⋯ menu (the tiles and desktop buttons are not drawn). */
+  variant?: "default" | "menu";
 }) {
   const logger = useActivityLogger({ timezone });
   const target = { contactId };
@@ -42,6 +46,38 @@ export function ContactActions({
   const logCall = () => logger.open({ target, kind: "call", subject, phone });
   const logWhatsApp = () => logger.open({ target, kind: "whatsapp", subject, phone });
   const logAny = () => logger.open({ target, kind: canCall ? "call" : "note", subject, phone });
+
+  if (variant === "menu") {
+    const wa = whatsappUrl(contact);
+    const tel = telHref(phone);
+    return (
+      <>
+        {tel ? (
+          <a href={tel} onClick={() => setTimeout(logCall, 400)} className={menuItemClass}>
+            <Phone className="size-4 text-muted" strokeWidth={1.75} aria-hidden /> Call
+          </a>
+        ) : (
+          <Link href={addPhoneHref} className={menuItemClass}>
+            <Phone className="size-4 text-muted" strokeWidth={1.75} aria-hidden /> Add phone
+          </Link>
+        )}
+        {wa ? (
+          <a href={wa} target="_blank" rel="noreferrer" onClick={() => setTimeout(logWhatsApp, 400)} className={menuItemClass}>
+            <MessageCircle className="size-4 text-muted" strokeWidth={1.75} aria-hidden /> WhatsApp
+          </a>
+        ) : null}
+        {email ? (
+          <a href={`mailto:${email}`} className={menuItemClass}>
+            <Mail className="size-4 text-muted" strokeWidth={1.75} aria-hidden /> Email
+          </a>
+        ) : null}
+        <button type="button" onClick={logAny} className={menuItemClass}>
+          <NotebookPen className="size-4 text-muted" strokeWidth={1.75} aria-hidden /> Log call / note
+        </button>
+        {logger.dialog}
+      </>
+    );
+  }
 
   return (
     <>
