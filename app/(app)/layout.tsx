@@ -10,6 +10,7 @@ import { SendFlourishHost } from "@/components/brand/send-flourish";
 import { FeaturesProvider } from "@/components/features";
 import { SideNav, TabBar } from "@/components/nav";
 import { NavProgress } from "@/components/nav-progress";
+import { AppRefresh, RefreshButton } from "@/components/app-refresh";
 import { env } from "@/lib/env";
 import { sql } from "@/lib/db";
 import { logout } from "@/app/(auth)/login/actions";
@@ -47,7 +48,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <Suspense fallback={<SideNav approvals={0} mail={0} />}>
             <CountedSideNav />
           </Suspense>
-          <form action={logout} className="mt-auto">
+          <RefreshButton className="mt-auto mb-2 flex items-center gap-2 px-2.5 text-xs text-subtle hover:text-muted [&_svg]:size-3.5" />
+          <form action={logout}>
             <button type="submit" className="px-2.5 text-xs text-subtle hover:text-muted">
               Sign out
             </button>
@@ -71,6 +73,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <Suspense fallback={null}>
           <NavProgress />
         </Suspense>
+        <AppRefresh version={process.env.VERCEL_GIT_COMMIT_SHA ?? "dev"} />
       </div>
     </FeaturesProvider>
   );

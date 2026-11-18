@@ -2,7 +2,7 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { Download, Menu, Settings2 } from "lucide-react";
+import { Download, Menu, MoreHorizontal, Settings2 } from "lucide-react";
 import { buttonClass } from "@/components/ui/button";
 import { AssistantSwitch } from "@/components/assistant/sheet-controls";
 import { PageHeader } from "@/components/ui/layout";
@@ -17,6 +17,7 @@ import { menuItemClass } from "../../_components/ui";
 import { AddRowButton } from "./add-row";
 import { ImportButton } from "./import-dialog";
 import { SheetView } from "./sheet-view";
+import { ArchiveSheetButton } from "../sheet-swipe-list";
 
 export async function generateMetadata({ params }: PageProps<"/campaigns/[id]">): Promise<Metadata> {
   const { id } = await params;
@@ -71,6 +72,9 @@ export default async function CampaignPage({ params }: PageProps<"/campaigns/[id
               <Link href={`/campaigns/${sheet.id}/templates`} className={buttonClass("secondary", "md")}>
                 <Settings2 className="size-4" /> Templates &amp; settings
               </Link>
+              <Dropdown trigger={<MoreHorizontal className="size-5" strokeWidth={1.75} />} label="More">
+                <ArchiveSheetButton id={sheet.id} className={menuItemClass} />
+              </Dropdown>
               <AddRowButton projectId={sheet.id} currency={sheet.currency} phonePrefix={sheet.phonePrefix} sections={sections} />
             </div>
             {/* Phones: everything behind one menu, so the list gets the screen. */}
@@ -86,6 +90,7 @@ export default async function CampaignPage({ params }: PageProps<"/campaigns/[id
                   <Download className="size-4 text-muted" /> Export CSV
                 </a>
               ) : null}
+              <ArchiveSheetButton id={sheet.id} className={menuItemClass} />
             </Dropdown>
           </>
         }

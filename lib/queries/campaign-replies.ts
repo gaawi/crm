@@ -29,7 +29,7 @@ export async function listCampaignReplies(limit = 20): Promise<CampaignReply[]> 
       select distinct on (c.id) c.id, c.name, o.name as org_name, p.id as project_id, p.name as project_name
         from contacts c
         join opportunities op on op.contact_id = c.id
-        join projects p on p.id = op.project_id and p.sheet
+        join projects p on p.id = op.project_id and p.sheet and not p.archived
         left join organizations o on o.id = op.organization_id
        where c.status <> 'archived'
          and c.last_inbound_at > coalesce(c.last_outbound_at, '-infinity'::timestamptz)

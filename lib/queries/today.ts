@@ -35,3 +35,9 @@ export async function contactCampaigns(contactIds: string[]): Promise<Map<string
   }
   return out;
 }
+
+/** Campaigns that were archived: their people no longer show on Today. */
+export async function archivedCampaignIds(): Promise<Set<string>> {
+  const rows = await sql<{ id: string }[]>`select id from projects where sheet and archived`;
+  return new Set(rows.map((r) => r.id));
+}

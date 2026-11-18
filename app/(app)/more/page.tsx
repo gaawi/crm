@@ -4,6 +4,7 @@ import { Building2, ChevronRight, FolderKanban, History, LayoutList, ListChecks,
 import { PageHeader } from "@/components/ui/layout";
 import { logout } from "@/app/(auth)/login/actions";
 import { env } from "@/lib/env";
+import { RefreshButton } from "@/components/app-refresh";
 
 export const metadata: Metadata = { title: "More" };
 
@@ -38,6 +39,7 @@ export default function MorePage() {
     <>
       <PageHeader title="More" />
       <div className="flex flex-col gap-6">
+        <RefreshButton className="flex min-h-[52px] w-full items-center gap-3 rounded-xl border border-border bg-surface px-4 text-left text-[17px] active:bg-surface-2 md:text-sm" />
         {GROUPS.filter((group) => env.claudeEnabled || !group.items.some((i) => i.href === "/assistant")).map((group) => (
           <section key={group.title}>
             <h2 className="mb-1.5 px-4 text-[13px] uppercase tracking-wide text-subtle">{group.title}</h2>

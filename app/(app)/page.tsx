@@ -23,7 +23,7 @@ import { getFollowUps, getScheduled } from "@/lib/queries/followups";
 import { concertsToday } from "@/lib/queries/listings";
 import { recentActivity } from "@/lib/queries/messages";
 import { getOverviewCounts } from "@/lib/queries/stats";
-import { contactCampaigns, listCampaignRefs } from "@/lib/queries/today";
+import { archivedCampaignIds, contactCampaigns, listCampaignRefs } from "@/lib/queries/today";
 import { campaignOptions, countByCampaign, inCampaign, TODAY_CAMPAIGN_PARAM } from "@/lib/today/campaign-filter";
 import type { ContactSummary } from "@/lib/types";
 import { cn, truncate } from "@/lib/utils";
@@ -84,6 +84,12 @@ export default async function TodayPage({ searchParams }: PageProps<"/">) {
     ...allActivity.flatMap((m) => (m.contact ? [m.contact.id] : [])),
   ]);
   const ofContact = (id: string | undefined) => (id ? memberships.get(id) : undefined);
+  // People only in archived campaigns (e.g. a finished 3-K search) don't show as replies to handle.
+  const archivedIds = await archivedCampaignIds();
+  const onlyArchived = (id: string) => {
+    const set = memberships.get(id);
+    return Boolean(set?.size) && [...set!].every((p) => archivedIds.has(p));
+  };
   const ofOpportunity = (o: { project: { id: string; sheet?: boolean } | null }) => (o.project?.sheet ? [o.project.id] : undefined);
   const todayItems = [
     ...allReview.actions.map((a) => [a.projectId]),
@@ -104,8 +110,8 @@ export default async function TodayPage({ searchParams }: PageProps<"/">) {
   const followUps = {
     due: allFollowUps.due.filter((c) => inCampaign(ofContact(c.id), selected)),
     opportunities: allFollowUps.opportunities.filter((o) => inCampaign(ofOpportunity(o), selected)),
-    needsReply: allFollowUps.needsReply.filter((c) => inCampaign(ofContact(c.id), selected) && !shownReplies.has(c.id)),
-    awaitingReply: allFollowUps.awaitingReply.filter((c) => inCampaign(ofContact(c.id), selected)),
+    needsReply: allFollowUps.needsReply.filter((c) => inCampaign(ofContact(c.id), selected) && !shownReplies.has(c.id) && !onlyArchived(c.id)),
+    awaitingReply: allFollowUps.awaitingReply.filter((c) => inCampaign(ofContact(c.id), selected) && !onlyArchived(c.id)),
   };
   const scheduled = allScheduled.filter((item) => inCampaign(item.campaign ? [item.campaign.id] : undefined, selected));
   const activity = allActivity.filter((m) => inCampaign(ofContact(m.contact?.id), selected));
