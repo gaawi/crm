@@ -288,7 +288,8 @@ export function SheetView({
       [{ section: null, rows: groupBySection(visible).flatMap((g) => g.rows) }].map((g) => {
         const key = g.section ?? "\u0000other";
         const fold = {
-          collapsed: collapsed.has(key),
+          // One flat list: never folded (an old "Collapse all" saved on this device would hide every row).
+          collapsed: false,
           onToggle: () => toggleCollapsed(key),
           summary: sectionSummary(g.rows, (stage) =>
             stageLabel(stage, labelKindFor(g.rows.map((r) => r.kind))),
@@ -305,7 +306,7 @@ export function SheetView({
                 setMore((m) => ({ key: filtersKey, n: (m.key === filtersKey ? m.n : 0) + ROWS_PER_SECTION })),
             };
       }),
-    [visible, more, filtersKey, collapsed, toggleCollapsed],
+    [visible, more, filtersKey, toggleCollapsed],
   );
   // Sheet-level status names: the booking ones while every row is a booking (or every row shares one goal), generic ones for a mix.
   const labelKind = useMemo(
