@@ -278,7 +278,7 @@ export function SheetView({
     () => filterRows(rows, deferredFilters, today, timezone),
     [rows, deferredFilters, today, timezone],
   );
-  const [collapsed, toggleCollapsed, setAllCollapsed] = useCollapsedSections(
+  const [, toggleCollapsed, setAllCollapsed] = useCollapsedSections(
     sheet.id,
   );
   const filtersKey = JSON.stringify(deferredFilters);
