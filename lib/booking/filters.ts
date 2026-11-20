@@ -98,6 +98,8 @@ export interface SheetFilters {
   fit?: FitFilter;
   /** Where the row came from (opportunities.origin); absent / "" = all. */
   origin?: string;
+  /** Organization tags (organizations.tags): all must match (?tag=a,b). "fit-high" etc. read the research fit. */
+  tags?: string[];
 }
 
 export const FIT_FILTERS = [
@@ -147,6 +149,9 @@ export function sheetFiltersFromParams(params: Params): SheetFilters {
     flags: [...new Set(flags)],
     ...(FIT_FILTERS.some((f) => f.value === read(params, "fit")) ? { fit: read(params, "fit") as FitFilter } : {}),
     ...(read(params, "origin") ? { origin: read(params, "origin").slice(0, 40) } : {}),
+    ...(read(params, "tag")
+      ? { tags: [...new Set(read(params, "tag").split(",").map((t) => t.trim().slice(0, 80)).filter(Boolean))].slice(0, 12) }
+      : {}),
   };
 }
 
@@ -160,6 +165,7 @@ export function sheetFiltersToQuery(filters: SheetFilters): string {
   if (filters.flags.length) params.set("flag", filters.flags.join(","));
   if (filters.fit) params.set("fit", filters.fit);
   if (filters.origin) params.set("origin", filters.origin);
+  if (filters.tags?.length) params.set("tag", filters.tags.join(","));
   const query = params.toString();
   return query ? `?${query}` : "";
 }
@@ -264,6 +270,15 @@ export function rowHasFlag(row: FilterRow, flag: SheetFlag, today: string, timez
   }
 }
 
+/** Pseudo-tags for the research fit ("fit-high", "fit-medium", "fit-low", "fit-unknown"). */
+export const FIT_TAGS = ["fit-high", "fit-medium", "fit-low", "fit-unknown"] as const;
+
+/** The organization has this tag (or, for fit-*, this research fit). */
+export function rowHasTag(row: FilterRow, tag: string): boolean {
+  if (tag.startsWith("fit-")) return (rowFit(row) ?? "unknown") === tag.slice(4);
+  return Boolean(row.organization?.tags?.includes(tag));
+}
+
 export function filterRows<T extends FilterRow>(rows: readonly T[], filters: SheetFilters, today: string, timezone: string): T[] {
   return rows.filter(
     (row) =>
@@ -273,6 +288,7 @@ export function filterRows<T extends FilterRow>(rows: readonly T[], filters: She
       filters.flags.every((flag) => rowHasFlag(row, flag, today, timezone)) &&
       matchesFit(row, filters.fit) &&
       (!filters.origin || row.origin === filters.origin) &&
+      (filters.tags ?? []).every((t) => rowHasTag(row, t)) &&
       rowMatchesSearch(row, filters.q),
   );
 }

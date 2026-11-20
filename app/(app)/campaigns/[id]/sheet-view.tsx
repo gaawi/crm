@@ -18,6 +18,7 @@ import {
   filterRows,
   groupBySection,
   NO_SECTION,
+  rowFit,
   rowHasFlag,
   sheetFiltersFromParams,
   sheetFiltersToQuery,
@@ -552,6 +553,29 @@ export function SheetView({
     }
     return m;
   }, [counted, today, timezone]);
+  // Each organization tag (and research fit): how many of the rows the other filters leave carry it.
+  const tagCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of counted) {
+      for (const t of r.organization?.tags ?? []) m.set(t, (m.get(t) ?? 0) + 1);
+      const fit = `fit-${rowFit(r) ?? "unknown"}`;
+      m.set(fit, (m.get(fit) ?? 0) + 1);
+    }
+    return m;
+  }, [counted]);
+  // The answer to "of these, how many did we write, how many replied?".
+  const summary = useMemo(() => {
+    const by = (s: OpportunityStage[]) => counted.filter((r) => s.includes(r.stage)).length;
+    return {
+      total: counted.length,
+      toContact: by(["lead"]),
+      noReply: by(["contacted"]),
+      replied: by(["replied"]),
+      offer: by(["proposal", "negotiation"]),
+      confirmed: by(["won"]),
+      declined: by(["lost"]),
+    };
+  }, [counted]);
   const stats = useMemo<StatItem[]>(() => {
     const count = (stage: OpportunityStage) =>
       counted.filter((r) => r.stage === stage).length;
@@ -686,6 +710,8 @@ export function SheetView({
           sectionCounts={sectionCounts}
           stats={stats}
           flagCounts={flagCounts}
+          tagCounts={tagCounts}
+          summary={summary}
           hasUnsectioned={hasUnsectioned}
           shown={visible.length}
           total={rows.length}

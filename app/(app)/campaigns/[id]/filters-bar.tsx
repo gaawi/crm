@@ -5,11 +5,11 @@ import {
   Building2,
   Car,
   Check,
+  ChevronRight,
   KeyRound,
   ListChecks,
   MapPin,
   Music,
-  Pencil,
   RotateCcw,
   SlidersHorizontal,
   Sparkles,
@@ -31,6 +31,7 @@ import { useId, useState } from "react";
 import { cn } from "@/lib/utils";
 import { InfoTip } from "@/components/booking/info-tip";
 import { AUTO_LOCK_NOTE, explainFlag } from "@/lib/booking/explain";
+import { isFilterableTag, tagInfo, TAG_CATALOG, TAG_GROUPS } from "@/lib/booking/tag-catalog";
 import { SearchInput } from "../../_components/ui";
 import { scrollerClass, type StatItem } from "./stats";
 
@@ -104,46 +105,6 @@ const TAGS: { flag: SheetFlag; icon: LucideIcon; off: string; on: string }[] = [
 const pillSelect =
   "h-9 shrink-0 cursor-pointer appearance-auto rounded-full border border-border bg-surface pl-3 pr-2 text-[15px] text-fg focus:border-border-strong focus:outline-none md:h-8 md:rounded-md md:pl-2.5 md:text-sm";
 
-/**
- * The filters split by who sets them, so anyone opening the sheet sees what
- * updates by itself and what a person changes.
- */
-const GROUPS: {
-  key: "auto" | "manual";
-  title: string;
-  hint: string;
-  icon: LucideIcon;
-  stats: string[];
-  flags: SheetFlag[];
-}[] = [
-  {
-    key: "auto",
-    title: "Automatic",
-    hint: "Updated by themselves from the emails and the research. Nobody can change them by hand.",
-    icon: Bot,
-    stats: ["total", "contacted", "replied", "no_reply"],
-    flags: [
-      "bounced",
-      "auto_reply",
-      "nyc",
-      "near_nyc",
-      "chamber",
-      "claude",
-      "chatgpt",
-      "phone",
-      "unresearched",
-    ],
-  },
-  {
-    key: "manual",
-    title: "Set by you",
-    hint: "You change these on each row (status, follow-up date, Returning) or on the organization (Prestigious, Tour, Rental only).",
-    icon: Pencil,
-    stats: ["proposal", "won", "lost", "due"],
-    flags: ["vip", "tour_nw", "tour_mw", "rental", "returning"],
-  },
-];
-
 const chip =
   "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-[15px] transition-colors md:h-8 md:rounded-md md:px-2.5 md:text-sm";
 
@@ -154,6 +115,8 @@ export function FiltersBar({
   sections,
   sectionCounts,
   flagCounts,
+  tagCounts,
+  summary,
   stats,
   hasUnsectioned,
   shown,
@@ -172,6 +135,10 @@ export function FiltersBar({
   sectionCounts?: ReadonlyMap<string, number>;
   /** Rows each tag would leave, given the other filters. */
   flagCounts?: ReadonlyMap<SheetFlag, number>;
+  /** Rows carrying each organization tag (and fit-*), given the other filters. */
+  tagCounts?: ReadonlyMap<string, number>;
+  /** Of the rows the filters leave: how many we wrote to, how many replied… */
+  summary?: { total: number; toContact: number; noReply: number; replied: number; offer: number; confirmed: number; declined: number };
   /** The counts (Total, Contacted, Replied, Offer sent… Follow-ups due, No reply): placed in their group. */
   stats: StatItem[];
   /** Some rows have no section (offers "No section"). */
@@ -192,7 +159,8 @@ export function FiltersBar({
     filters.section ||
     filters.flags.length ||
     filters.fit ||
-    filters.origin,
+    filters.origin ||
+    filters.tags?.length,
   );
   // Plain pills after the colored tags: the other filters, plus any other flag that is on (e.g. ?flag=hot from a link).
   const toggleFlag = (flag: SheetFlag) =>
@@ -258,7 +226,8 @@ export function FiltersBar({
     (filters.section ? 1 : 0) +
     (filters.fit ? 1 : 0) +
     (filters.origin ? 1 : 0) +
-    filters.flags.length;
+    filters.flags.length +
+    (filters.tags?.length ?? 0);
 
   return (
     <div className="flex flex-col gap-2 pb-3 md:pb-0 md:pt-2">
@@ -307,18 +276,8 @@ export function FiltersBar({
         </button>
       </div>
 
-      {filtered ? (
-        <p className="text-[13px] text-muted md:text-xs" aria-live="polite">
-          Showing {shown} of {total}
-          {" · "}
-          <button
-            type="button"
-            onClick={() => onChange(EMPTY_FILTERS)}
-            className="font-medium text-fg/80 underline underline-offset-2 active:opacity-60"
-          >
-            Clear filters
-          </button>
-        </p>
+      {filtered && summary ? (
+        <ResultsSummary summary={summary} shown={shown} total={total} onClear={() => onChange(EMPTY_FILTERS)} />
       ) : null}
 
       {panelOpen ? (
@@ -415,27 +374,157 @@ export function FiltersBar({
             </select>
           </div>
 
-          {/* What updates by itself, and what a person sets, each with its (i). */}
-          {GROUPS.map((g) => (
-            <section key={g.key} aria-label={g.title}>
-              <p className="mb-1 flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-muted">
-                <g.icon className="size-3.5" strokeWidth={2} aria-hidden />
-                {g.title}
-                <InfoTip
-                  title={g.title}
-                  items={stats.filter((st) => g.stats.includes(st.key) && st.info).map((st) => st.info!)}
-                  note={g.key === "auto" ? `${g.hint} ${AUTO_LOCK_NOTE}` : g.hint}
-                />
-              </p>
-              <div className="flex flex-wrap gap-1.5">{g.flags.map((flag) => renderFlag(flag))}</div>
-            </section>
-          ))}
+          {/* Organization tags by group: combine them (all must match); each shows how many rows it leaves. */}
+          <TagPicker
+            selected={filters.tags ?? []}
+            counts={tagCounts}
+            onToggle={(tag) => {
+              const cur = filters.tags ?? [];
+              const tags = cur.includes(tag) ? cur.filter((t) => t !== tag) : [...cur, tag];
+              onChange({ ...filters, tags: tags.length ? tags : undefined });
+            }}
+          />
+          {/* Email details of each row (automatic) and the Returning mark. */}
+          <section aria-label="Email details">
+            <p className="mb-1 flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-muted">
+              <Bot className="size-3.5" strokeWidth={2} aria-hidden />
+              Email details
+              <InfoTip title="Email details" note={AUTO_LOCK_NOTE} items={DETAIL_FLAGS.map((f) => explainFlag(f)).filter((x): x is NonNullable<typeof x> => Boolean(x))} />
+            </p>
+            <div className="flex flex-wrap gap-1.5">{DETAIL_FLAGS.map((flag) => renderFlag(flag))}</div>
+          </section>
           <label className="flex min-h-11 items-center gap-2 text-[15px] text-muted md:hidden">
             <input type="checkbox" checked={compact} onChange={(e) => onCompact(e.currentTarget.checked)} className="size-5" />
             Compact list (name, place and last interaction)
           </label>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/** Row-level filters kept as toggles (the organization tags are in the tag picker). */
+const DETAIL_FLAGS: SheetFlag[] = ["bounced", "auto_reply", "phone", "returning", "unresearched"];
+
+const FIT_LABEL: Record<string, string> = { "fit-high": "Fit: high", "fit-medium": "Fit: medium", "fit-low": "Fit: low", "fit-unknown": "Fit: not researched" };
+
+/** The tags grouped (What they are, Where, Our marks, Not a fit, From lists), each with its count. */
+function TagPicker({
+  selected,
+  counts,
+  onToggle,
+}: {
+  selected: string[];
+  counts?: ReadonlyMap<string, number>;
+  onToggle: (tag: string) => void;
+}) {
+  const present = [...new Set([...(counts?.keys() ?? []), ...selected])].filter((t) => isFilterableTag(t));
+  const fit = present.filter((t) => t.startsWith("fit-")).sort();
+  const byGroup = new Map<string, string[]>();
+  for (const t of present) {
+    if (t.startsWith("fit-")) continue;
+    const g = tagInfo(t).group;
+    byGroup.set(g, [...(byGroup.get(g) ?? []), t]);
+  }
+  const order = new Map(TAG_CATALOG.map((t, i) => [t.tag, i]));
+  const sortTags = (list: string[]) =>
+    list.sort((a, b) => (order.get(a) ?? 999) - (order.get(b) ?? 999) || (counts?.get(b) ?? 0) - (counts?.get(a) ?? 0));
+  const chipFor = (tag: string, label: string) => {
+    const on = selected.includes(tag);
+    const n = counts?.get(tag) ?? 0;
+    return (
+      <button
+        key={tag}
+        type="button"
+        aria-pressed={on}
+        onClick={() => onToggle(tag)}
+        title={tagInfo(tag).text}
+        className={cn(
+          "inline-flex h-9 shrink-0 items-center gap-1 rounded-full border px-3 text-[14px] transition-colors md:h-7 md:px-2.5 md:text-xs",
+          on ? "border-fg bg-fg text-bg" : "border-border bg-surface text-fg/80 active:bg-surface-2 md:hover:bg-surface-2",
+        )}
+      >
+        {on ? <Check className="size-3.5" strokeWidth={2.25} aria-hidden /> : null}
+        {label}
+        <span className="tabular-nums opacity-60">{n}</span>
+      </button>
+    );
+  };
+  const groups = TAG_GROUPS.map((g) => ({ ...g, tags: sortTags(byGroup.get(g.key) ?? []) })).filter((g) => g.tags.length);
+  return (
+    <div className="flex flex-col gap-2">
+      {fit.length ? (
+        <section aria-label="Research fit">
+          <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">Research fit</p>
+          <div className="flex flex-wrap gap-1.5">{fit.map((t) => chipFor(t, FIT_LABEL[t] ?? t))}</div>
+        </section>
+      ) : null}
+      {groups.map((g) => {
+        const body = <div className="flex flex-wrap gap-1.5">{g.tags.map((t) => chipFor(t, tagInfo(t).label))}</div>;
+        const title = (
+          <span className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-muted">
+            {g.title}
+            <InfoTip title={g.title} note={g.hint} items={g.tags.filter((t) => tagInfo(t).group !== "lists").slice(0, 14).map((t) => ({ label: tagInfo(t).label, how: tagInfo(t).how, text: tagInfo(t).text }))} />
+          </span>
+        );
+        return g.key === "lists" ? (
+          <details key={g.key} className="group" open={g.tags.some((t) => selected.includes(t))}>
+            <summary className="mb-1 flex cursor-pointer list-none items-center gap-1 [&::-webkit-details-marker]:hidden">
+              <ChevronRight className="size-3.5 text-muted transition-transform group-open:rotate-90" aria-hidden />
+              {title}
+            </summary>
+            {body}
+          </details>
+        ) : (
+          <section key={g.key} aria-label={g.title}>
+            <div className="mb-1">{title}</div>
+            {body}
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
+/** "128 shown · 64 to contact · 55 written, no reply · 9 replied (14%)…" for the rows the filters leave. */
+function ResultsSummary({
+  summary: s,
+  shown,
+  total,
+  onClear,
+}: {
+  summary: { total: number; toContact: number; noReply: number; replied: number; offer: number; confirmed: number; declined: number };
+  shown: number;
+  total: number;
+  onClear: () => void;
+}) {
+  const written = s.total - s.toContact;
+  const answered = s.replied + s.offer + s.confirmed + s.declined;
+  const pct = written ? Math.round((answered / written) * 100) : 0;
+  const cell = (label: string, n: number, tone = "") => (
+    <span className="flex flex-col">
+      <span className={cn("text-[17px] font-semibold tabular-nums md:text-base", tone)}>{n}</span>
+      <span className="text-[11px] text-muted">{label}</span>
+    </span>
+  );
+  return (
+    <div className="rounded-xl border border-border bg-surface px-3 py-2 md:rounded-lg" aria-live="polite">
+      <div className="flex flex-wrap gap-x-5 gap-y-2">
+        {cell("organizations", s.total)}
+        {cell("to contact", s.toContact)}
+        {cell("written", written)}
+        {cell(`answered (${pct}%)`, answered, "text-emerald-700 dark:text-emerald-400")}
+        {cell("no reply yet", s.noReply)}
+        {s.offer ? cell("offer sent", s.offer) : null}
+        {s.confirmed ? cell("confirmed", s.confirmed) : null}
+        {s.declined ? cell("declined", s.declined) : null}
+      </div>
+      <p className="mt-1.5 text-[12px] text-muted">
+        Showing {shown} of {total} ·{" "}
+        <button type="button" onClick={onClear} className="font-medium text-fg/80 underline underline-offset-2 active:opacity-60">
+          Clear filters
+        </button>
+      </p>
     </div>
   );
 }
