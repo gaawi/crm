@@ -100,6 +100,8 @@ export interface SheetFilters {
   origin?: string;
   /** Organization tags (organizations.tags): all must match (?tag=a,b). "fit-high" etc. read the research fit. */
   tags?: string[];
+  /** How the tags combine: "all" (AND, default) or "any" (OR) (?tagmode=any). */
+  tagMode?: "all" | "any";
 }
 
 export const FIT_FILTERS = [
@@ -152,6 +154,7 @@ export function sheetFiltersFromParams(params: Params): SheetFilters {
     ...(read(params, "tag")
       ? { tags: [...new Set(read(params, "tag").split(",").map((t) => t.trim().slice(0, 80)).filter(Boolean))].slice(0, 12) }
       : {}),
+    ...(read(params, "tagmode") === "any" ? { tagMode: "any" as const } : {}),
   };
 }
 
@@ -166,6 +169,7 @@ export function sheetFiltersToQuery(filters: SheetFilters): string {
   if (filters.fit) params.set("fit", filters.fit);
   if (filters.origin) params.set("origin", filters.origin);
   if (filters.tags?.length) params.set("tag", filters.tags.join(","));
+  if (filters.tags?.length && filters.tagMode === "any") params.set("tagmode", "any");
   const query = params.toString();
   return query ? `?${query}` : "";
 }
@@ -279,6 +283,11 @@ export function rowHasTag(row: FilterRow, tag: string): boolean {
   return Boolean(row.organization?.tags?.includes(tag));
 }
 
+function matchesTags(row: FilterRow, tags: string[] | undefined, mode: "all" | "any" | undefined): boolean {
+  if (!tags?.length) return true;
+  return mode === "any" ? tags.some((t) => rowHasTag(row, t)) : tags.every((t) => rowHasTag(row, t));
+}
+
 export function filterRows<T extends FilterRow>(rows: readonly T[], filters: SheetFilters, today: string, timezone: string): T[] {
   return rows.filter(
     (row) =>
@@ -288,7 +297,7 @@ export function filterRows<T extends FilterRow>(rows: readonly T[], filters: She
       filters.flags.every((flag) => rowHasFlag(row, flag, today, timezone)) &&
       matchesFit(row, filters.fit) &&
       (!filters.origin || row.origin === filters.origin) &&
-      (filters.tags ?? []).every((t) => rowHasTag(row, t)) &&
+      matchesTags(row, filters.tags, filters.tagMode) &&
       rowMatchesSearch(row, filters.q),
   );
 }

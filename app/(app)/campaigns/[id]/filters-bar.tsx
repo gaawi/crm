@@ -375,13 +375,37 @@ export function FiltersBar({
           </div>
 
           {/* Organization tags by group: combine them (all must match); each shows how many rows it leaves. */}
+          {filters.tags?.length ? (
+            <div className="flex flex-wrap items-center gap-2 text-[13px] text-muted md:text-xs">
+              <span>
+                {filters.tags.length} tag{filters.tags.length === 1 ? "" : "s"} chosen. Rows must have
+              </span>
+              <span role="radiogroup" aria-label="How tags combine" className="inline-flex overflow-hidden rounded-full border border-border">
+                {(["all", "any"] as const).map((m) => {
+                  const on = (filters.tagMode ?? "all") === m;
+                  return (
+                    <button
+                      key={m}
+                      type="button"
+                      role="radio"
+                      aria-checked={on}
+                      onClick={() => onChange({ ...filters, tagMode: m === "any" ? "any" : undefined })}
+                      className={cn("h-9 px-3 font-medium md:h-7 md:px-2.5", on ? "bg-fg text-bg" : "bg-surface text-fg/80 active:bg-surface-2")}
+                    >
+                      {m === "all" ? "all of them (AND)" : "any of them (OR)"}
+                    </button>
+                  );
+                })}
+              </span>
+            </div>
+          ) : null}
           <TagPicker
             selected={filters.tags ?? []}
             counts={tagCounts}
             onToggle={(tag) => {
               const cur = filters.tags ?? [];
               const tags = cur.includes(tag) ? cur.filter((t) => t !== tag) : [...cur, tag];
-              onChange({ ...filters, tags: tags.length ? tags : undefined });
+              onChange({ ...filters, tags: tags.length ? tags : undefined, tagMode: tags.length > 1 ? filters.tagMode : undefined });
             }}
           />
           {/* Email details of each row (automatic) and the Returning mark. */}

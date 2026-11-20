@@ -554,15 +554,23 @@ export function SheetView({
     return m;
   }, [counted, today, timezone]);
   // Each organization tag (and research fit): how many of the rows the other filters leave carry it.
+  // With "any of them" (OR), each tag counts over the rows before the tag filter, so it reads as "this many have it".
+  const tagBase = useMemo(
+    () =>
+      deferredFilters.tagMode === "any" && deferredFilters.tags?.length
+        ? filterRows(rows, { ...deferredFilters, status: "", tags: undefined, flags: deferredFilters.flags.filter((f) => f !== "due" && f !== "no_reply") }, today, timezone)
+        : counted,
+    [rows, deferredFilters, counted, today, timezone],
+  );
   const tagCounts = useMemo(() => {
     const m = new Map<string, number>();
-    for (const r of counted) {
+    for (const r of tagBase) {
       for (const t of r.organization?.tags ?? []) m.set(t, (m.get(t) ?? 0) + 1);
       const fit = `fit-${rowFit(r) ?? "unknown"}`;
       m.set(fit, (m.get(fit) ?? 0) + 1);
     }
     return m;
-  }, [counted]);
+  }, [tagBase]);
   // The answer to "of these, how many did we write, how many replied?".
   const summary = useMemo(() => {
     const by = (s: OpportunityStage[]) => counted.filter((r) => s.includes(r.stage)).length;
