@@ -247,6 +247,10 @@ export async function startCampaign(id: string, settings: Partial<CampaignSettin
       select per_hour, daily_cap, window_start::int, window_end::int, weekdays_only, timezone from email_campaigns where id = ${id}`;
     const checked = validateCampaignSettings(settings, current[0] ?? DEFAULT_CAMPAIGN_SETTINGS);
     if (!checked.ok) throw new CampaignError(checked.error);
+    // Re-check every email against the database's sending rules before queuing (e.g. the Booking USA
+    // first-contact guard): one that no longer passes moves to "changes requested" instead of making
+    // the whole approval fail.
+    await tx`update email_drafts set status = status where campaign_id = ${id} and status = 'proposed'`;
     // Held-back emails are not part of the approval: the owner checks each one ("Queue again", "Send now").
     const queued = await tx`
       update email_drafts set status = 'queued'
