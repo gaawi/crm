@@ -154,6 +154,11 @@ export interface Contact extends ContactSummary {
   /** The https page the photo was found on. */
   photoSource: string | null;
   photoUpdatedAt: Date | null;
+  /** "Pianista", "Gestor cultural", "Abogado"… (1-3 words). */
+  background: string | null;
+  /** Short biography (Spanish), from published sources. */
+  bio: string | null;
+  bioSource: string | null;
   notes: string | null;
   source: "manual" | "gmail";
   replyDismissedAt: Date | null;

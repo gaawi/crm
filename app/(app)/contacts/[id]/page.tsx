@@ -475,6 +475,11 @@ function ContactHeader({
               ) : null}
             </p>
           ) : null}
+          {contact.background ? (
+            <p className="mt-1 inline-flex max-w-full items-center rounded-full bg-brand/10 px-2 py-0.5 text-[13px] font-medium text-brand md:text-xs">
+              {contact.background}
+            </p>
+          ) : null}
           <div className="mt-1 flex max-w-full flex-wrap items-center justify-start gap-x-2 gap-y-1 md:mt-2">
             <StatusBadge status={contact.status} />
             {musician ? (
@@ -495,6 +500,27 @@ function ContactHeader({
           </div>
         </div>
       </div>
+
+      {contact.bio ? (
+        <details className="group rounded-xl border border-border bg-surface px-3 py-2 text-[15px] md:rounded-lg md:text-sm">
+          <summary className="flex cursor-pointer list-none items-start gap-2 [&::-webkit-details-marker]:hidden">
+            <span className="min-w-0 flex-1 text-fg/90 group-open:hidden">
+              <span className="line-clamp-2">{contact.bio}</span>
+            </span>
+            <span className="hidden min-w-0 flex-1 font-medium group-open:block">Who they are</span>
+            <span className="shrink-0 text-[13px] text-muted md:text-xs">
+              <span className="group-open:hidden">More</span>
+              <span className="hidden group-open:inline">Less</span>
+            </span>
+          </summary>
+          <p className="mt-1 whitespace-pre-line text-fg/90">{contact.bio}</p>
+          {contact.bioSource ? (
+            <a href={contact.bioSource} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[13px] text-muted underline underline-offset-2 md:text-xs">
+              Source
+            </a>
+          ) : null}
+        </details>
+      ) : null}
 
       {editingPhoto ? <PhotoForm contact={contact} cancelHref={base} /> : null}
 
