@@ -198,14 +198,10 @@ export function FiltersBar({
                 : "border-border bg-surface text-muted hover:text-fg active:bg-surface-2 md:hover:bg-surface-2",
           )}
         >
-          {Icon ? (
+          {on ? (
+            <Check className="size-3.5 md:size-3" strokeWidth={2.5} aria-hidden />
+          ) : Icon ? (
             <Icon className="size-3.5 md:size-3" strokeWidth={2} aria-hidden />
-          ) : on ? (
-            <Check
-              className="size-3.5 md:size-3"
-              strokeWidth={2.25}
-              aria-hidden
-            />
           ) : null}
           {SHEET_FLAG_LABELS[flag]}
           {n !== undefined ? (
@@ -564,7 +560,10 @@ function ResultsSummary({
     const on = stage !== null && status === stage && (stage !== "" || !filtered);
     const inner = (
       <>
-        <span className={cn("text-[17px] font-semibold tabular-nums md:text-base", on ? "" : tone)}>{n}</span>
+        <span className={cn("flex items-center gap-1 text-[17px] font-semibold tabular-nums md:text-base", on ? "" : tone)}>
+          {on && stage ? <Check className="size-4" strokeWidth={2.5} aria-hidden /> : null}
+          {n}
+        </span>
         <span className={cn("text-[11px]", on ? "opacity-80" : "text-muted")}>{label}</span>
       </>
     );
@@ -606,7 +605,10 @@ function ResultsSummary({
               st.active ? "bg-fg text-bg" : "active:bg-surface-2 md:hover:bg-surface-2",
             )}
           >
-            <span className={cn("text-[17px] font-semibold tabular-nums md:text-base", !st.active && (st.tone === "danger" ? "text-danger" : "text-warning"))}>{st.count}</span>
+            <span className={cn("flex items-center gap-1 text-[17px] font-semibold tabular-nums md:text-base", !st.active && (st.tone === "danger" ? "text-danger" : "text-warning"))}>
+              {st.active ? <Check className="size-4" strokeWidth={2.5} aria-hidden /> : null}
+              {st.count}
+            </span>
             <span className={cn("text-[11px]", st.active ? "opacity-80" : "text-muted")}>{st.label.toLowerCase()}</span>
           </button>
         ))}
@@ -630,6 +632,7 @@ function ResultsSummary({
                     on ? "border-fg bg-fg text-bg" : "border-rose-300 bg-rose-50 text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200",
                   )}
                 >
+                  {on ? <Check className="size-3.5" strokeWidth={2.5} aria-hidden /> : null}
                   Showed interest <span className="tabular-nums opacity-70">{n}</span>
                 </button>
               );
@@ -654,6 +657,7 @@ function ResultsSummary({
                       !n && !on && "opacity-50",
                     )}
                   >
+                    {on ? <Check className="size-3.5" strokeWidth={2.5} aria-hidden /> : null}
                     {r.label} <span className="tabular-nums opacity-70">{n}</span>
                   </button>
                 </span>
