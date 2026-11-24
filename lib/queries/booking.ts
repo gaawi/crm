@@ -130,6 +130,7 @@ function toSheetRow(row: RawSheetRow): SheetRow {
           sentAt: iso(row.lastEmail.sentAt)!,
           subject: row.lastEmail.subject,
           excerpt: newPart(row.lastEmail.body, 220).replace(/\s+/g, " ").trim(),
+          full: newPart(row.lastEmail.body, 1500).trim(),
           accountId: row.lastEmail.accountId,
           threadId: row.lastEmail.threadId,
           answered: row.lastEmail.answered,

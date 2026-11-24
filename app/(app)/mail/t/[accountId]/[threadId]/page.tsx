@@ -116,7 +116,10 @@ export default async function ThreadPage({ params, searchParams }: PageProps<"/m
   const { accountId: rawAccount, threadId } = await params;
   if (!isAccountId(rawAccount) || !isGmailId(threadId)) notFound();
   const accountId = rawAccount.toLowerCase();
-  const parsed = parseMailParams(await searchParams);
+  const sp = await searchParams;
+  const parsed = parseMailParams(sp);
+  // ?reply=1 (the "Reply" button on a campaign row): opens the reply right away.
+  const openReply = sp.reply === "1";
   // Gmail is asked for the thread (and its labels) right away, alongside the
   // sidebar data, instead of after it; the result is used only if the account is live.
   const liveThread = fetchThreadCached(accountId, threadId).then(
@@ -175,6 +178,7 @@ export default async function ThreadPage({ params, searchParams }: PageProps<"/m
               // A new message or label change (after a refresh) starts from a fresh view state; being read does not.
               key={`${thread.key}:${latest?.id}:${thread.labelIds.filter((l) => l !== "UNREAD").join(",")}`}
               thread={thread}
+              openReply={openReply}
               backHref={backHref}
               backLabel={backLabel}
               hideOnLeave={{ archive: state.view === "inbox" && !state.q, trash: state.view !== "trash" }}

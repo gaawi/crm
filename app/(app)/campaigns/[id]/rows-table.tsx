@@ -327,7 +327,7 @@ const TableRow = memo(function TableRow({
         <DateCell rowId={row.id} value={row.followUpAt} overdue={isFollowUpDue(row, ctx.today)} className="text-xs" />
       </td>
       <td className="px-1 py-1.5">
-        <LastEmailLine row={row} className="mb-1" />
+        <LastEmailLine row={row} tipAlign="right" className="mb-1" />
         <NotesCell rowId={row.id} value={row.notes} />
         <PlayedHere row={row} className="mt-0.5 px-2" />
         <EarlierNotes row={row} />

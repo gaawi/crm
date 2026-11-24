@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useClaudeEnabled } from "@/components/features";
 import { useRouter } from "next/navigation";
-import { startTransition, useEffect, useMemo, useState } from "react";
+import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import {
   Archive,
   ArchiveRestore,
@@ -57,7 +57,10 @@ export function ThreadView({
   notice,
   readOnly = false,
   triageBar,
+  openReply = false,
 }: {
+  /** Open the reply composer once, on arrival (?reply=1). */
+  openReply?: boolean;
   notice?: string | null;
   /** Vela's triage and prepared reply for this conversation (TriageBar), under the subject. */
   triageBar?: React.ReactNode;
@@ -133,6 +136,12 @@ export function ThreadView({
       ? toast({ tone: "error", message: `${thread.accountEmail} is monitor-only: Vela never writes from it. Write from your own account on the contact.` })
       : compose(composeFor(kind, thread, message, own, timezone));
   const canReplyAll = latest ? hasReplyAll(latest, own) : false;
+  const replied = useRef(false);
+  useEffect(() => {
+    if (!openReply || replied.current || readOnly || !latest) return;
+    replied.current = true;
+    compose(composeFor("reply", thread, latest, own, timezone));
+  }, [openReply, readOnly, latest, compose, thread, own, timezone]);
 
   useShortcuts({
     u: () => router.push(backHref),

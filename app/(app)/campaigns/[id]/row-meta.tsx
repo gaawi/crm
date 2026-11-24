@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { AlertTriangle, ArrowDownLeft, ArrowUpRight, Bot, Building2, KeyRound, MapPin, Car, CircleSlash, Clock, Flame, History, Loader2, Mail, MailCheck, RotateCcw, Sparkles, Star } from "lucide-react";
+import { useState } from "react";
+import { AlertTriangle, ArrowDownLeft, ArrowUpRight, Bot, Building2, KeyRound, MapPin, Car, CircleSlash, Clock, Flame, History, Loader2, Mail, MailCheck, Reply, RotateCcw, Sparkles, Star } from "lucide-react";
 import { ActivityIcon, describeLastTouch, TOUCH_TONE_CLASS } from "@/components/booking/activity-meta";
 import { phoneActionClass, type PhoneActionSize } from "@/components/booking/phone-action-class";
 import { PlaceLink } from "@/components/organizations/place-link";
@@ -446,37 +447,100 @@ export function EarlierNotes({ row }: { row: SheetRow }) {
 }
 
 /**
- * Their last real email, cut short, and whether we answered it: green
- * "Replied", amber "Not replied" (or grey when marked as needing no reply).
- * A link to the thread, except inside another button (the compact card).
+ * Their last real email, cut short, and whether we answered it. Hover (desktop)
+ * or tap (phone) the text to read it all. Not answered yet: an amber box with a
+ * Reply button that opens the conversation with the reply ready.
+ * `link={false}`: inside another button (the compact card), text and state only.
  */
-export function LastEmailLine({ row, link = true, className }: { row: Pick<SheetRow, "lastEmail">; link?: boolean; className?: string }) {
+export function LastEmailLine({
+  row,
+  link = true,
+  tipAlign = "left",
+  className,
+}: {
+  row: Pick<SheetRow, "lastEmail">;
+  link?: boolean;
+  /** Which edge the hover panel lines up with ("right" in the table's last column). */
+  tipAlign?: "left" | "right";
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
   const m = row.lastEmail;
   if (!m) return null;
-  const [label, tone] = m.answered
-    ? ["Replied", "text-emerald-700 dark:text-emerald-400"]
-    : m.dismissed
-      ? ["No reply needed", "text-muted"]
-      : ["Not replied", "font-semibold text-amber-700 dark:text-amber-400"];
-  const date = new Date(m.sentAt).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  const body = (
-    <>
-      <span className="flex min-w-0 items-center gap-1 text-[12px] md:text-[11px]">
-        <ArrowDownLeft className="size-3 shrink-0 text-teal-600" aria-hidden />
-        <span className="text-muted" suppressHydrationWarning>
-          Their last email · {date}
-        </span>
-        <span className={cn("ml-auto shrink-0", tone)}>{label}</span>
+  const needsReply = !m.answered && !m.dismissed;
+  const label = m.answered ? "Replied" : m.dismissed ? "No reply needed" : "Not replied";
+  const date = new Date(m.sentAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  const threadHref = `/mail/t/${m.accountId}/${encodeURIComponent(m.threadId)}`;
+  const text = m.excerpt || m.subject || "(no text)";
+  const header = (
+    <span className="flex min-w-0 items-center gap-1 text-[12px] md:text-[11px]">
+      <ArrowDownLeft className={cn("size-3 shrink-0", needsReply ? "text-amber-600" : "text-teal-600")} aria-hidden />
+      <span className="truncate text-muted" suppressHydrationWarning>
+        Their last email · {date}
       </span>
-      <span className="line-clamp-2 text-[13px] leading-snug text-fg/85 md:text-xs">{m.excerpt || m.subject || "(no text)"}</span>
-    </>
+      <span
+        className={cn(
+          "ml-auto shrink-0 rounded-full px-1.5 font-medium",
+          m.answered && "text-emerald-700 dark:text-emerald-400",
+          m.dismissed && !m.answered && "text-muted",
+          needsReply && "bg-amber-500 font-semibold text-white",
+        )}
+      >
+        {needsReply ? "Needs your reply" : label}
+      </span>
+    </span>
   );
-  const cls = cn("block min-w-0 rounded-md border-l-2 border-teal-500 bg-surface-2/60 px-1.5 py-1", className);
-  return link ? (
-    <Link href={`/mail/t/${m.accountId}/${encodeURIComponent(m.threadId)}`} className={cn(cls, "active:opacity-60 md:hover:bg-surface-2")} title={m.subject ?? undefined}>
-      {body}
-    </Link>
-  ) : (
-    <span className={cls}>{body}</span>
+  const box = cn(
+    "block min-w-0 rounded-md border-l-[3px] px-1.5 py-1",
+    needsReply ? "border-amber-500 bg-amber-50 dark:bg-amber-950/40" : "border-teal-500 bg-surface-2/60",
+    className,
+  );
+  if (!link) {
+    return (
+      <span className={box} title={m.full || text}>
+        {header}
+        <span className="line-clamp-1 text-[13px] leading-snug text-fg/85 md:text-xs">{text}</span>
+      </span>
+    );
+  }
+  return (
+    <div className={box}>
+      {header}
+      <div className="group relative">
+        <button
+          type="button"
+          onClick={() => setOpen(!open)}
+          aria-expanded={open}
+          className="block w-full text-left text-[13px] leading-snug text-fg/85 active:opacity-60 md:text-xs"
+        >
+          <span className={cn("whitespace-pre-line", !open && "line-clamp-2")}>{open ? m.full || text : text}</span>
+          {!open && (m.full || text).length > text.length + 10 ? <span className="text-[12px] font-medium text-blue-600 md:hidden dark:text-blue-400">More</span> : null}
+        </button>
+        {/* Desktop: the whole email on hover. */}
+        {!open && m.full ? (
+          <div
+            role="tooltip"
+            className={cn("pointer-events-none invisible absolute top-full z-30 mt-1 max-h-80 w-[28rem] max-w-[80vw] overflow-hidden rounded-lg border border-border bg-surface p-3 text-[13px] leading-snug whitespace-pre-line text-fg opacity-0 shadow-lg transition-opacity delay-150 md:group-hover:visible md:group-hover:opacity-100", tipAlign === "right" ? "right-0" : "left-0")}
+          >
+            {m.subject ? <p className="mb-1.5 font-semibold">{m.subject}</p> : null}
+            {m.full}
+          </div>
+        ) : null}
+      </div>
+      <div className="mt-1 flex items-center gap-2">
+        {needsReply ? (
+          <Link
+            href={`${threadHref}?reply=1`}
+            className="inline-flex h-8 items-center gap-1 rounded-full bg-amber-500 px-3 text-[13px] font-semibold text-white active:opacity-70 md:h-7 md:text-xs md:hover:bg-amber-600"
+          >
+            <Reply className="size-3.5" aria-hidden />
+            Reply
+          </Link>
+        ) : null}
+        <Link href={threadHref} className="text-[12px] text-blue-600 active:opacity-60 md:text-[11px] md:hover:underline dark:text-blue-400">
+          Open conversation
+        </Link>
+      </div>
+    </div>
   );
 }

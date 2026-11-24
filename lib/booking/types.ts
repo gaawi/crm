@@ -145,6 +145,8 @@ export interface SheetRowLastEmail {
   subject: string | null;
   /** The new part of their email, cut short. */
   excerpt: string;
+  /** The new part of their email, longer (hover / tap to read). */
+  full: string;
   accountId: string;
   threadId: string;
   /** We wrote to them after it. */
