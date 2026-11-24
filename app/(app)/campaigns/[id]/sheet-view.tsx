@@ -595,11 +595,12 @@ export function SheetView({
     // The results line is one choice at a time: a status, Follow-ups due or No reply (tapping the chosen one clears it).
     const withoutResult = (flags: SheetFlag[]) => flags.filter((x) => x !== "due" && x !== "no_reply");
     const setStatus = (stage: OpportunityStage) => () =>
-      setFilters((f) => ({ ...f, status: f.status === stage ? "" : stage, flags: withoutResult(f.flags) }));
+      setFilters((f) => ({ ...f, status: f.status === stage ? "" : stage, response: undefined, flags: withoutResult(f.flags) }));
     const toggleFlag = (flag: "due" | "no_reply") => () =>
       setFilters((f) => ({
         ...f,
         status: "",
+        response: undefined,
         flags: f.flags.includes(flag) ? withoutResult(f.flags) : [...withoutResult(f.flags), flag],
       }));
     const stage = (value: OpportunityStage, always = true): StatItem[] => {

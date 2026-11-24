@@ -301,9 +301,12 @@ export function FiltersBar({
           stats={stats}
           status={filters.status}
           response={filters.response}
-          onResponse={(r) => onChange({ ...filters, response: r })}
+          onResponse={(r) =>
+            // An answer and a status are one choice: an answer implies they replied.
+            onChange({ ...filters, response: r, status: r ? "" : filters.status, flags: r ? filters.flags.filter((f) => f !== "due" && f !== "no_reply") : filters.flags })
+          }
           onStatus={(status) =>
-            onChange({ ...filters, status, flags: filters.flags.filter((f) => f !== "due" && f !== "no_reply") })
+            onChange({ ...filters, status, response: undefined, flags: filters.flags.filter((f) => f !== "due" && f !== "no_reply") })
           }
           shown={shown}
           total={total}
