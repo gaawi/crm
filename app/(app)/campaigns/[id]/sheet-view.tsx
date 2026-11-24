@@ -247,7 +247,8 @@ export function SheetView({
   const [selected, setSelected] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
-  const [drawerRowId, setDrawerRowId] = useState<string | null>(null);
+  // The open panel is in the URL too (?row=), so Back from any page lands on it again.
+  const [drawerRowId, setDrawerRowId] = useState<string | null>(() => searchParams.get("row"));
   const [preparing, setPreparing] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
@@ -256,14 +257,15 @@ export function SheetView({
 
   // Filters live in the URL (links and Back keep them); replaceState keeps typing out of the history.
   useEffect(() => {
-    const query = sheetFiltersToQuery(filters);
+    const base = sheetFiltersToQuery(filters);
+    const query = drawerRowId ? `${base ? `${base}&` : "?"}row=${encodeURIComponent(drawerRowId)}` : base;
     if (query !== window.location.search)
       window.history.replaceState(
         null,
         "",
         `${window.location.pathname}${query}`,
       );
-  }, [filters]);
+  }, [filters, drawerRowId]);
 
   const sections = useMemo(() => sheetSections(rows), [rows]);
   const hasUnsectioned = useMemo(

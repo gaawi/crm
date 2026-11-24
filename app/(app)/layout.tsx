@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AppMailProvider } from "@/components/mail/app-mail-provider";
 import { Suspense } from "react";
 import { after, connection } from "next/server";
 import { Search } from "lucide-react";
@@ -62,7 +63,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </Suspense>
           {/* Pages whose root has data-fullbleed (Mail) use the whole width and manage their own padding. */}
           <main className="mx-auto w-full max-w-6xl flex-1 px-4 pb-[calc(env(safe-area-inset-bottom)+5.5rem)] pt-[calc(env(safe-area-inset-top)+1rem)] has-[>[data-wide]]:max-w-[100rem] has-[>[data-fullbleed]]:max-w-none has-[>[data-fullbleed]]:p-0 md:px-8 md:py-8">
-            {children}
+            <AppMailProvider>{children}</AppMailProvider>
           </main>
         </div>
 

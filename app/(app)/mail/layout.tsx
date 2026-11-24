@@ -1,31 +1,19 @@
 import type { Metadata } from "next";
-import { MailProvider } from "@/components/mail/mail-provider";
 import { requireSession } from "@/lib/auth";
-import { env } from "@/lib/env";
-import { accountDot } from "@/lib/mail/format";
-import { accountsForRender, ownAddressesForRender } from "@/lib/queries/render-cache";
 
 export const metadata: Metadata = { title: "Mail" };
 
 /**
- * Shared by every mail page: the composer and optimistic state live in a
- * client provider here, so a message being written survives navigation
- * between the list and threads. `data-fullbleed` opts out of the app's
- * centered max-width column.
+ * Shared by every mail page. The composer and optimistic state live in the
+ * app layout (AppMailProvider), so a message being written survives
+ * navigation, inside Mail and out of it. `data-fullbleed` opts out of the
+ * app's centered max-width column.
  */
 export default async function MailLayout({ children }: LayoutProps<"/mail">) {
   await requireSession();
-  const [accounts, own] = await Promise.all([accountsForRender(), ownAddressesForRender()]);
-  // Only what the client needs (never tokens); colors follow the account order everywhere.
-  const options = accounts
-    .filter((a) => a.status !== "disconnected")
-    .flatMap((a, index) => (a.status === "active" ? [{ id: a.id, email: a.email, displayName: a.displayName, dot: accountDot(index), monitorOnly: a.monitorOnly }] : []));
-
   return (
-    <MailProvider accounts={options} timezone={env.timezone} ownAddresses={[...own]}>
-      <div data-fullbleed className="min-w-0">
-        {children}
-      </div>
-    </MailProvider>
+    <div data-fullbleed className="min-w-0">
+      {children}
+    </div>
   );
 }

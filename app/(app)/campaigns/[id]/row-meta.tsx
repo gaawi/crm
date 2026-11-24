@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { InlineThread } from "@/components/mail/inline-thread";
 import { AlertTriangle, ArrowDownLeft, ArrowUpRight, Bot, Building2, KeyRound, MapPin, Car, CircleSlash, Clock, FilePen, Flame, History, Loader2, Mail, MailCheck, Reply, RotateCcw, Sparkles, Star } from "lucide-react";
 import { ActivityIcon, describeLastTouch, TOUCH_TONE_CLASS } from "@/components/booking/activity-meta";
 import { phoneActionClass, type PhoneActionSize } from "@/components/booking/phone-action-class";
@@ -468,6 +469,8 @@ export function LastEmailLine({
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
+  // The conversation, unfolded here; "reply" also opens the composer (never leaves the page).
+  const [thread, setThread] = useState<null | "read" | "reply">(null);
   const m = row.lastEmail;
   if (!m) return null;
   // Old emails never ask for a reply: only this campaign's.
@@ -475,7 +478,6 @@ export function LastEmailLine({
   const draftId = row.contact?.openDraftId ?? null;
   const label = m.answered ? "Replied" : m.dismissed ? "No reply needed" : "Not replied";
   const date = new Date(m.sentAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-  const threadHref = `/mail/t/${m.accountId}/${encodeURIComponent(m.threadId)}`;
   const text = m.excerpt || m.subject || "(no text)";
   const header = (
     <span className="flex min-w-0 items-center gap-1 text-[12px] md:text-[11px]">
@@ -540,13 +542,14 @@ export function LastEmailLine({
       </div>
       <div className="mt-1 flex flex-wrap items-center gap-2">
         {needsReply ? (
-          <Link
-            href={`${threadHref}?reply=1`}
+          <button
+            type="button"
+            onClick={() => setThread("reply")}
             className="inline-flex h-8 items-center gap-1 rounded-full bg-amber-500 px-3 text-[13px] font-semibold text-white active:opacity-70 md:h-7 md:text-xs md:hover:bg-amber-600"
           >
             <Reply className="size-3.5" aria-hidden />
             Reply
-          </Link>
+          </button>
         ) : null}
         {needsReply && draftId ? (
           onOpenDraft ? (
@@ -561,10 +564,16 @@ export function LastEmailLine({
             </Link>
           )
         ) : null}
-        <Link href={threadHref} className="text-[12px] text-blue-600 active:opacity-60 md:text-[11px] md:hover:underline dark:text-blue-400">
-          Open conversation
-        </Link>
+        <button
+          type="button"
+          aria-expanded={thread !== null}
+          onClick={() => setThread(thread ? null : "read")}
+          className="text-[12px] text-blue-600 active:opacity-60 md:text-[11px] md:hover:underline dark:text-blue-400"
+        >
+          {thread ? "Hide conversation" : "Show conversation"}
+        </button>
       </div>
+      {thread ? <InlineThread key={thread} accountId={m.accountId} threadId={m.threadId} autoReply={thread === "reply"} className="mt-1.5" /> : null}
     </div>
   );
 }

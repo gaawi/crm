@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { ArrowDownLeft, ArrowUpRight, MessageSquareQuote } from "lucide-react";
+import { ThreadToggle } from "@/components/mail/inline-thread";
 import { AccountBadge } from "@/components/ui/badge";
 import { formatDate, formatRelative } from "@/lib/dates";
 import type { LastReply } from "@/lib/queries/last-reply";
@@ -35,12 +35,7 @@ export function LastReplyCard({ reply, timezone, showSender = false }: { reply: 
         </p>
         {theirs.subject ? <p className="mt-1 text-[15px] font-semibold text-fg md:text-sm">{theirs.subject}</p> : null}
         <p className="mt-1.5 whitespace-pre-line text-[15px] leading-relaxed text-fg md:text-sm">{theirs.text || "(no text)"}</p>
-        <Link
-          href={`/mail/t/${theirs.accountId}/${encodeURIComponent(theirs.threadId)}`}
-          className="mt-2 inline-block text-[13px] font-medium text-emerald-800 hover:underline dark:text-emerald-300"
-        >
-          Open the conversation
-        </Link>
+        <ThreadToggle accountId={theirs.accountId} threadId={theirs.threadId} className="mt-2" />
       </div>
       {ours ? (
         <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 border-t border-emerald-200 bg-surface/60 px-4 py-2 text-[12px] text-muted dark:border-emerald-900">

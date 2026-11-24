@@ -7,24 +7,22 @@ import { DesktopSearch } from "@/components/mail/mail-header";
 import { MailSidebar } from "@/components/mail/mail-sidebar";
 import { buildMailboxes } from "@/components/mail/mailboxes";
 import { composeFor } from "@/components/mail/reply-init";
-import type { ThreadMessageView, ThreadViewData } from "@/components/mail/thread-types";
+import type { ThreadViewData } from "@/components/mail/thread-types";
 import { ThreadView } from "@/components/mail/thread-view";
 import { requireSession } from "@/lib/auth";
 import { env } from "@/lib/env";
 import { fetchThreadCached, userLabels, type LiveThread } from "@/lib/mail/gmail";
 import { isAccountId, isGmailId, listTitle, mailListHref, parseMailParams } from "@/lib/mail/params";
-import { campaignsOfThread, openDraftInThread, storedThreadLabels } from "@/lib/mail/queries";
+import { campaignsOfThread, openDraftInThread } from "@/lib/mail/queries";
+import { storedThreadView } from "@/lib/mail/stored-thread";
 import { threadTriage } from "@/lib/mail/triage";
 import { buildSrcDoc } from "@/lib/mail/sanitize";
-import { getThread } from "@/lib/queries/messages";
 import { ownAddressesForRender } from "@/lib/queries/render-cache";
 import type { Address } from "@/lib/types";
 import { errorMessage, gmailThreadUrl } from "@/lib/utils";
-import { loadMailChrome, requestTime, type MailAccountInfo } from "../../../_lib/chrome";
+import { loadMailChrome, requestTime } from "../../../_lib/chrome";
 
 export const metadata: Metadata = { title: "Mail" };
-
-const HIDDEN = ["DELETED", "SPAM", "DRAFT", "CHAT"];
 
 function fromLive(live: LiveThread): ThreadViewData {
   return {
@@ -54,47 +52,6 @@ function fromLive(live: LiveThread): ThreadViewData {
       textWithoutQuotes: m.textWithoutQuotes,
       attachments: m.attachments.map((a) => ({ ...a, partId: a.partId })),
     })),
-  };
-}
-
-/** The copy stored by sync (plain text, quotes stripped) when Gmail can't be reached. */
-async function fromStored(account: MailAccountInfo, threadId: string): Promise<ThreadViewData | null> {
-  const [messages, labels] = await Promise.all([getThread(account.id, threadId), storedThreadLabels(account.id, threadId)]);
-  const shown = messages.filter((m) => !(labels[m.gmailMessageId] ?? []).some((l) => HIDDEN.includes(l)));
-  const notTrashed = shown.filter((m) => !(labels[m.gmailMessageId] ?? []).includes("TRASH"));
-  const visible = notTrashed.length ? notTrashed : shown;
-  if (!visible.length) return null;
-  const views: ThreadMessageView[] = visible.map((m) => {
-    const l = labels[m.gmailMessageId] ?? [];
-    return {
-      id: m.gmailMessageId,
-      from: m.from,
-      to: m.to,
-      cc: m.cc,
-      replyTo: [],
-      date: m.sentAt,
-      outbound: m.direction === "outbound",
-      unread: l.includes("UNREAD"),
-      starred: l.includes("STARRED"),
-      subject: m.subject,
-      snippet: m.snippet ?? "",
-      srcDoc: null,
-      remoteImages: 0,
-      text: m.bodyText,
-      textWithoutQuotes: m.bodyText,
-      attachments: m.attachments.map((a) => ({ partId: null, filename: a.filename, mimeType: a.mimeType, size: a.size })),
-    };
-  });
-  return {
-    key: `${account.id}:${threadId}`,
-    accountId: account.id,
-    accountEmail: account.email,
-    threadId,
-    subject: visible.find((m) => m.subject?.trim())?.subject ?? null,
-    labelIds: [...new Set(visible.flatMap((m) => labels[m.gmailMessageId] ?? []))].sort(),
-    gmailUrl: gmailThreadUrl(account.email, threadId),
-    source: "stored",
-    messages: views,
   };
 }
 
@@ -152,7 +109,7 @@ export default async function ThreadPage({ params, searchParams }: PageProps<"/m
         ? `Reconnect ${account.email} in Settings to see the full email. Showing the copy stored in Vela (plain text).`
         : `${account.email} is not connected to Gmail. Showing the copy stored in Vela (plain text).`;
   }
-  if (!thread) thread = await fromStored(account, threadId);
+  if (!thread) thread = await storedThreadView(account, threadId);
   if (!thread) notFound();
 
   // Opening marks it read from the client (ThreadView), so a prefetched thread stays unread until seen.

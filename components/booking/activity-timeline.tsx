@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import Link from "next/link";
+import { InlineThread } from "@/components/mail/inline-thread";
 import { ArrowDownLeft, ArrowRightLeft, ArrowUpRight, CircleCheck, CircleX, Trash2 } from "lucide-react";
 import { contactTimelineAction, deleteActivityAction } from "@/app/(app)/activity-actions";
 import { updateCellAction, timelineAction } from "@/app/(app)/campaigns/actions";
@@ -285,12 +285,19 @@ function ActivityEntry({
   );
 }
 
+/** An email: tap to read the whole conversation right here (Reply opens the composer in place). */
 function EmailEntry({ item, timezone }: { item: Extract<TimelineItem, { type: "email" }>; timezone: string }) {
+  const [open, setOpen] = useState(false);
   const outbound = item.direction === "outbound";
   const Icon = outbound ? ArrowUpRight : ArrowDownLeft;
   return (
     <li>
-      <Link href={item.href} className="flex gap-3 px-4 py-3 active:bg-surface-2 md:px-3 md:py-2.5 md:hover:bg-surface-2/60">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+        className="flex w-full gap-3 px-4 py-3 text-left active:bg-surface-2 md:px-3 md:py-2.5 md:hover:bg-surface-2/60"
+      >
         <span
           className={cn(
             "flex size-8 shrink-0 items-center justify-center rounded-full md:size-7",
@@ -306,9 +313,10 @@ function EmailEntry({ item, timezone }: { item: Extract<TimelineItem, { type: "e
             <When at={item.at} timezone={timezone} />
           </div>
           <p className="truncate text-[15px] text-fg md:text-sm">{item.subject || "(no subject)"}</p>
-          {item.snippet ? <p className="line-clamp-2 text-[13px] text-muted md:line-clamp-1 md:text-xs">{item.snippet}</p> : null}
+          {item.snippet && !open ? <p className="line-clamp-2 text-[13px] text-muted md:line-clamp-1 md:text-xs">{item.snippet}</p> : null}
         </div>
-      </Link>
+      </button>
+      {open ? <InlineThread accountId={item.accountId} threadId={item.gmailThreadId} className="mx-3 mb-3" /> : null}
     </li>
   );
 }
