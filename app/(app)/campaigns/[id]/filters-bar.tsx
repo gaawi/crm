@@ -11,9 +11,11 @@ import {
   MapPin,
   Music,
   RotateCcw,
+  Rows3,
   SlidersHorizontal,
   Sparkles,
   Star,
+  X,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -26,7 +28,8 @@ import {
   type SheetFilters,
   type SheetFlag,
 } from "@/lib/booking/filters";
-import type { OpportunityKind } from "@/lib/types";
+import type { OpportunityKind, OpportunityStage } from "@/lib/types";
+import { stageLabel } from "@/lib/constants";
 import { useId, useState } from "react";
 import { cn } from "@/lib/utils";
 import { InfoTip } from "@/components/booking/info-tip";
@@ -268,37 +271,49 @@ export function FiltersBar({
           title={selectMode ? "Done" : "Select"}
           onClick={() => onSelectMode(!selectMode)}
           className={cn(
-            "inline-flex size-10 shrink-0 items-center justify-center rounded-full md:hidden",
-            selectMode ? "bg-accent text-accent-fg" : "text-muted active:bg-surface-2",
+            "inline-flex size-10 shrink-0 items-center justify-center rounded-full md:size-8",
+            !compact && "md:hidden",
+            selectMode ? "bg-accent text-accent-fg" : "text-muted active:bg-surface-2 md:hover:bg-surface-2",
           )}
         >
-          <ListChecks className="size-5" strokeWidth={1.75} aria-hidden />
+          <ListChecks className="size-5 md:size-4" strokeWidth={1.75} aria-hidden />
+        </button>
+        <button
+          type="button"
+          aria-pressed={compact}
+          aria-label={compact ? "Show full rows" : "Compact list"}
+          title={compact ? "Full rows" : "Compact list (name, place, last interaction)"}
+          onClick={() => onCompact(!compact)}
+          className={cn(
+            "inline-flex size-10 shrink-0 items-center justify-center rounded-full md:size-8",
+            compact ? "bg-fg text-bg" : "text-muted active:bg-surface-2 md:hover:bg-surface-2",
+          )}
+        >
+          <Rows3 className="size-5 md:size-4" strokeWidth={1.75} aria-hidden />
         </button>
       </div>
 
-      {filtered && summary ? (
-        <ResultsSummary summary={summary} shown={shown} total={total} onClear={() => onChange(EMPTY_FILTERS)} />
+      {summary ? (
+        <ResultsSummary
+          summary={summary}
+          stats={stats}
+          status={filters.status}
+          onStatus={(status) =>
+            onChange({ ...filters, status, flags: filters.flags.filter((f) => f !== "due" && f !== "no_reply") })
+          }
+          shown={shown}
+          total={total}
+          filtered={filtered}
+          onClear={() => onChange(EMPTY_FILTERS)}
+        />
       ) : null}
+
+      {/* The filters in use, when the panel is closed: each one removable. */}
+      {!panelOpen ? <ActiveFilters filters={filters} onChange={onChange} /> : null}
 
       {panelOpen ? (
         <div id={panelId} className="flex flex-col gap-2 rounded-xl border border-border bg-surface p-3 md:rounded-lg">
           <div className={cn(scrollerClass, "-mx-3 gap-2 px-3 md:mx-0 md:flex-wrap md:px-0")}>
-            {/* Where each row stands: one choice at a time, with its count. */}
-            <select
-              value={stats.find((st) => st.active && st.key !== "total")?.key ?? ""}
-              onChange={(e) => {
-                const key = e.currentTarget.value;
-                (stats.find((st) => st.key === (key || "total")) ?? stats[0])?.onClick();
-              }}
-              aria-label="Status"
-              className={cn(pillSelect, "max-w-[16rem]", stats.some((st) => st.active && st.key !== "total") && "border-fg/70 font-medium")}
-            >
-              {stats.map((st) => (
-                <option key={st.key} value={st.key === "total" ? "" : st.key}>
-                  {st.key === "total" ? `Any status (${st.count})` : `${st.label} (${st.count})`}
-                </option>
-              ))}
-            </select>
             {goalOptions.length > 1 || filters.kind ? (
               <select
                 value={filters.kind ?? ""}
@@ -417,10 +432,7 @@ export function FiltersBar({
             </p>
             <div className="flex flex-wrap gap-1.5">{DETAIL_FLAGS.map((flag) => renderFlag(flag))}</div>
           </section>
-          <label className="flex min-h-11 items-center gap-2 text-[15px] text-muted md:hidden">
-            <input type="checkbox" checked={compact} onChange={(e) => onCompact(e.currentTarget.checked)} className="size-5" />
-            Compact list (name, place and last interaction)
-          </label>
+
         </div>
       ) : null}
     </div>
@@ -510,45 +522,133 @@ function TagPicker({
   );
 }
 
-/** "128 shown · 64 to contact · 55 written, no reply · 9 replied (14%)…" for the rows the filters leave. */
+/**
+ * Where the rows stand, always visible: how many organizations, to contact,
+ * written, answered, no reply… Each number filters the list to that status
+ * (one at a time); the counts ignore the status filter so they stay put.
+ */
 function ResultsSummary({
   summary: s,
+  stats,
+  status,
+  onStatus,
   shown,
   total,
+  filtered,
   onClear,
 }: {
   summary: { total: number; toContact: number; noReply: number; replied: number; offer: number; confirmed: number; declined: number };
+  stats: StatItem[];
+  status: string;
+  onStatus: (status: OpportunityStage | "") => void;
   shown: number;
   total: number;
+  filtered: boolean;
   onClear: () => void;
 }) {
   const written = s.total - s.toContact;
   const answered = s.replied + s.offer + s.confirmed + s.declined;
   const pct = written ? Math.round((answered / written) * 100) : 0;
-  const cell = (label: string, n: number, tone = "") => (
-    <span className="flex flex-col">
-      <span className={cn("text-[17px] font-semibold tabular-nums md:text-base", tone)}>{n}</span>
-      <span className="text-[11px] text-muted">{label}</span>
-    </span>
-  );
+  const cell = (label: string, n: number, stage: OpportunityStage | "" | null, tone = "") => {
+    const on = stage !== null && status === stage && (stage !== "" || !filtered);
+    const inner = (
+      <>
+        <span className={cn("text-[17px] font-semibold tabular-nums md:text-base", on ? "" : tone)}>{n}</span>
+        <span className={cn("text-[11px]", on ? "opacity-80" : "text-muted")}>{label}</span>
+      </>
+    );
+    if (stage === null) return <span className="flex flex-col px-1.5 py-1">{inner}</span>;
+    return (
+      <button
+        type="button"
+        aria-pressed={status === stage && stage !== ""}
+        onClick={() => onStatus(status === stage ? "" : stage)}
+        className={cn(
+          "flex min-h-11 flex-col items-start rounded-lg px-1.5 py-1 text-left md:min-h-0",
+          status === stage && stage !== "" ? "bg-fg text-bg" : "active:bg-surface-2 md:hover:bg-surface-2",
+        )}
+      >
+        {inner}
+      </button>
+    );
+  };
+  const extra = stats.filter((st) => (st.key === "due" || st.key === "no_reply") && st.count > 0);
   return (
-    <div className="rounded-xl border border-border bg-surface px-3 py-2 md:rounded-lg" aria-live="polite">
-      <div className="flex flex-wrap gap-x-5 gap-y-2">
-        {cell("organizations", s.total)}
-        {cell("to contact", s.toContact)}
-        {cell("written", written)}
-        {cell(`answered (${pct}%)`, answered, "text-emerald-700 dark:text-emerald-400")}
-        {cell("no reply yet", s.noReply)}
-        {s.offer ? cell("offer sent", s.offer) : null}
-        {s.confirmed ? cell("confirmed", s.confirmed) : null}
-        {s.declined ? cell("declined", s.declined) : null}
+    <div className="rounded-xl border border-border bg-surface px-2 py-1.5 md:rounded-lg" aria-live="polite">
+      <div className="flex flex-wrap gap-x-2 gap-y-1 md:gap-x-3">
+        {cell("organizations", s.total, "")}
+        {cell("to contact", s.toContact, "lead")}
+        {cell("written", written, null)}
+        {cell(`answered (${pct}%)`, answered, "replied", "text-emerald-700 dark:text-emerald-400")}
+        {cell("no reply yet", s.noReply, "contacted")}
+        {s.offer ? cell("offer sent", s.offer, "proposal") : null}
+        {s.confirmed ? cell("confirmed", s.confirmed, "won") : null}
+        {s.declined ? cell("declined", s.declined, "lost") : null}
+        {extra.map((st) => (
+          <button
+            key={st.key}
+            type="button"
+            aria-pressed={st.active}
+            onClick={st.onClick}
+            className={cn(
+              "flex min-h-11 flex-col items-start rounded-lg px-1.5 py-1 text-left md:min-h-0",
+              st.active ? "bg-fg text-bg" : "active:bg-surface-2 md:hover:bg-surface-2",
+            )}
+          >
+            <span className={cn("text-[17px] font-semibold tabular-nums md:text-base", !st.active && (st.tone === "danger" ? "text-danger" : "text-warning"))}>{st.count}</span>
+            <span className={cn("text-[11px]", st.active ? "opacity-80" : "text-muted")}>{st.label.toLowerCase()}</span>
+          </button>
+        ))}
       </div>
-      <p className="mt-1.5 text-[12px] text-muted">
-        Showing {shown} of {total} ·{" "}
-        <button type="button" onClick={onClear} className="font-medium text-fg/80 underline underline-offset-2 active:opacity-60">
-          Clear filters
+      {filtered ? (
+        <p className="mt-1 px-1.5 text-[12px] text-muted">
+          Showing {shown} of {total} ·{" "}
+          <button type="button" onClick={onClear} className="font-medium text-fg/80 underline underline-offset-2 active:opacity-60">
+            Clear filters
+          </button>
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/** The filters in use, as removable chips (shown when the Filters panel is closed). */
+function ActiveFilters({ filters, onChange }: { filters: SheetFilters; onChange: (next: SheetFilters) => void }) {
+  const chips: { key: string; label: string; clear: () => SheetFilters }[] = [];
+  if (filters.status) chips.push({ key: "status", label: `Status: ${stageLabel(filters.status, "booking")}`, clear: () => ({ ...filters, status: "" }) });
+  if (filters.kind) chips.push({ key: "kind", label: `Goal: ${filters.kind}`, clear: () => ({ ...filters, kind: "" }) });
+  if (filters.section) chips.push({ key: "section", label: filters.section === NO_SECTION ? "No section" : filters.section, clear: () => ({ ...filters, section: "" }) });
+  if (filters.fit) chips.push({ key: "fit", label: FIT_FILTERS.find((f) => f.value === filters.fit)?.label ?? filters.fit, clear: () => ({ ...filters, fit: undefined }) });
+  if (filters.origin) chips.push({ key: "origin", label: ORIGINS.find((o) => o.value === filters.origin)?.label ?? filters.origin, clear: () => ({ ...filters, origin: undefined }) });
+  for (const t of filters.tags ?? []) {
+    chips.push({
+      key: `tag-${t}`,
+      label: t.startsWith("fit-") ? t.replace("fit-", "Fit: ") : tagInfo(t).label,
+      clear: () => {
+        const tags = (filters.tags ?? []).filter((x) => x !== t);
+        return { ...filters, tags: tags.length ? tags : undefined, tagMode: tags.length > 1 ? filters.tagMode : undefined };
+      },
+    });
+  }
+  for (const f of filters.flags) chips.push({ key: `flag-${f}`, label: SHEET_FLAG_LABELS[f], clear: () => ({ ...filters, flags: filters.flags.filter((x) => x !== f) }) });
+  if (!chips.length) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {(filters.tags?.length ?? 0) > 1 ? (
+        <span className="text-[12px] text-muted">{filters.tagMode === "any" ? "Any of the tags:" : "All of the tags:"}</span>
+      ) : null}
+      {chips.map((c) => (
+        <button
+          key={c.key}
+          type="button"
+          onClick={() => onChange(c.clear())}
+          title="Remove this filter"
+          className="inline-flex h-8 items-center gap-1 rounded-full border border-fg/60 bg-surface px-2.5 text-[13px] font-medium text-fg active:bg-surface-2 md:h-7 md:text-xs md:hover:bg-surface-2"
+        >
+          {c.label}
+          <X className="size-3.5 text-muted" aria-hidden />
         </button>
-      </p>
+      ))}
     </div>
   );
 }

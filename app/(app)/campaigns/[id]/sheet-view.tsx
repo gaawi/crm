@@ -83,7 +83,6 @@ import { type StatItem } from "./stats";
  * server action whose refresh() brings back fresh rows.
  */
 
-const COMPACT_KEY = "crm:booking:compact";
 const COMPACT_EVENT = "crm:booking-compact";
 
 function subscribeCompact(onChange: () => void) {
@@ -95,36 +94,34 @@ function subscribeCompact(onChange: () => void) {
   };
 }
 
-function readCompact(): boolean {
-  try {
-    // Compact by default; "0" = the owner chose the full cards.
-    return window.localStorage.getItem(COMPACT_KEY) !== "0";
-  } catch {
-    return true;
-  }
-}
-
-function writeCompact(on: boolean) {
-  try {
-    window.localStorage.setItem(COMPACT_KEY, on ? "1" : "0");
-  } catch {
-    // Private mode / blocked storage: the toggle still works for this visit.
-  }
-  window.dispatchEvent(new Event(COMPACT_EVENT));
-}
-
-/** Compact phone cards, remembered on this device. */
-function useCompact(): [boolean, (on: boolean) => void] {
-  const stored = useSyncExternalStore(
-    subscribeCompact,
-    readCompact,
-    () => true,
-  );
+/**
+ * Compact list, remembered on this device: on by default on phones
+ * ("crm:booking:compact"), off by default on desktop, where the full table
+ * shows ("crm:booking:compact-desktop").
+ */
+function useCompact(key: string, fallback: boolean): [boolean, (on: boolean) => void] {
+  const read = useCallback(() => {
+    try {
+      const v = window.localStorage.getItem(key);
+      return v === null ? fallback : v === "1";
+    } catch {
+      return fallback;
+    }
+  }, [key, fallback]);
+  const stored = useSyncExternalStore(subscribeCompact, read, () => fallback);
   const [override, setOverride] = useState<boolean | null>(null);
-  const set = useCallback((on: boolean) => {
-    setOverride(on);
-    writeCompact(on);
-  }, []);
+  const set = useCallback(
+    (on: boolean) => {
+      setOverride(on);
+      try {
+        window.localStorage.setItem(key, on ? "1" : "0");
+      } catch {
+        // Private mode / blocked storage: the toggle still works for this visit.
+      }
+      window.dispatchEvent(new Event(COMPACT_EVENT));
+    },
+    [key],
+  );
   return [override ?? stored, set];
 }
 
@@ -240,7 +237,12 @@ export function SheetView({
     sheetFiltersFromParams(new URLSearchParams(searchParams.toString())),
   );
   const deferredFilters = useDeferredValue(filters);
-  const [compact, setCompact] = useCompact();
+  const [phoneCompact, setPhoneCompact] = useCompact("crm:booking:compact", true);
+  const [desktopCompact, setDesktopCompact] = useCompact("crm:booking:compact-desktop", false);
+  const compact = phone ? phoneCompact : desktopCompact;
+  const setCompact = phone ? setPhoneCompact : setDesktopCompact;
+  // The compact list replaces the table on desktop too.
+  const cardList = phone || desktopCompact;
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<ReadonlySet<string>>(
     () => new Set(),
@@ -771,7 +773,7 @@ export function SheetView({
               </button>
             </div>
           ) : null}
-          {phone ? null : (
+          {cardList ? null : (
             <RowsTable
               groups={groups}
               showSectionHeaders={showSectionHeaders}
@@ -785,8 +787,8 @@ export function SheetView({
           )}
 
           {/* Phones: cards grouped by section. */}
-          {phone ? (
-            <div className="flex flex-col gap-6 md:hidden">
+          {cardList ? (
+            <div className={cn("flex flex-col gap-6", !phone && "mx-auto max-w-3xl")}>
               {groups.map((group) => (
                 <section
                   key={group.section ?? "\u0000other"}
