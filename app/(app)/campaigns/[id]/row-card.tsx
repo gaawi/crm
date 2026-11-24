@@ -14,7 +14,8 @@ import { formatPhone } from "@/lib/booking/phone";
 import { isFollowUpDue } from "@/lib/booking/timing";
 import type { SheetRow } from "@/lib/booking/types";
 import { cn } from "@/lib/utils";
-import { DateCell, DeleteRowButton, KindCell, ReturningCell, StageCell, TextCell } from "./cells";
+import { responseInfo } from "@/lib/booking/explain";
+import { DateCell, DeleteRowButton, KindCell, ResponseCell, ReturningCell, StageCell, TextCell } from "./cells";
 import {
   HistoryButton,
   LastTouchLine,
@@ -104,7 +105,14 @@ export const RowCard = memo(function RowCard({
           className="flex min-w-0 flex-1 items-center gap-2 text-left active:opacity-60"
         >
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-[15px] font-semibold">{name}</span>
+            <span className="flex min-w-0 items-center gap-1.5">
+              <span className="truncate text-[15px] font-semibold">{name}</span>
+              {responseInfo(row.response) ? (
+                <span className={cn("shrink-0 rounded-full px-1.5 py-0.5 text-[11px] font-medium", responseInfo(row.response)!.tone)}>
+                  {responseInfo(row.response)!.label}
+                </span>
+              ) : null}
+            </span>
             <span className="mt-0.5 flex min-w-0 items-center gap-2">
               <RowPlace row={row} className="shrink-[2] text-[13px] text-muted" />
               <LastTouchLine row={row} timezone={ctx.timezone} today={ctx.today} className="min-w-0 shrink" />
@@ -201,6 +209,7 @@ export const RowCard = memo(function RowCard({
 
       <div className="grid grid-cols-2 gap-2 px-3 pb-3 pt-3">
         <StageCell rowId={row.id} value={row.stage} options={pickableStageOptions(row.kind, row.stage)} look="field" />
+        <ResponseCell rowId={row.id} value={row.response} look="field" className="mt-2" />
         <DateCell rowId={row.id} value={row.followUpAt} overdue={isFollowUpDue(row, ctx.today)} look="field" />
       </div>
 

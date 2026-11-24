@@ -27,7 +27,7 @@ import {
   type SheetFlag,
 } from "@/lib/booking/filters";
 import { sectionSummary } from "@/lib/booking/section-summary";
-import { explainFlag, explainStage } from "@/lib/booking/explain";
+import { explainFlag, explainStage, RESPONSES } from "@/lib/booking/explain";
 import { suggestTemplate } from "@/lib/booking/templates";
 import { isFollowUpDue, isNoReply } from "@/lib/booking/timing";
 import type {
@@ -584,6 +584,7 @@ export function SheetView({
       offer: by(["proposal", "negotiation"]),
       confirmed: by(["won"]),
       declined: by(["lost"]),
+      responses: Object.fromEntries(RESPONSES.map((r) => [r.value, counted.filter((x) => x.response === r.value).length])),
     };
   }, [counted]);
   const stats = useMemo<StatItem[]>(() => {

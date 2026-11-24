@@ -135,7 +135,7 @@ export async function getSheetRows(projectId: string, options: { ids?: string[] 
   if (!ID.test(projectId)) return [];
   const rows = await sql<RawSheetRow[]>`
     select op.id, op.title, op.kind, op.stage, op.value, op.currency, op.follow_up_at, op.next_action, op.next_step, op.notes, op.event_dates,
-           op.sheet_section as section, op.spaces, op.is_returning as "returning", op.origin, op.notes_history, op.created_at, op.updated_at,
+           op.sheet_section as section, op.spaces, op.is_returning as "returning", op.response, op.origin, op.notes_history, op.created_at, op.updated_at,
            case when o.id is null then null else json_build_object('id', o.id, 'name', o.name, 'city', o.city, 'website', o.website, 'tags', o.tags, 'profile', ${sheetProfile()}) end as organization,
            case when c.id is null then null else json_build_object(
              'id', c.id,
@@ -431,6 +431,7 @@ export interface SheetRowPatch {
   notes?: string | null;
   section?: string | null;
   spaces?: string | null;
+  response?: string | null;
   returning?: boolean;
   /** Written to the row's contact (created, unnamed, when the row has none). Normalized with the sheet's prefix. */
   phone?: string | null;
@@ -479,6 +480,7 @@ export async function updateSheetRow(id: string, patch: SheetRowPatch): Promise<
       values.sheetSection = row.projectId ? await resolveSection(tx, row.projectId, patch.section) : oneLine(patch.section, 120);
     if ("spaces" in patch) values.spaces = oneLine(patch.spaces, 1000);
     if (patch.returning !== undefined) values.isReturning = Boolean(patch.returning);
+    if ("response" in patch) values.response = patch.response || null;
 
     if (Object.keys(values).length) await tx`update opportunities set ${tx(values as never)} where id = ${id}`;
     if (stageChanged) {

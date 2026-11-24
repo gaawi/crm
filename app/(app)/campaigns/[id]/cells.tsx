@@ -1,5 +1,6 @@
 "use client";
 
+import { RESPONSES, responseInfo } from "@/lib/booking/explain";
 import { EMAIL_STAGES } from "@/lib/constants";
 import type { OpportunityStage } from "@/lib/types";
 import { HowChip, InfoTip } from "@/components/booking/info-tip";
@@ -465,5 +466,39 @@ export function DeleteRowButton({ rowId, name, label }: { rowId: string; name: s
     >
       <Trash2 className="size-4" strokeWidth={1.75} />
     </button>
+  );
+}
+
+/** Their answer, under the status: Interested, Considering, Later season, Not a fit, Played there (set by hand). */
+export function ResponseCell({ rowId, value, look = "cell", className }: { rowId: string; value: string | null | undefined; look?: CellLook; className?: string }) {
+  const { pending, error, save } = useCell(rowId, "response");
+  const [draft, setDraft] = useSynced(value ?? "");
+  const info = responseInfo(draft);
+  return (
+    <div className={className}>
+      <select
+        value={draft}
+        aria-label="Their answer"
+        title={info?.text ?? "Their answer to our emails (set by hand)"}
+        onChange={(e) => {
+          setDraft(e.currentTarget.value);
+          save(e.currentTarget.value);
+        }}
+        className={cn(
+          controlClass(look),
+          "cursor-pointer appearance-auto pr-1 text-[13px] md:text-xs",
+          info ? cn(info.tone, "font-medium") : "text-muted",
+          error && "border-danger",
+        )}
+      >
+        <option value="">Answer: none yet</option>
+        {RESPONSES.map((r) => (
+          <option key={r.value} value={r.value}>
+            {r.label}
+          </option>
+        ))}
+      </select>
+      <Status pending={pending} error={error} look={look} />
+    </div>
   );
 }

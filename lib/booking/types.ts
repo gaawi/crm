@@ -111,6 +111,8 @@ export interface SheetRow {
   spaces: string | null;
   /** Worked together before. */
   returning: boolean;
+  /** Their answer (opportunities.response): interested, considering, later, not_a_fit, played_before. */
+  response?: string | null;
   /** Where the row came from: josefina-2025, hubspot, musical-america, email, lists-2016-2019, research, other. */
   origin?: string | null;
   /** Earlier notes, moved out of notes so notes only holds the research summary. */
@@ -175,6 +177,7 @@ export type SheetField =
   | "section"
   | "spaces"
   | "returning"
+  | "response"
   | "phone"
   | "whatsapp";
 

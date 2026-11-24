@@ -104,6 +104,7 @@ const patchSchemas = {
   returning: z.enum(["true", "false", "1", "0", "on", "off", ""]).transform((v) => v === "true" || v === "1" || v === "on"),
   phone: phoneText,
   whatsapp: phoneText,
+  response: z.enum(["interested", "considering", "later", "not_a_fit", "played_before", ""]),
 } satisfies Record<SheetField, z.ZodType>;
 
 /**

@@ -10,7 +10,7 @@ import { formatPhone } from "@/lib/booking/phone";
 import { isFollowUpDue } from "@/lib/booking/timing";
 import type { SheetRow } from "@/lib/booking/types";
 import { goalLabel, nextActionLabel, stageLabel } from "@/lib/constants";
-import { DateCell, KindCell, NextActionCell, ReturningCell, StageCell, TextCell } from "./cells";
+import { DateCell, KindCell, NextActionCell, ResponseCell, ReturningCell, StageCell, TextCell } from "./cells";
 import { PrepareEmailButton, RowBadges, RowPlace, rowSubject, pickableStageOptions, venueName, type EmailSuggestion, type RowContext } from "./row-meta";
 
 /**
@@ -99,6 +99,7 @@ export function HistoryDrawer({
           <div className="grid grid-cols-2 gap-x-2 gap-y-3 border-t border-border px-3 pb-4 pt-3">
             <DrawerField label="Status">
               <StageCell rowId={row.id} value={row.stage} options={pickableStageOptions(row.kind, row.stage)} look="field" />
+              <ResponseCell rowId={row.id} value={row.response} look="field" className="mt-2" />
             </DrawerField>
             <DrawerField label="Goal">
               <KindCell rowId={row.id} value={row.kind} look="field" />

@@ -100,6 +100,8 @@ export interface SheetFilters {
   origin?: string;
   /** Organization tags (organizations.tags): all must match (?tag=a,b). "fit-high" etc. read the research fit. */
   tags?: string[];
+  /** Their answer (opportunities.response), e.g. "interested" (?response=). */
+  response?: string;
   /** How the tags combine: "all" (AND, default) or "any" (OR) (?tagmode=any). */
   tagMode?: "all" | "any";
 }
@@ -155,6 +157,7 @@ export function sheetFiltersFromParams(params: Params): SheetFilters {
       ? { tags: [...new Set(read(params, "tag").split(",").map((t) => t.trim().slice(0, 80)).filter(Boolean))].slice(0, 12) }
       : {}),
     ...(read(params, "tagmode") === "any" ? { tagMode: "any" as const } : {}),
+    ...(read(params, "response") ? { response: read(params, "response").slice(0, 30) } : {}),
   };
 }
 
@@ -170,6 +173,7 @@ export function sheetFiltersToQuery(filters: SheetFilters): string {
   if (filters.origin) params.set("origin", filters.origin);
   if (filters.tags?.length) params.set("tag", filters.tags.join(","));
   if (filters.tags?.length && filters.tagMode === "any") params.set("tagmode", "any");
+  if (filters.response) params.set("response", filters.response);
   const query = params.toString();
   return query ? `?${query}` : "";
 }
@@ -191,6 +195,7 @@ export interface FilterRow extends TimingRow {
   section: string | null;
   spaces: string | null;
   returning: boolean;
+  response?: string | null;
   /** Where the row came from (opportunities.origin). */
   origin?: string | null;
   organization: {
@@ -298,6 +303,7 @@ export function filterRows<T extends FilterRow>(rows: readonly T[], filters: She
       matchesFit(row, filters.fit) &&
       (!filters.origin || row.origin === filters.origin) &&
       matchesTags(row, filters.tags, filters.tagMode) &&
+      (!filters.response || (filters.response === "none" ? !row.response : row.response === filters.response)) &&
       rowMatchesSearch(row, filters.q),
   );
 }

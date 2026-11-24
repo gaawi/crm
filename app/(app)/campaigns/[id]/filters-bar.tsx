@@ -33,7 +33,7 @@ import { stageLabel } from "@/lib/constants";
 import { useId, useState } from "react";
 import { cn } from "@/lib/utils";
 import { InfoTip } from "@/components/booking/info-tip";
-import { AUTO_LOCK_NOTE, explainFlag } from "@/lib/booking/explain";
+import { AUTO_LOCK_NOTE, explainFlag, RESPONSES, responseInfo } from "@/lib/booking/explain";
 import { isFilterableTag, tagInfo, TAG_CATALOG, TAG_GROUPS } from "@/lib/booking/tag-catalog";
 import { SearchInput } from "../../_components/ui";
 import { scrollerClass, type StatItem } from "./stats";
@@ -141,7 +141,7 @@ export function FiltersBar({
   /** Rows carrying each organization tag (and fit-*), given the other filters. */
   tagCounts?: ReadonlyMap<string, number>;
   /** Of the rows the filters leave: how many we wrote to, how many replied… */
-  summary?: { total: number; toContact: number; noReply: number; replied: number; offer: number; confirmed: number; declined: number };
+  summary?: { total: number; toContact: number; noReply: number; replied: number; offer: number; confirmed: number; declined: number; responses: Record<string, number> };
   /** The counts (Total, Contacted, Replied, Offer sent… Follow-ups due, No reply): placed in their group. */
   stats: StatItem[];
   /** Some rows have no section (offers "No section"). */
@@ -163,6 +163,7 @@ export function FiltersBar({
     filters.flags.length ||
     filters.fit ||
     filters.origin ||
+    filters.response ||
     filters.tags?.length,
   );
   // Plain pills after the colored tags: the other filters, plus any other flag that is on (e.g. ?flag=hot from a link).
@@ -230,6 +231,7 @@ export function FiltersBar({
     (filters.fit ? 1 : 0) +
     (filters.origin ? 1 : 0) +
     filters.flags.length +
+    (filters.response ? 1 : 0) +
     (filters.tags?.length ?? 0);
 
   return (
@@ -298,6 +300,8 @@ export function FiltersBar({
           summary={summary}
           stats={stats}
           status={filters.status}
+          response={filters.response}
+          onResponse={(r) => onChange({ ...filters, response: r })}
           onStatus={(status) =>
             onChange({ ...filters, status, flags: filters.flags.filter((f) => f !== "due" && f !== "no_reply") })
           }
@@ -532,13 +536,17 @@ function ResultsSummary({
   stats,
   status,
   onStatus,
+  response,
+  onResponse,
   shown,
   total,
   filtered,
   onClear,
 }: {
-  summary: { total: number; toContact: number; noReply: number; replied: number; offer: number; confirmed: number; declined: number };
+  summary: { total: number; toContact: number; noReply: number; replied: number; offer: number; confirmed: number; declined: number; responses: Record<string, number> };
   stats: StatItem[];
+  response?: string;
+  onResponse: (response: string | undefined) => void;
   status: string;
   onStatus: (status: OpportunityStage | "") => void;
   shown: number;
@@ -600,6 +608,29 @@ function ResultsSummary({
           </button>
         ))}
       </div>
+      {RESPONSES.some((r) => s.responses[r.value]) ? (
+        <div className="mt-1 flex flex-wrap items-center gap-1.5 border-t border-border px-1.5 pt-1.5">
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">Their answer</span>
+          {RESPONSES.filter((r) => s.responses[r.value] || response === r.value).map((r) => {
+            const on = response === r.value;
+            return (
+              <button
+                key={r.value}
+                type="button"
+                aria-pressed={on}
+                title={r.text}
+                onClick={() => onResponse(on ? undefined : r.value)}
+                className={cn(
+                  "inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-[13px] font-medium md:h-7 md:text-xs",
+                  on ? "bg-fg text-bg" : r.tone,
+                )}
+              >
+                {r.label} <span className="tabular-nums opacity-70">{s.responses[r.value] ?? 0}</span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
       {filtered ? (
         <p className="mt-1 px-1.5 text-[12px] text-muted">
           Showing {shown} of {total} ·{" "}
@@ -616,6 +647,7 @@ function ResultsSummary({
 function ActiveFilters({ filters, onChange }: { filters: SheetFilters; onChange: (next: SheetFilters) => void }) {
   const chips: { key: string; label: string; clear: () => SheetFilters }[] = [];
   if (filters.status) chips.push({ key: "status", label: `Status: ${stageLabel(filters.status, "booking")}`, clear: () => ({ ...filters, status: "" }) });
+  if (filters.response) chips.push({ key: "response", label: `Answer: ${responseInfo(filters.response)?.label ?? filters.response}`, clear: () => ({ ...filters, response: undefined }) });
   if (filters.kind) chips.push({ key: "kind", label: `Goal: ${filters.kind}`, clear: () => ({ ...filters, kind: "" }) });
   if (filters.section) chips.push({ key: "section", label: filters.section === NO_SECTION ? "No section" : filters.section, clear: () => ({ ...filters, section: "" }) });
   if (filters.fit) chips.push({ key: "fit", label: FIT_FILTERS.find((f) => f.value === filters.fit)?.label ?? filters.fit, clear: () => ({ ...filters, fit: undefined }) });
