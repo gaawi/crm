@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { AlertTriangle, ArrowDownLeft, ArrowUpRight, Bot, Building2, KeyRound, MapPin, Car, CircleSlash, Clock, Flame, History, Loader2, Mail, MailCheck, Reply, RotateCcw, Sparkles, Star } from "lucide-react";
+import { AlertTriangle, ArrowDownLeft, ArrowUpRight, Bot, Building2, KeyRound, MapPin, Car, CircleSlash, Clock, FilePen, Flame, History, Loader2, Mail, MailCheck, Reply, RotateCcw, Sparkles, Star } from "lucide-react";
 import { ActivityIcon, describeLastTouch, TOUCH_TONE_CLASS } from "@/components/booking/activity-meta";
 import { phoneActionClass, type PhoneActionSize } from "@/components/booking/phone-action-class";
 import { PlaceLink } from "@/components/organizations/place-link";
@@ -456,9 +456,12 @@ export function LastEmailLine({
   row,
   link = true,
   tipAlign = "left",
+  onOpenDraft,
   className,
 }: {
-  row: Pick<SheetRow, "lastEmail">;
+  row: Pick<SheetRow, "lastEmail" | "contact">;
+  /** Opens the row's panel, where the prepared reply waits (else the Approvals page). */
+  onOpenDraft?: () => void;
   link?: boolean;
   /** Which edge the hover panel lines up with ("right" in the table's last column). */
   tipAlign?: "left" | "right";
@@ -467,7 +470,9 @@ export function LastEmailLine({
   const [open, setOpen] = useState(false);
   const m = row.lastEmail;
   if (!m) return null;
-  const needsReply = !m.answered && !m.dismissed;
+  // Old emails never ask for a reply: only this campaign's.
+  const needsReply = !m.answered && !m.dismissed && m.recent;
+  const draftId = row.contact?.openDraftId ?? null;
   const label = m.answered ? "Replied" : m.dismissed ? "No reply needed" : "Not replied";
   const date = new Date(m.sentAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
   const threadHref = `/mail/t/${m.accountId}/${encodeURIComponent(m.threadId)}`;
@@ -488,6 +493,12 @@ export function LastEmailLine({
       >
         {needsReply ? "Needs your reply" : label}
       </span>
+      {needsReply && draftId ? (
+        <span title="A reply is drafted and waiting for you to send it" className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-blue-600 px-1.5 font-semibold text-white">
+          <FilePen className="size-3" aria-hidden />
+          Draft
+        </span>
+      ) : null}
     </span>
   );
   const box = cn(
@@ -528,7 +539,26 @@ export function LastEmailLine({
         ) : null}
       </div>
       <div className="mt-1 flex items-center gap-2">
-        {needsReply ? (
+        {needsReply && draftId ? (
+          onOpenDraft ? (
+            <button
+              type="button"
+              onClick={onOpenDraft}
+              className="inline-flex h-8 items-center gap-1 rounded-full bg-blue-600 px-3 text-[13px] font-semibold text-white active:opacity-70 md:h-7 md:text-xs md:hover:bg-blue-700"
+            >
+              <FilePen className="size-3.5" aria-hidden />
+              Review draft and send
+            </button>
+          ) : (
+            <Link
+              href={`/approvals/${draftId}`}
+              className="inline-flex h-8 items-center gap-1 rounded-full bg-blue-600 px-3 text-[13px] font-semibold text-white active:opacity-70 md:h-7 md:text-xs md:hover:bg-blue-700"
+            >
+              <FilePen className="size-3.5" aria-hidden />
+              Review draft and send
+            </Link>
+          )
+        ) : needsReply ? (
           <Link
             href={`${threadHref}?reply=1`}
             className="inline-flex h-8 items-center gap-1 rounded-full bg-amber-500 px-3 text-[13px] font-semibold text-white active:opacity-70 md:h-7 md:text-xs md:hover:bg-amber-600"

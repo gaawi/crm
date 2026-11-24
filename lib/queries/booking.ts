@@ -134,6 +134,7 @@ function toSheetRow(row: RawSheetRow): SheetRow {
           accountId: row.lastEmail.accountId,
           threadId: row.lastEmail.threadId,
           answered: row.lastEmail.answered,
+          recent: row.lastEmail.recent,
           dismissed: row.lastEmail.dismissed,
         }
       : null,
@@ -161,7 +162,11 @@ export async function getSheetRows(projectId: string, options: { ids?: string[] 
       select distinct on (re.contact_id) re.contact_id,
              json_build_object('sentAt', m.sent_at, 'subject', m.subject, 'body', left(coalesce(m.body_text, m.snippet), 4000),
                                'accountId', m.account_id, 'threadId', m.gmail_thread_id,
-                               'answered', coalesce(c.last_outbound_at > m.sent_at, false),
+                               'answered', coalesce(c.last_outbound_at > m.sent_at, false)
+                                           or exists (select 1 from messages o
+                                                       where o.account_id = m.account_id and o.gmail_thread_id = m.gmail_thread_id
+                                                         and o.direction = 'outbound' and o.sent_at > m.sent_at),
+                               'recent', m.sent_at >= coalesce((select replies_since from projects where id = ${projectId}), now() - interval '120 days'),
                                'dismissed', coalesce(c.reply_dismissed_at >= m.sent_at, false)) as last_email
         from row_emails re
         join contacts c on c.id = re.contact_id

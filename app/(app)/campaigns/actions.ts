@@ -13,6 +13,8 @@ import { addSheetRow, bulkUpdateSheetRows, createSheet, importSheetRows, updateS
 import { PREPARE_MAX_ROWS, prepareSheetEmails } from "@/lib/queries/booking-emails";
 import { deleteOpportunity } from "@/lib/queries/opportunities";
 import { errorMessage } from "@/lib/utils";
+import { getDraft } from "@/lib/queries/drafts";
+import type { EmailDraft } from "@/lib/types";
 import type { ActionResult } from "../_components/action-form";
 import {
   field,
@@ -235,4 +237,11 @@ export async function setSheetArchivedAction(projectId: string, archived: boolea
   if (!/^[0-9a-f-]{36}$/i.test(projectId)) return;
   await sql`update projects set archived = ${archived}, updated_at = now() where id = ${projectId} and sheet`;
   refresh();
+}
+
+/** The email waiting to be sent to a row's contact, for the History panel (review, edit, send). */
+export async function rowDraftAction(draftId: string): Promise<EmailDraft | null> {
+  await requireSession();
+  const draft = await getDraft(draftId);
+  return draft && !["sent", "discarded"].includes(draft.status) ? draft : null;
 }

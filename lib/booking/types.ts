@@ -149,8 +149,10 @@ export interface SheetRowLastEmail {
   full: string;
   accountId: string;
   threadId: string;
-  /** We wrote to them after it. */
+  /** We wrote to them after it (to them, or in that conversation). */
   answered: boolean;
+  /** Sent during this campaign (since projects.replies_since, else the last 120 days): only these ask for a reply. */
+  recent: boolean;
   /** Marked as needing no reply (Today's "Done"). */
   dismissed: boolean;
 }

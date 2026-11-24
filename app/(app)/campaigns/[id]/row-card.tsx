@@ -195,7 +195,7 @@ export const RowCard = memo(function RowCard({
               </p>
             ) : null}
             <LastTouchLine row={row} timezone={ctx.timezone} today={ctx.today} className="mt-1" />
-            <LastEmailLine row={row} className="mt-1.5" />
+            <LastEmailLine row={row} onOpenDraft={() => actions.onHistory(row.id)} className="mt-1.5" />
             <TimingBadge row={row} timezone={ctx.timezone} today={ctx.today} className="mt-1.5 h-6 px-2 text-xs" />
           </div>
         </div>

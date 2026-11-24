@@ -6,12 +6,16 @@ import { LiveTimeline } from "@/components/booking/activity-timeline";
 import { PhoneActions } from "@/components/booking/phone-actions";
 import { OrgProfileLine } from "@/components/organizations/profile-card";
 import { Sheet } from "@/components/ui/sheet";
+import { DraftCard } from "@/components/draft-card";
+import type { EmailDraft } from "@/lib/types";
+import { useEffect, useState } from "react";
+import { rowDraftAction } from "../actions";
 import { formatPhone } from "@/lib/booking/phone";
 import { isFollowUpDue } from "@/lib/booking/timing";
 import type { SheetRow } from "@/lib/booking/types";
 import { goalLabel, nextActionLabel, stageLabel } from "@/lib/constants";
 import { DateCell, KindCell, NextActionCell, ResponseCell, ReturningCell, StageCell, TextCell } from "./cells";
-import { PrepareEmailButton, RowBadges, RowPlace, rowSubject, pickableStageOptions, venueName, type EmailSuggestion, type RowContext } from "./row-meta";
+import { LastEmailLine, PrepareEmailButton, RowBadges, RowPlace, rowSubject, pickableStageOptions, venueName, type EmailSuggestion, type RowContext } from "./row-meta";
 
 /**
  * A row's History: Call / WhatsApp (logged right after the tap), Prepare
@@ -62,6 +66,9 @@ export function HistoryDrawer({
           {suggestion ? <PrepareEmailButton suggestion={suggestion} pending={preparing} onPrepare={() => onPrepare(row)} size="button" /> : null}
           <RowBadges row={row} />
         </div>
+
+        {row.lastEmail ? <LastEmailLine row={row} /> : null}
+        {c?.openDraftId ? <RowDraft draftId={c.openDraftId} timezone={ctx.timezone} /> : null}
 
         {c ? (
           <Link
@@ -161,5 +168,28 @@ function DrawerField({ label, wide = false, children }: { label: string; wide?: 
       </span>
       {children}
     </div>
+  );
+}
+
+/** The email waiting to go to this contact: read, edit and send it right here. */
+function RowDraft({ draftId, timezone }: { draftId: string; timezone: string }) {
+  const [draft, setDraft] = useState<EmailDraft | null | undefined>(undefined);
+  useEffect(() => {
+    let live = true;
+    rowDraftAction(draftId).then(
+      (d) => live && setDraft(d),
+      () => live && setDraft(null),
+    );
+    return () => {
+      live = false;
+    };
+  }, [draftId]);
+  if (draft === undefined) return <p className="text-[13px] text-muted md:text-xs">Loading the draft…</p>;
+  if (!draft) return null;
+  return (
+    <section aria-label="Draft waiting to be sent" className="rounded-xl border-2 border-blue-500/60 p-2 md:rounded-lg">
+      <p className="mb-1.5 px-1 text-[12px] font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-400">Draft ready to send</p>
+      <DraftCard draft={draft} timezone={timezone} />
+    </section>
   );
 }

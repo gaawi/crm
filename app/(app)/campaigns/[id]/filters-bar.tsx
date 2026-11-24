@@ -12,6 +12,7 @@ import {
   Music,
   RotateCcw,
   Rows3,
+  Table2,
   SlidersHorizontal,
   Sparkles,
   Star,
@@ -261,21 +262,23 @@ export function FiltersBar({
             </span>
           ) : null}
         </button>
-        {/* Phones: select mode (the desktop table always has checkboxes). */}
+        {/* Select several rows (the desktop table always has checkboxes). Icon on phones, words on desktop. */}
         <button
           type="button"
           aria-pressed={selectMode}
           aria-label={selectMode ? "Done selecting" : "Select rows"}
-          title={selectMode ? "Done" : "Select"}
+          title={selectMode ? "Done selecting" : "Select several rows (to tag, change status or prepare emails)"}
           onClick={() => onSelectMode(!selectMode)}
           className={cn(
-            "inline-flex size-10 shrink-0 items-center justify-center rounded-full md:size-8",
+            "inline-flex size-10 shrink-0 items-center justify-center gap-1.5 rounded-full md:h-8 md:w-auto md:border md:border-border md:px-3 md:text-sm",
             !compact && "md:hidden",
-            selectMode ? "bg-accent text-accent-fg" : "text-muted active:bg-surface-2 md:hover:bg-surface-2",
+            selectMode ? "bg-accent text-accent-fg md:border-transparent" : "text-muted active:bg-surface-2 md:text-fg md:hover:bg-surface-2",
           )}
         >
           <ListChecks className="size-5 md:size-4" strokeWidth={1.75} aria-hidden />
+          <span className="hidden md:inline">{selectMode ? "Done" : "Select"}</span>
         </button>
+        {/* Phones: one toggle. Desktop: "List | Table", so it reads what each view is. */}
         <button
           type="button"
           aria-pressed={compact}
@@ -283,12 +286,31 @@ export function FiltersBar({
           title={compact ? "Full rows" : "Compact list (name, place, last interaction)"}
           onClick={() => onCompact(!compact)}
           className={cn(
-            "inline-flex size-10 shrink-0 items-center justify-center rounded-full md:size-8",
-            compact ? "bg-fg text-bg" : "text-muted active:bg-surface-2 md:hover:bg-surface-2",
+            "inline-flex size-10 shrink-0 items-center justify-center rounded-full md:hidden",
+            compact ? "bg-fg text-bg" : "text-muted active:bg-surface-2",
           )}
         >
-          <Rows3 className="size-5 md:size-4" strokeWidth={1.75} aria-hidden />
+          <Rows3 className="size-5" strokeWidth={1.75} aria-hidden />
         </button>
+        <span role="radiogroup" aria-label="View" className="hidden h-8 shrink-0 overflow-hidden rounded-full border border-border text-sm md:inline-flex">
+          {([
+            [true, "List", Rows3, "Compact list in columns: name, place, their last email"],
+            [false, "Table", Table2, "Full table: contact, status, notes, everything editable"],
+          ] as const).map(([value, label, Icon, hint]) => (
+            <button
+              key={label}
+              type="button"
+              role="radio"
+              aria-checked={compact === value}
+              title={hint}
+              onClick={() => onCompact(value)}
+              className={cn("inline-flex items-center gap-1.5 px-3", compact === value ? "bg-fg text-bg" : "text-fg hover:bg-surface-2")}
+            >
+              <Icon className="size-4" strokeWidth={1.75} aria-hidden />
+              {label}
+            </button>
+          ))}
+        </span>
       </div>
 
       {summary ? (
