@@ -303,7 +303,12 @@ export function filterRows<T extends FilterRow>(rows: readonly T[], filters: She
       matchesFit(row, filters.fit) &&
       (!filters.origin || row.origin === filters.origin) &&
       matchesTags(row, filters.tags, filters.tagMode) &&
-      (!filters.response || (filters.response === "none" ? !row.response : row.response === filters.response)) &&
+      (!filters.response ||
+        (filters.response === "interest"
+          ? row.response === "interested" || row.response === "later"
+          : filters.response === "none"
+            ? !row.response
+            : row.response === filters.response)) &&
       rowMatchesSearch(row, filters.q),
   );
 }

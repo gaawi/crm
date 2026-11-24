@@ -33,7 +33,7 @@ import { stageLabel } from "@/lib/constants";
 import { useId, useState } from "react";
 import { cn } from "@/lib/utils";
 import { InfoTip } from "@/components/booking/info-tip";
-import { AUTO_LOCK_NOTE, explainFlag, RESPONSES, responseInfo } from "@/lib/booking/explain";
+import { AUTO_LOCK_NOTE, explainFlag, INTEREST_RESPONSES, RESPONSES, responseInfo } from "@/lib/booking/explain";
 import { isFilterableTag, tagInfo, TAG_CATALOG, TAG_GROUPS } from "@/lib/booking/tag-catalog";
 import { SearchInput } from "../../_components/ui";
 import { scrollerClass, type StatItem } from "./stats";
@@ -609,26 +609,54 @@ function ResultsSummary({
         ))}
       </div>
       {RESPONSES.some((r) => s.responses[r.value]) ? (
-        <div className="mt-1 flex flex-wrap items-center gap-1.5 border-t border-border px-1.5 pt-1.5">
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">Their answer</span>
-          {RESPONSES.filter((r) => s.responses[r.value] || response === r.value).map((r) => {
-            const on = response === r.value;
-            return (
-              <button
-                key={r.value}
-                type="button"
-                aria-pressed={on}
-                title={r.text}
-                onClick={() => onResponse(on ? undefined : r.value)}
-                className={cn(
-                  "inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-[13px] font-medium md:h-7 md:text-xs",
-                  on ? "bg-fg text-bg" : r.tone,
-                )}
-              >
-                {r.label} <span className="tabular-nums opacity-70">{s.responses[r.value] ?? 0}</span>
-              </button>
-            );
-          })}
+        <div className="mt-1 border-t border-border px-1.5 pt-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">Their answer</span>
+            {/* The ones worth chasing: wants to book + interested later. */}
+            {(() => {
+              const n = INTEREST_RESPONSES.reduce((a, v) => a + (s.responses[v] ?? 0), 0);
+              const on = response === "interest";
+              return (
+                <button
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => onResponse(on ? undefined : "interest")}
+                  title="Wants to book + Interested, later"
+                  className={cn(
+                    "inline-flex h-8 items-center gap-1 rounded-full border px-2.5 text-[13px] font-semibold md:h-7 md:text-xs",
+                    on ? "border-fg bg-fg text-bg" : "border-rose-300 bg-rose-50 text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200",
+                  )}
+                >
+                  Showed interest <span className="tabular-nums opacity-70">{n}</span>
+                </button>
+              );
+            })()}
+          </div>
+          {/* Warm to cold, left to right. */}
+          <div className="mt-1.5 flex flex-wrap items-center gap-1">
+            {RESPONSES.map((r, i) => {
+              const on = response === r.value;
+              const n = s.responses[r.value] ?? 0;
+              return (
+                <span key={r.value} className="inline-flex items-center gap-1">
+                  {i ? <span aria-hidden className="text-[11px] text-subtle">›</span> : null}
+                  <button
+                    type="button"
+                    aria-pressed={on}
+                    title={r.text}
+                    onClick={() => onResponse(on ? undefined : r.value)}
+                    className={cn(
+                      "inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-[13px] font-medium md:h-7 md:text-xs",
+                      on ? "bg-fg text-bg ring-2 ring-fg/30" : r.tone,
+                      !n && !on && "opacity-50",
+                    )}
+                  >
+                    {r.label} <span className="tabular-nums opacity-70">{n}</span>
+                  </button>
+                </span>
+              );
+            })}
+          </div>
         </div>
       ) : null}
       {filtered ? (
@@ -647,7 +675,7 @@ function ResultsSummary({
 function ActiveFilters({ filters, onChange }: { filters: SheetFilters; onChange: (next: SheetFilters) => void }) {
   const chips: { key: string; label: string; clear: () => SheetFilters }[] = [];
   if (filters.status) chips.push({ key: "status", label: `Status: ${stageLabel(filters.status, "booking")}`, clear: () => ({ ...filters, status: "" }) });
-  if (filters.response) chips.push({ key: "response", label: `Answer: ${responseInfo(filters.response)?.label ?? filters.response}`, clear: () => ({ ...filters, response: undefined }) });
+  if (filters.response) chips.push({ key: "response", label: filters.response === "interest" ? "Showed interest" : `Answer: ${responseInfo(filters.response)?.label ?? filters.response}`, clear: () => ({ ...filters, response: undefined }) });
   if (filters.kind) chips.push({ key: "kind", label: `Goal: ${filters.kind}`, clear: () => ({ ...filters, kind: "" }) });
   if (filters.section) chips.push({ key: "section", label: filters.section === NO_SECTION ? "No section" : filters.section, clear: () => ({ ...filters, section: "" }) });
   if (filters.fit) chips.push({ key: "fit", label: FIT_FILTERS.find((f) => f.value === filters.fit)?.label ?? filters.fit, clear: () => ({ ...filters, fit: undefined }) });

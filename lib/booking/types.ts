@@ -111,7 +111,7 @@ export interface SheetRow {
   spaces: string | null;
   /** Worked together before. */
   returning: boolean;
-  /** Their answer (opportunities.response): interested, considering, later, not_a_fit, played_before. */
+  /** Their answer (opportunities.response): interested (wants to book), later (interested, later), considering (acknowledged), not_a_fit. */
   response?: string | null;
   /** Where the row came from: josefina-2025, hubspot, musical-america, email, lists-2016-2019, research, other. */
   origin?: string | null;

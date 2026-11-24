@@ -126,15 +126,21 @@ export function explainFlag(flag: string): Explained | undefined {
   return [...TAGS_EXPLAINED, ...STATUS_EXPLAINED].find((e) => e.label === label);
 }
 
-/** Their answer: a second status next to the email status (opportunities.response). */
+/**
+ * Their answer, as a scale from warm to cold (opportunities.response). Only
+ * real signals count as interest: "Wants to book" and "Interested, later".
+ * "Acknowledged" is a polite receipt (passed to programming) and says nothing.
+ * Having played there is not an answer: it is the Returning mark.
+ */
 export const RESPONSES = [
-  { value: "interested", label: "Interested", tone: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300", text: "Wants information, dates or the fee." },
-  { value: "considering", label: "Considering", tone: "bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300", text: "Reviewing the proposal, or passed it to programming." },
-  { value: "later", label: "Later season", tone: "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300", text: "Not now: a future season, or keeping us on file." },
-  { value: "not_a_fit", label: "Not a fit", tone: "bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300", text: "Said we don't fit their series." },
-  { value: "played_before", label: "Played there", tone: "bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-300", text: "We have already performed there." },
+  { value: "interested", label: "Wants to book", short: "Hot", tone: "bg-rose-600 text-white", text: "Asked for dates, fee or details for a coming season: likely this year.", interest: true },
+  { value: "later", label: "Interested, later", short: "Warm", tone: "bg-orange-200 text-orange-900 dark:bg-orange-900/60 dark:text-orange-100", text: "Showed interest but for a future season, or asked us to write again later.", interest: true },
+  { value: "considering", label: "Acknowledged", short: "Neutral", tone: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300", text: "A polite receipt or 'passed to programming': no real signal yet.", interest: false },
+  { value: "not_a_fit", label: "Not a fit", short: "Cold", tone: "bg-zinc-300 text-zinc-600 line-through decoration-zinc-500/60 dark:bg-zinc-700 dark:text-zinc-300", text: "Said we don't fit their series.", interest: false },
 ] as const;
 export type ResponseValue = (typeof RESPONSES)[number]["value"];
+/** The answers that mean real interest. */
+export const INTEREST_RESPONSES: string[] = RESPONSES.filter((r) => r.interest).map((r) => r.value);
 export function responseInfo(value: string | null | undefined) {
   return RESPONSES.find((r) => r.value === value) ?? null;
 }
