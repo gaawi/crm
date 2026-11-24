@@ -19,6 +19,8 @@ export interface CampaignReply {
   subject: string | null;
   /** The new part of their email, cut short. */
   excerpt: string;
+  /** A reply to them is drafted and waiting in Approvals. */
+  draftId: string | null;
 }
 
 type Row = Omit<CampaignReply, "sentAt" | "excerpt"> & { sentAt: Date; body: string | null; snippet: string | null };
@@ -39,7 +41,10 @@ export async function listCampaignReplies(limit = 20): Promise<CampaignReply[]> 
     )
     select w.id as contact_id, w.name as contact_name, w.org_name as organization_name,
            w.project_id, w.project_name,
-           m.account_id, m.gmail_thread_id as thread_id, m.sent_at, m.subject, m.body_text as body, m.snippet
+           m.account_id, m.gmail_thread_id as thread_id, m.sent_at, m.subject, m.body_text as body, m.snippet,
+           (select d.id from email_drafts d
+             where d.contact_id = w.id and d.status in ('proposed', 'queued', 'revising', 'failed')
+             order by d.created_at desc limit 1) as draft_id
       from waiting w
       cross join lateral (
         select m.*
@@ -63,5 +68,6 @@ export async function listCampaignReplies(limit = 20): Promise<CampaignReply[]> 
     sentAt: r.sentAt.toISOString(),
     subject: r.subject,
     excerpt: newPart(r.body ?? r.snippet, 260),
+    draftId: r.draftId,
   }));
 }

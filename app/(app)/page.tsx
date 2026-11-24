@@ -153,8 +153,6 @@ export default async function TodayPage({ searchParams }: PageProps<"/">) {
         <div className="flex flex-col gap-8">
           <ConcertTodayBlock concerts={concerts} />
 
-          <CampaignRepliesBlock replies={replies} timezone={timezone} onDone={(id) => markReplyDone.bind(null, id)} />
-
           <ApprovalsBlock pending={pending} />
 
           <ReviewInbox today={today} data={review} campaignName={campaign?.name} emails={false} />
@@ -255,6 +253,9 @@ export default async function TodayPage({ searchParams }: PageProps<"/">) {
               </RowList>
             </section>
           ) : null}
+
+          {/* Campaign replies: an inbox, under the day's tasks. */}
+          <CampaignRepliesBlock replies={replies} timezone={timezone} onDone={(id) => markReplyDone.bind(null, id)} />
 
           {followUps.needsReply.length ? (
             <section>
