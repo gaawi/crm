@@ -538,27 +538,8 @@ export function LastEmailLine({
           </div>
         ) : null}
       </div>
-      <div className="mt-1 flex items-center gap-2">
-        {needsReply && draftId ? (
-          onOpenDraft ? (
-            <button
-              type="button"
-              onClick={onOpenDraft}
-              className="inline-flex h-8 items-center gap-1 rounded-full bg-blue-600 px-3 text-[13px] font-semibold text-white active:opacity-70 md:h-7 md:text-xs md:hover:bg-blue-700"
-            >
-              <FilePen className="size-3.5" aria-hidden />
-              Review draft and send
-            </button>
-          ) : (
-            <Link
-              href={`/approvals/${draftId}`}
-              className="inline-flex h-8 items-center gap-1 rounded-full bg-blue-600 px-3 text-[13px] font-semibold text-white active:opacity-70 md:h-7 md:text-xs md:hover:bg-blue-700"
-            >
-              <FilePen className="size-3.5" aria-hidden />
-              Review draft and send
-            </Link>
-          )
-        ) : needsReply ? (
+      <div className="mt-1 flex flex-wrap items-center gap-2">
+        {needsReply ? (
           <Link
             href={`${threadHref}?reply=1`}
             className="inline-flex h-8 items-center gap-1 rounded-full bg-amber-500 px-3 text-[13px] font-semibold text-white active:opacity-70 md:h-7 md:text-xs md:hover:bg-amber-600"
@@ -566,6 +547,19 @@ export function LastEmailLine({
             <Reply className="size-3.5" aria-hidden />
             Reply
           </Link>
+        ) : null}
+        {needsReply && draftId ? (
+          onOpenDraft ? (
+            <button type="button" onClick={onOpenDraft} title="A reply is ready: read it, edit it if you like, and send it" className="inline-flex h-8 items-center gap-1 rounded-full bg-blue-600 px-3 text-[13px] font-semibold text-white active:opacity-70 md:h-7 md:text-xs md:hover:bg-blue-700">
+              <FilePen className="size-3.5" aria-hidden />
+              Approve draft reply
+            </button>
+          ) : (
+            <Link href={`/approvals/${draftId}`} className="inline-flex h-8 items-center gap-1 rounded-full bg-blue-600 px-3 text-[13px] font-semibold text-white active:opacity-70 md:h-7 md:text-xs md:hover:bg-blue-700">
+              <FilePen className="size-3.5" aria-hidden />
+              Approve draft reply
+            </Link>
+          )
         ) : null}
         <Link href={threadHref} className="text-[12px] text-blue-600 active:opacity-60 md:text-[11px] md:hover:underline dark:text-blue-400">
           Open conversation

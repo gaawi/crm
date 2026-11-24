@@ -67,7 +67,7 @@ export function HistoryDrawer({
           <RowBadges row={row} />
         </div>
 
-        {row.lastEmail ? <LastEmailLine row={row} /> : null}
+        {row.lastEmail ? <LastEmailLine row={row} onOpenDraft={() => document.getElementById("row-draft")?.scrollIntoView({ behavior: "smooth" })} /> : null}
         {c?.openDraftId ? <RowDraft draftId={c.openDraftId} timezone={ctx.timezone} /> : null}
 
         {c ? (
@@ -187,7 +187,7 @@ function RowDraft({ draftId, timezone }: { draftId: string; timezone: string }) 
   if (draft === undefined) return <p className="text-[13px] text-muted md:text-xs">Loading the draft…</p>;
   if (!draft) return null;
   return (
-    <section aria-label="Draft waiting to be sent" className="rounded-xl border-2 border-blue-500/60 p-2 md:rounded-lg">
+    <section id="row-draft" aria-label="Draft waiting to be sent" className="rounded-xl border-2 border-blue-500/60 p-2 md:rounded-lg">
       <p className="mb-1.5 px-1 text-[12px] font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-400">Draft ready to send</p>
       <DraftCard draft={draft} timezone={timezone} />
     </section>
