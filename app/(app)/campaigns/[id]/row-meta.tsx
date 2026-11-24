@@ -444,3 +444,39 @@ export function EarlierNotes({ row }: { row: SheetRow }) {
     </details>
   );
 }
+
+/**
+ * Their last real email, cut short, and whether we answered it: green
+ * "Replied", amber "Not replied" (or grey when marked as needing no reply).
+ * A link to the thread, except inside another button (the compact card).
+ */
+export function LastEmailLine({ row, link = true, className }: { row: Pick<SheetRow, "lastEmail">; link?: boolean; className?: string }) {
+  const m = row.lastEmail;
+  if (!m) return null;
+  const [label, tone] = m.answered
+    ? ["Replied", "text-emerald-700 dark:text-emerald-400"]
+    : m.dismissed
+      ? ["No reply needed", "text-muted"]
+      : ["Not replied", "font-semibold text-amber-700 dark:text-amber-400"];
+  const date = new Date(m.sentAt).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const body = (
+    <>
+      <span className="flex min-w-0 items-center gap-1 text-[12px] md:text-[11px]">
+        <ArrowDownLeft className="size-3 shrink-0 text-teal-600" aria-hidden />
+        <span className="text-muted" suppressHydrationWarning>
+          Their last email · {date}
+        </span>
+        <span className={cn("ml-auto shrink-0", tone)}>{label}</span>
+      </span>
+      <span className="line-clamp-2 text-[13px] leading-snug text-fg/85 md:text-xs">{m.excerpt || m.subject || "(no text)"}</span>
+    </>
+  );
+  const cls = cn("block min-w-0 rounded-md border-l-2 border-teal-500 bg-surface-2/60 px-1.5 py-1", className);
+  return link ? (
+    <Link href={`/mail/t/${m.accountId}/${encodeURIComponent(m.threadId)}`} className={cn(cls, "active:opacity-60 md:hover:bg-surface-2")} title={m.subject ?? undefined}>
+      {body}
+    </Link>
+  ) : (
+    <span className={cls}>{body}</span>
+  );
+}

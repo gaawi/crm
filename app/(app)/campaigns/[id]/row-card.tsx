@@ -15,9 +15,10 @@ import { isFollowUpDue } from "@/lib/booking/timing";
 import type { SheetRow } from "@/lib/booking/types";
 import { cn } from "@/lib/utils";
 import { responseInfo } from "@/lib/booking/explain";
-import { DateCell, DeleteRowButton, KindCell, ResponseCell, ReturningCell, StageCell, TextCell } from "./cells";
+import { DateCell, DeleteRowButton, KindCell, ResponseCell, ReturningCell, NotesCell, StageCell, TextCell } from "./cells";
 import {
   HistoryButton,
+  LastEmailLine,
   LastTouchLine,
   PrepareEmailButton,
   RowBadges,
@@ -117,6 +118,7 @@ export const RowCard = memo(function RowCard({
               <RowPlace row={row} className="shrink-[2] text-[13px] text-muted" />
               <LastTouchLine row={row} timezone={ctx.timezone} today={ctx.today} className="min-w-0 shrink" />
             </span>
+            {row.lastEmail ? <LastEmailLine row={row} link={false} className="mt-1 [&>span:last-child]:line-clamp-1" /> : null}
           </span>
           {selectMode ? null : <ChevronRight className="size-5 shrink-0 text-subtle" strokeWidth={2} aria-hidden />}
         </button>
@@ -193,6 +195,7 @@ export const RowCard = memo(function RowCard({
               </p>
             ) : null}
             <LastTouchLine row={row} timezone={ctx.timezone} today={ctx.today} className="mt-1" />
+            <LastEmailLine row={row} className="mt-1.5" />
             <TimingBadge row={row} timezone={ctx.timezone} today={ctx.today} className="mt-1.5 h-6 px-2 text-xs" />
           </div>
         </div>
@@ -237,7 +240,7 @@ export const RowCard = memo(function RowCard({
             </CardField>
           </div>
           <CardField label="Notes">
-            <TextCell rowId={row.id} name="notes" value={row.notes} placeholder="Notes" label="Notes" multiline rows={3} look="field" />
+            <NotesCell rowId={row.id} value={row.notes} look="field" />
             <PlayedHere row={row} className="mt-1 px-2" />
             <EarlierNotes row={row} />
           </CardField>

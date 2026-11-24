@@ -13,10 +13,11 @@ import { isFollowUpDue, isOpenStage } from "@/lib/booking/timing";
 import type { SheetRow } from "@/lib/booking/types";
 import { deciderOf, flagBorderClass, personFlags } from "@/lib/organizations/people";
 import { cn } from "@/lib/utils";
-import { DateCell, DeleteRowButton, KindCell, ResponseCell, StageCell, TextCell } from "./cells";
+import { DateCell, DeleteRowButton, KindCell, ResponseCell, NotesCell, StageCell } from "./cells";
 import {
   RowPlace,
   HistoryButton,
+  LastEmailLine,
   LastTouchLine,
   PrepareEmailButton,
   RowBadges,
@@ -326,7 +327,8 @@ const TableRow = memo(function TableRow({
         <DateCell rowId={row.id} value={row.followUpAt} overdue={isFollowUpDue(row, ctx.today)} className="text-xs" />
       </td>
       <td className="px-1 py-1.5">
-        <TextCell rowId={row.id} name="notes" value={row.notes} placeholder="Notes" label="Notes" multiline rows={3} />
+        <LastEmailLine row={row} className="mb-1" />
+        <NotesCell rowId={row.id} value={row.notes} />
         <PlayedHere row={row} className="mt-0.5 px-2" />
         <EarlierNotes row={row} />
       </td>

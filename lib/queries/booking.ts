@@ -4,13 +4,14 @@ import { FOLLOW_UP_OVERDUE_DAYS, GOAL_KINDS, stageLabel } from "@/lib/constants"
 import { parseSheetImport } from "@/lib/booking/csv-import";
 import { normalizeFee } from "@/lib/booking/fee";
 import { normalizePrefix } from "@/lib/booking/phone";
-import type { BookingSheet, ImportResult, SendAccount, SheetRow, SheetRowInput } from "@/lib/booking/types";
+import type { BookingSheet, ImportResult, SendAccount, SheetRow, SheetRowInput, SheetRowLastEmail } from "@/lib/booking/types";
 import { todayIn } from "@/lib/dates";
 import { env } from "@/lib/env";
 import { cleanPhone, createContact, getContactByEmail } from "@/lib/queries/contacts";
 import { checkGoalValues, createOpportunity, parseMoney } from "@/lib/queries/opportunities";
 import { findOrCreateOrganization, normalizeDomains } from "@/lib/queries/organizations";
 import { readProfile } from "@/lib/organizations/profile";
+import { newPart } from "@/lib/queries/last-reply";
 import { createProject, updateProject } from "@/lib/queries/projects";
 import type { NextAction, OpportunityKind, OpportunityStage, OrganizationKind } from "@/lib/types";
 import { errorMessage, isValidEmail, normalizeEmail } from "@/lib/utils";
@@ -104,7 +105,8 @@ const sheetProfile = () => sql`case when o.profile is null then null else jsonb_
 
 const iso = (value: string | Date | null | undefined): string | null => (value ? new Date(value).toISOString() : null);
 
-type RawSheetRow = Omit<SheetRow, "createdAt" | "updatedAt"> & { createdAt: Date; updatedAt: Date };
+type RawLastEmail = Omit<SheetRowLastEmail, "excerpt"> & { body: string | null };
+type RawSheetRow = Omit<SheetRow, "createdAt" | "updatedAt" | "lastEmail"> & { createdAt: Date; updatedAt: Date; lastEmail?: RawLastEmail | null };
 
 function toSheetRow(row: RawSheetRow): SheetRow {
   return {
@@ -123,6 +125,17 @@ function toSheetRow(row: RawSheetRow): SheetRow {
       : null,
     lastActivity: row.lastActivity ? { ...row.lastActivity, occurredAt: iso(row.lastActivity.occurredAt)! } : null,
     lastCall: row.lastCall ? { ...row.lastCall, occurredAt: iso(row.lastCall.occurredAt)! } : null,
+    lastEmail: row.lastEmail
+      ? {
+          sentAt: iso(row.lastEmail.sentAt)!,
+          subject: row.lastEmail.subject,
+          excerpt: newPart(row.lastEmail.body, 220).replace(/\s+/g, " ").trim(),
+          accountId: row.lastEmail.accountId,
+          threadId: row.lastEmail.threadId,
+          answered: row.lastEmail.answered,
+          dismissed: row.lastEmail.dismissed,
+        }
+      : null,
   };
 }
 
@@ -133,7 +146,29 @@ function toSheetRow(row: RawSheetRow): SheetRow {
  */
 export async function getSheetRows(projectId: string, options: { ids?: string[] } = {}): Promise<SheetRow[]> {
   if (!ID.test(projectId)) return [];
+  const only = () => (options.ids ? sql`and op.id = any(${options.ids}::uuid[])` : sql``);
   const rows = await sql<RawSheetRow[]>`
+    with row_emails as (
+      select distinct ce.contact_id, ce.email
+        from opportunities op
+        join contacts c on c.id = op.contact_id and c.last_inbound_at is not null
+        join contact_emails ce on ce.contact_id = c.id
+       where op.project_id = ${projectId} ${only()}
+    ),
+    -- Their latest real email (not automatic), and whether we wrote after it.
+    last_email as (
+      select distinct on (re.contact_id) re.contact_id,
+             json_build_object('sentAt', m.sent_at, 'subject', m.subject, 'body', left(coalesce(m.body_text, m.snippet), 4000),
+                               'accountId', m.account_id, 'threadId', m.gmail_thread_id,
+                               'answered', coalesce(c.last_outbound_at > m.sent_at, false),
+                               'dismissed', coalesce(c.reply_dismissed_at >= m.sent_at, false)) as last_email
+        from row_emails re
+        join contacts c on c.id = re.contact_id
+        join message_participants mp on mp.email = re.email and mp.role = 'from'
+        join messages m on m.id = mp.message_id
+       where m.direction = 'inbound' and not m.auto_reply and not coalesce(m.is_automated, false)
+       order by re.contact_id, m.sent_at desc
+    )
     select op.id, op.title, op.kind, op.stage, op.value, op.currency, op.follow_up_at, op.next_action, op.next_step, op.notes, op.event_dates,
            op.sheet_section as section, op.spaces, op.is_returning as "returning", op.response, op.origin, op.notes_history, op.created_at, op.updated_at,
            case when o.id is null then null else json_build_object('id', o.id, 'name', o.name, 'city', o.city, 'website', o.website, 'tags', o.tags, 'profile', ${sheetProfile()}) end as organization,
@@ -155,7 +190,7 @@ export async function getSheetRows(projectId: string, options: { ids?: string[] 
              'openDraftId', (select d.id from email_drafts d
                               where d.contact_id = c.id and d.status in ('proposed', 'queued', 'revising', 'sending', 'failed')
                               order by d.created_at desc limit 1)) end as contact,
-           la.last_activity, lc.last_call, coalesce(ac.n, 0) as activity_count
+           la.last_activity, lc.last_call, coalesce(ac.n, 0) as activity_count, lm.last_email
       from opportunities op
       join projects sp on sp.id = op.project_id and sp.sheet
       left join organizations o on o.id = op.organization_id
@@ -177,13 +212,14 @@ export async function getSheetRows(projectId: string, options: { ids?: string[] 
          order by a.occurred_at desc, a.created_at desc
          limit 1
       ) lc on true
+      left join last_email lm on lm.contact_id = c.id
       left join lateral (
         select count(*)::int as n
           from activities a
          where a.kind <> 'status' and (a.opportunity_id = op.id or a.contact_id = op.contact_id)
       ) ac on true
      where op.project_id = ${projectId}
-       ${options.ids ? sql`and op.id = any(${options.ids}::uuid[])` : sql``}
+       ${only()}
      order by array_position(${STAGE_ORDER}::text[], op.stage), op.follow_up_at asc nulls last, lower(coalesce(o.name, op.title))
   `;
   return rows.map(toSheetRow);

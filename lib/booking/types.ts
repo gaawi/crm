@@ -136,6 +136,21 @@ export interface SheetRow {
   lastCall: { outcome: CallOutcome | null; occurredAt: string } | null;
   /** Non-status activities of the row or its contact. */
   activityCount: number;
+  /** Their latest real email to us (not automatic), and whether we answered it. */
+  lastEmail?: SheetRowLastEmail | null;
+}
+
+export interface SheetRowLastEmail {
+  sentAt: string;
+  subject: string | null;
+  /** The new part of their email, cut short. */
+  excerpt: string;
+  accountId: string;
+  threadId: string;
+  /** We wrote to them after it. */
+  answered: boolean;
+  /** Marked as needing no reply (Today's "Done"). */
+  dismissed: boolean;
 }
 
 /** What a sheet row is created from (the add form, an import). */

@@ -790,7 +790,7 @@ export function SheetView({
 
           {/* Phones: cards grouped by section. */}
           {cardList ? (
-            <div className={cn("flex flex-col gap-6", !phone && "mx-auto max-w-3xl")}>
+            <div className={cn("flex flex-col gap-6", !phone && !compact && "mx-auto max-w-3xl")}>
               {groups.map((group) => (
                 <section
                   key={group.section ?? "\u0000other"}
@@ -822,7 +822,10 @@ export function SheetView({
                   <ul
                     className={cn(
                       compact
-                        ? "divide-y divide-border overflow-hidden rounded-2xl border border-border bg-surface"
+                        ? phone
+                          ? "divide-y divide-border overflow-hidden rounded-2xl border border-border bg-surface"
+                          : // Desktop compact: columns, so many more fit; the 1px gap draws the lines.
+                            "grid grid-cols-1 gap-px overflow-hidden rounded-2xl border border-border bg-border lg:grid-cols-2 2xl:grid-cols-3"
                         : "flex flex-col gap-3",
                     )}
                   >

@@ -87,6 +87,7 @@ export function TextCell({
   list,
   inputMode,
   type = "text",
+  autoFocus,
   className,
 }: {
   rowId: string;
@@ -101,6 +102,7 @@ export function TextCell({
   list?: string;
   inputMode?: "text" | "tel" | "decimal" | "email";
   type?: "text" | "tel";
+  autoFocus?: boolean;
   className?: string;
 }) {
   const { pending, error, save } = useCell(rowId, name);
@@ -120,6 +122,7 @@ export function TextCell({
     placeholder,
     onChange: (e: { currentTarget: { value: string } }) => setDraft(e.currentTarget.value),
     onBlur: commit,
+    autoFocus,
   };
   return (
     <div className={className}>
@@ -500,5 +503,30 @@ export function ResponseCell({ rowId, value, look = "cell", className }: { rowId
       </select>
       <Status pending={pending} error={error} look={look} />
     </div>
+  );
+}
+
+/**
+ * Notes, folded: two lines of text; a tap opens the full editable box.
+ * Keeps long research notes from pushing the rows apart.
+ */
+export function NotesCell({ rowId, value, look = "cell", className }: { rowId: string; value: string | null; look?: CellLook; className?: string }) {
+  const [open, setOpen] = useState(false);
+  if (open || !value?.trim()) {
+    return <TextCell rowId={rowId} name="notes" value={value} placeholder="Notes" label="Notes" multiline rows={open ? 5 : 1} look={look} autoFocus={open} className={className} />;
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => setOpen(true)}
+      title="Edit notes"
+      className={cn(
+        "block w-full rounded-md px-2 py-1 text-left text-[13px] leading-snug text-fg/80 active:bg-surface-2 md:text-xs md:hover:bg-surface-2",
+        look === "field" && "border border-border",
+        className,
+      )}
+    >
+      <span className="line-clamp-2 whitespace-pre-line">{value}</span>
+    </button>
   );
 }
