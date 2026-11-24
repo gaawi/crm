@@ -390,6 +390,27 @@ export function FiltersBar({
                 </option>
               ))}
             </select>
+
+            {/* Their answer, warm to cold (the summary only shows "Showed interest"). */}
+            <select
+              value={filters.response ?? ""}
+              onChange={(e) => {
+                const r = e.currentTarget.value || undefined;
+                onChange({ ...filters, response: r, status: r ? "" : filters.status, flags: r ? filters.flags.filter((f) => f !== "due" && f !== "no_reply") : filters.flags });
+              }}
+              aria-label="Their answer"
+              title="What they answered, warm to cold"
+              className={cn(pillSelect, filters.response && "border-fg/70 font-medium")}
+            >
+              <option value="">Any answer</option>
+              <option value="interest">Showed interest</option>
+              {RESPONSES.map((r) => (
+                <option key={r.value} value={r.value}>
+                  {r.label} ({r.short})
+                </option>
+              ))}
+              <option value="none">No answer set</option>
+            </select>
           </div>
 
           {/* Organization tags by group: combine them (all must match); each shows how many rows it leaves. */}
@@ -637,32 +658,6 @@ function ResultsSummary({
                 </button>
               );
             })()}
-          </div>
-          {/* Warm to cold, left to right. */}
-          <div className="mt-1.5 flex flex-wrap items-center gap-1">
-            {RESPONSES.map((r, i) => {
-              const on = response === r.value;
-              const n = s.responses[r.value] ?? 0;
-              return (
-                <span key={r.value} className="inline-flex items-center gap-1">
-                  {i ? <span aria-hidden className="text-[11px] text-subtle">›</span> : null}
-                  <button
-                    type="button"
-                    aria-pressed={on}
-                    title={r.text}
-                    onClick={() => onResponse(on ? undefined : r.value)}
-                    className={cn(
-                      "inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-[13px] font-medium md:h-7 md:text-xs",
-                      on ? "bg-fg text-bg ring-2 ring-fg/30" : r.tone,
-                      !n && !on && "opacity-50",
-                    )}
-                  >
-                    {on ? <Check className="size-3.5" strokeWidth={2.5} aria-hidden /> : null}
-                    {r.label} <span className="tabular-nums opacity-70">{n}</span>
-                  </button>
-                </span>
-              );
-            })}
           </div>
         </div>
       ) : null}
